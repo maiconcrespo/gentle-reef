@@ -34,6 +34,8 @@ export function initialScene(deskCount = DESK_COUNT) {
     agents: [],
     // desks[i] is the agent id at desk i (or null). bench keeps queued agents in arrival order.
     seats: { desks: Array(deskCount).fill(null), bench: [] },
+    // toolStarts[name] is when that tool last started, so its end can log one line with the duration.
+    toolStarts: {},
     log: [],
     logSeq: 0,
   };
@@ -103,11 +105,17 @@ function applyEvent(state, { event, at = 0 }) {
       return applyCompaction(state, event.phase, at);
     case "tool": {
       if (typeof event.toolName !== "string") return state;
-      if (event.phase === "start") return pushLog(state, { kind: "tool", text: `${event.toolName} started`, at });
+      const starts = state.toolStarts ?? {};
+      if (event.phase === "start") return { ...state, toolStarts: { ...starts, [event.toolName]: at } };
       if (event.phase === "end") {
-        return event.ok === false
-          ? pushLog(state, { kind: "fail", text: `${event.toolName} failed`, at })
-          : pushLog(state, { kind: "tool", text: `${event.toolName} finished`, at });
+        const startedAt = Object.hasOwn(starts, event.toolName) ? starts[event.toolName] : undefined;
+        const { [event.toolName]: _done, ...rest } = starts;
+        const next = { ...state, toolStarts: rest };
+        const failed = event.ok === false;
+        const text = startedAt === undefined
+          ? `${event.toolName} ${failed ? "failed" : "finished"}`
+          : `${event.toolName}${failed ? " failed" : ""} · ${formatDuration(at - startedAt)}`;
+        return pushLog(next, { kind: failed ? "fail" : "tool", text, at });
       }
       return state;
     }
@@ -220,6 +228,15 @@ function nameOf(agent) {
   return agent.label || (agent.agent === "unknown" ? agent.id : agent.agent);
 }
 
+/** 0.4s under ten seconds, 13s under a minute, then 1m 05s. */
+function formatDuration(ms) {
+  const safe = Math.max(0, ms);
+  if (safe < 10_000) return `${(safe / 1000).toFixed(1)}s`;
+  const seconds = Math.round(safe / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+}
+
 function pushLog(state, entry) {
   const logSeq = state.logSeq + 1;
   return { ...state, logSeq, log: [{ id: logSeq, ...entry }, ...state.log].slice(0, SCENE_LOG_LIMIT) };
@@ -253,7 +270,7 @@ export function sceneView(state) {
     bubble: brewing ? "cup" : BUBBLE_BY_STATE[orchestratorState],
     brewing,
     orchestrator: orchestratorState,
-    percent,
+    percent: percent === null ? null : Math.round(percent),
     potLevel: percent === null ? 1 : Math.round((1 - percent / 100) * 10000) / 10000,
     activeAgents: state.agents.filter(isActive).length,
     agents,

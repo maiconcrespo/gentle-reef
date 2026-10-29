@@ -125,16 +125,26 @@ describe("events and snapshot", () => {
 		assert.equal(view.potLevel, 0.9);
 	});
 
-	it("tool start and end write activity lines; the orchestrator bubble follows the tool state", () => {
-		const started = run(event({ type: "tool", actor: "orchestrator", toolName: "bash", phase: "start" }));
-		assert.equal(started.log[0].text, "bash started");
-		const ended = run(
-			event({ type: "tool", actor: "orchestrator", toolName: "bash", phase: "start" }),
-			event({ type: "tool", actor: "orchestrator", toolName: "bash", phase: "end", ok: true }),
-		);
-		assert.equal(ended.log[0].text, "bash finished");
-		assert.equal(ended.log[0].kind, "tool");
-		assert.equal(run(event({ type: "tool", actor: "orchestrator", toolName: "bash", phase: "end", ok: false })).log[0].text, "bash failed");
+	it("a tool writes one activity line when it ends, with its duration", () => {
+		const tool = (phase: string, when: number, ok?: boolean) =>
+			({ type: "event", seq: 1, at: when, event: { v: 1, type: "tool", actor: "orchestrator", toolName: "bash", phase, ...(ok === undefined ? {} : { ok }) } });
+		const started = run(tool("start", 1_000));
+		assert.deepEqual(started.log, []);
+		const ended = run(tool("start", 1_000), tool("end", 1_420, true));
+		assert.equal(ended.log.length, 1);
+		assert.deepEqual({ kind: ended.log[0].kind, text: ended.log[0].text }, { kind: "tool", text: "bash · 0.4s" });
+		const failed = run(tool("start", 1_000), tool("end", 13_600, false));
+		assert.deepEqual({ kind: failed.log[0].kind, text: failed.log[0].text }, { kind: "fail", text: "bash failed · 13s" });
+		assert.equal(run(tool("start", 0), tool("end", 65_000, true)).log[0].text, "bash · 1m 05s");
+		// An end without a seen start (for example after a reconnect) has no duration.
+		assert.equal(run(tool("end", 1_000, true)).log[0].text, "bash finished");
+		assert.equal(run(tool("end", 1_000, false)).log[0].text, "bash failed");
+	});
+
+	it("the view rounds the context percent to a whole number; the pot keeps the exact level", () => {
+		const view = sceneView(run(context(8.8967)));
+		assert.equal(view.percent, 9);
+		assert.equal(view.potLevel, 0.911);
 	});
 
 	it("feature events are logged but do not move the scene", () => {
