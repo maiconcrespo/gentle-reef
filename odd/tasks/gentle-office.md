@@ -23,7 +23,7 @@ Design source: design/agent-office/ (01 overworld HQ, 02 dock pane, 03 story mod
 - T3 — S1, S7: resident agents (Explore, Worker, Verify) on dynamic desks from subagent tasks. Route: worker (first run timed out, relaunched). Commit: bd7f257.
 - T4 — S7: review inspectors from review agents / review lifecycle. Commit: pending.
 - T5 — S7: judgment-day judges debating. Commit: pending.
-- T6 — S8: feature props (music radio, design easel, memory cabinet, web pigeon, todo whiteboard, ask-user bell, MCP rack, codegraph board). Commit: pending.
+- T6 — S8: feature props (music radio, design easel, memory cabinet, web pigeon, todo whiteboard, ask-user bell, MCP rack, codegraph board) drawn in the empty room and animated by feature events; music tied to the real gentle-shell music source. Route: worker, parallel with T13 (disjoint surfaces). Commit: pending.
 - T7 — S3: optional TUI mini widget replacing the working label. Commit: pending.
 - T8 — S9: boss character (suit + tie) moved with the keyboard; input terminal desk + hotkey that sends the prompt through the authenticated inbound channel. Risk: security (item 2) → independent verify. Commit: pending.
 - T9 — S6, S10: characters 1.5x larger (24x36 sprites) with more detail inside the same room; desks, chairs and seats re-laid out to fit. Route: worker (user: "usa los agentes"). Commit: 1ffe867 (161/161; headless screenshots; includes a one-line fix for a NaN walk on a negative first-frame delta, reproduced 1/5 loads before, 0/5 after).
@@ -59,3 +59,4 @@ Design source: design/agent-office/ (01 overworld HQ, 02 dock pane, 03 story mod
 - L24 — User: "pero el personage se quda atras" (screenshot: orchestrator hidden behind the ask dialog at front y:10) → front spot moved to x:8 y:6, above the dialog.
 - L25 — Live check: orchestrator visible above the ask dialog, facing front ("Sí, se ve bien"); explore resident sat at its desk in the real window.
 - L26 — User: "dale" → start T13.
+- L27 — User: "ok, falta los acesorios, musica de gentle music, etc.." → start T6 in parallel with T13.
