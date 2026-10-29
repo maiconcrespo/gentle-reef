@@ -13,7 +13,7 @@ Design source: design/agent-office/ (01 overworld HQ, 02 dock pane, 03 story mod
 - S8 — Represent gentle-shell features: "Mira todas las funcionalidades de Gentle-shell para intentar representar en la escena, como gentle-stream, musica. Gentle-design(no se como podria se representar.)etc"
 - S10 — Bigger characters: "que los personagens sea un poco mas grandes, para que se vea detalles". Decision: larger sprites in the same room (not a whole-scene zoom).
 - S11 — Command selector: "que el comando no tenga que escribir /office on , off, open que me abra un selector."
-- S12 — Decisions as a game dialog: "Que las decisiones me aparezcan asi con un cuadro de textos como en los videojuegos" (reference: design/agent-office/03-story-mode.html dialog box). Decision: show the question and its options AND answer from the window (arrows + Enter).
+- S12 — Decisions as a game dialog: "Que las decisiones me aparezcan asi con un cuadro de textos como en los videojuegos" (reference: design/agent-office/03-story-mode.html dialog box). Decision (L19): for now only show the question and its options in a dialog; answering from the window is deferred.
 - S13 — Compact layout option: "tenias una opcion de design mas compacta agregamos como opcion? dock panel creo." (design/agent-office/02-dock-pane.html).
 - S9 — Boss = the user, playable: "poder usar gentle-shell practicamente como se fuera un juego. Agregar el boss, como Yo el usuario. Dueno de la empresa con traje y corbata. Ahi me puedo mover yo libremente en el Office.. El input lo puedo ir a un ordenado, y escribir ahi por ejempo o precionando una tecla". The window gets an inbound input channel (boss prompt → orchestrator session); it must be authenticated (session token), loopback-only and Origin-checked.
 
@@ -29,7 +29,7 @@ Design source: design/agent-office/ (01 overworld HQ, 02 dock pane, 03 story mod
 - T9 — S6, S10: characters 1.5x larger (24x36 sprites) with more detail inside the same room; desks, chairs and seats re-laid out to fit. Route: worker (user: "usa los agentes"). Commit: pending.
 - T10 — S2, S11: `/office` with no arguments opens a selector (on/off, open, status); typed subcommands keep working. Route: inline. Commit: 4c26a2d (153/153; selector not yet tried in a live Pi TUI).
 - T11 — S3: window polish after T9: round the context percent ("91.1033%" bug, web/app.js:67 and footer), canvas fills its column at integer scale (no empty gap), one activity line per tool with duration, clearer legend ("Facing you: waiting for your answer"); then chairs attached to desks and fill or shrink the empty room. Route: inline. Commit: pending.
-- T12 — S12, S9: ask_user dialog box in the window: question + options in a story-mode dialog, answered with arrows + Enter through the authenticated inbound channel (shares T8's channel: token, loopback, Origin check). Risk: security (item 2) → independent verify. Commit: pending.
+- T12 — S12: ask_user dialog box in the window, display only: question + options in a story-mode dialog while the ask is open, closed when it ends; snapshot carries it for late windows. Answering from the window deferred to T8's authenticated channel. Route: inline. Commit: 0374821 (159/159; headless screenshot showed the dialog over the office with the orchestrator facing front; not yet seen in a live Pi session).
 - T13 — S13: compact dock layout as a window option and a /office menu entry. Commit: pending.
 
 ## Log
@@ -51,3 +51,4 @@ Design source: design/agent-office/ (01 overworld HQ, 02 dock pane, 03 story mod
 - L16 — User: "usas el explorer para explorar? no porque no?" then "usa los agentes" → T9 routed to a worker. Colors committed 5f83620.
 - L17 — User (screenshot of the window): "tenias una opcion de design mas compacta agregamos como opcion? dock panel creo. en esta imagen veo mucho espacion y algun fallo de design que opinas para mejorar en esta prinmero" → review: unrounded percent, empty gap, floating chairs, empty room, noisy log, legend copy.
 - L18 — User: "Que las decisiones me aparezcan asi con un cuadro de textos como en los videojuegos" → answers: "Mostrar y contestar"; polish fixes "Después de T9". Added S12/S13, T11-T13.
+- L19 — User: "ok entonces de momento , no contestamos por navegado , que salte un mensage con la pregunta y las opciuones apenas. dejamos mas para adelante para contestar." → T12 display only, no inbound channel.
