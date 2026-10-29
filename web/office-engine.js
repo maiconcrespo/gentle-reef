@@ -16,7 +16,7 @@ const P = {
 	bg: '#060407', panel: '#100A0F', user: '#2A1523', sel: '#28121E', border: '#563040',
 	text: '#F6EFF3', muted: '#A78E9B', dim: '#76616B', gold: '#E0C27A', blue: '#A9C7EE', sky: '#C4DAF6',
 	sec: '#D2CBD0', softRose: '#D7A0B8', green: '#B4E7C7', sand: '#F2B86D', red: '#FF718F',
-	purple: '#F095C8', deep: '#C96AA2', violet: '#FFB1DD', steel: '#A78E9B', floorA: '#140C12', floorB: '#1B1018',
+	purple: '#F095C8', deep: '#C96AA2', violet: '#FFB1DD', steel: '#A78E9B', floorA: '#4A2A3A', floorB: '#563446',
 	seam: '#0B070A', plum: '#2A1523', champagne: '#E0C27A'
 };
 
@@ -30,7 +30,8 @@ const shade = c => goMix(c, '#2A1523', 0.4);
 const hi = c => goMix(c, '#F6EFF3', 0.3);
 const INK = '#060407';
 const SKIN = '#F2B86D', SKIN_SH = goMix('#F2B86D', '#2A1523', 0.4);
-const ORCH_COLOR = '#E0C27A', ORCH_HAIR = '#D2CBD0';
+const ORCH_COLOR = '#E0C27A', ORCH_HAIR = '#16101A';
+const STACHE = '#FF1F9D', STACHE_S = '#C2107A';
 const C = {
 	wood: P.sand, woodH: hi(P.sand), woodS: shade(P.sand),
 	marble: P.text, marbleS: goMix(P.text, '#2A1523', 0.25),
@@ -549,19 +550,19 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		/* Pink flower on the band */
 		hX(10, 3, -6, 3, P.purple); hX(11, 1, -5, 1, P.gold); hX(10, 1, -6, 1, P.violet); hX(12, 1, -4, 1, P.violet);
 		if (fam === 'up') {
-			hX(0, 2, 7, 2, P.purple); hX(14, 2, 7, 2, P.purple); hX(0, 1, 6, 1, P.deep); hX(15, 1, 6, 1, P.deep);
+			hX(0, 2, 7, 2, STACHE); hX(14, 2, 7, 2, STACHE); hX(0, 1, 6, 1, STACHE_S); hX(15, 1, 6, 1, STACHE_S);
 			return;
 		}
 		if (fam === 'side') {
-			hX(1, 4, 8, 2, P.purple); hX(0, 2, 7, 2, P.purple); hX(0, 1, 6, 1, P.deep); hX(1, 3, 9, 1, P.deep);
+			hX(1, 4, 8, 2, STACHE); hX(0, 2, 7, 2, STACHE); hX(0, 1, 6, 1, STACHE_S); hX(1, 3, 9, 1, STACHE_S);
 			/* Monocle on the visible eye */
 			hX(3, 4, 5, 1, P.gold); hX(3, 4, 7, 1, P.gold); hX(3, 1, 5, 3, P.gold); hX(6, 1, 5, 3, P.gold);
 			hX(4, 2, 6, 1, P.sky);
 			hX(6, 1, 8, 4, P.gold); hX(5, 1, 12, 1, P.gold); hX(6, 1, 13, 1, P.sec);
 		} else {
 			/* Handlebar mustache: wider than the face, curled tips */
-			hX(0, 16, 8, 2, P.purple); hX(1, 14, 10, 1, P.deep);
-			hX(0, 2, 6, 2, P.purple); hX(14, 2, 6, 2, P.purple); hX(0, 1, 5, 1, P.deep); hX(15, 1, 5, 1, P.deep);
+			hX(0, 16, 8, 2, STACHE); hX(1, 14, 10, 1, STACHE_S);
+			hX(0, 2, 6, 2, STACHE); hX(14, 2, 6, 2, STACHE); hX(0, 1, 5, 1, STACHE_S); hX(15, 1, 5, 1, STACHE_S);
 			/* Monocle ring with light lens over the right eye, chain hanging to the vest */
 			hX(9, 4, 5, 1, P.gold); hX(9, 4, 7, 1, P.gold); hX(9, 1, 5, 3, P.gold); hX(12, 1, 5, 3, P.gold);
 			hX(10, 2, 6, 1, P.sky);
