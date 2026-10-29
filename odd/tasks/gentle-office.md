@@ -16,7 +16,7 @@ Design source: design/agent-office/ (01 overworld HQ, 02 dock pane, 03 story mod
 ## Tasks
 - T1 — S1, S2, S4: package skeleton (pi-package manifest, peerDependencies), settings toggle, `/office` command, normalized event contract + adapter from Pi events, subagent task status, context usage; unit-tested; no visuals. Route: worker. Commit: 1291251 (51 tests pass). Pending check: load in a real Pi runtime (deferred to T2).
 - T2 — S3, S5, S6: loopback server + SSE stream + browser window; zone (static map) + orchestrator + coffee pot driven by T1 events. Route: worker + independent verify + native review (approved). Commit: a1f7ca0.
-- T3 — S1, S7: resident agents (Explore, Worker, Verify) on dynamic desks from subagent tasks. Commit: pending.
+- T3 — S1, S7: resident agents (Explore, Worker, Verify) on dynamic desks from subagent tasks. Route: worker (first run timed out, relaunched). Commit: bd7f257.
 - T4 — S7: review inspectors from review agents / review lifecycle. Commit: pending.
 - T5 — S7: judgment-day judges debating. Commit: pending.
 - T6 — S8: feature props (music radio, design easel, memory cabinet, web pigeon, todo whiteboard, ask-user bell, MCP rack, codegraph board). Commit: pending.
@@ -34,3 +34,5 @@ Design source: design/agent-office/ (01 overworld HQ, 02 dock pane, 03 story mod
 - L8 — User: "poder usar gentle-shell practicamente como se fuera un juego. Agregar el boss, como Yo el usuario. Dueno de la empresa con traje y corbata. Ahi me puedo mover yo libremente en el Office.. El input lo puedo ir a un ordenado, y escribir ahi por ejempo o precionando una tecla" → added S9/T8; T1 contract defines the inbound input message type now (not wired) to avoid a later refactor.
 - L9 — T1 evidence: `npm test` 51/51 pass (node 24.10 type stripping). Open: subagent pi.events notification only carries taskId+status (agent/label/tokens on TaskRecord, not reachable) → T3 needs a gentle-pi export or store read; tool names for music/web/memory unverified; extension not yet loaded in Pi.
 - L10 — T2 evidence: `npm test` 105/105. Real Pi load passed via `pi --mode rpc -ne -e extensions/gentle-office.ts` (get_commands lists office; /office status and open-while-off behave). Independent verify: all 7 security checks PASS, no High/Medium defects. Native review review-93786a961def0b64 (risk + resilience) approved and acknowledged; advisory R1-token-in-argv (token visible in xdg-open argv) is non-blocking follow-up. Open: enabled `/office open` in real Pi, real session_shutdown; T8 must add an Origin check for inbound input.
+- L11 — T3 evidence: `npm test` 146/146. Identity bridge reads subagent_run args {agent,label} and task id from result details.gentleAgents.taskId (gentle-pi gentle-agents.ts:2312, :410-412). Screenshots showed 4 residents at desks, bench overflow, ✓/! exits. Open: never seen a live subagent_run event; subagent_continue not bridged.
+- L12 — User: "cuando se podra empezar a ver algo?"
