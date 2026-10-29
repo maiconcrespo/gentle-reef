@@ -1,5 +1,5 @@
 import { featureForTool } from "../contract/classify.ts";
-import { OFFICE_EVENT_VERSION, type OfficeEvent, type OrchestratorState } from "../contract/office-event.ts";
+import { OFFICE_EVENT_VERSION, type AskQuestion, type OfficeEvent, type OrchestratorState } from "../contract/office-event.ts";
 
 // The Pi payloads this adapter reads (dist/core/extensions/types.d.ts). Other fields are ignored.
 export type PiEvent =
@@ -19,6 +19,42 @@ export interface UsageReading {
 }
 
 const ASK_TOOL_PREFIX = "ask_user";
+// Bounds for the dialog: the args come from the model, the window only needs a readable prompt.
+const MAX_ASK_QUESTIONS = 4;
+const MAX_ASK_OPTIONS = 4;
+const MAX_ASK_TEXT = 300;
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+function askText(value: unknown): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const text = value.trim();
+	if (text === "") return undefined;
+	return text.length > MAX_ASK_TEXT ? `${text.slice(0, MAX_ASK_TEXT - 1)}…` : text;
+}
+
+function askQuestion(raw: unknown): AskQuestion | undefined {
+	if (!isRecord(raw)) return undefined;
+	const question = askText(raw.question);
+	if (question === undefined) return undefined;
+	const options = (Array.isArray(raw.options) ? raw.options : [])
+		.map(option => (isRecord(option) ? askText(option.label) : undefined))
+		.filter((label): label is string => label !== undefined)
+		.slice(0, MAX_ASK_OPTIONS);
+	const header = askText(raw.header);
+	const multiSelect = raw.multiSelect === true;
+	return header === undefined ? { question, options, multiSelect } : { header, question, options, multiSelect };
+}
+
+/** ask_user_question carries `questions`; ask_user_choice is a single question at the top level. */
+function askQuestions(args: unknown): AskQuestion[] {
+	if (!isRecord(args)) return [];
+	const raw = Array.isArray(args.questions) ? args.questions : [args];
+	return raw
+		.map(askQuestion)
+		.filter((question): question is AskQuestion => question !== undefined)
+		.slice(0, MAX_ASK_QUESTIONS);
+}
 
 const orchestrator = (state: OrchestratorState, toolName?: string): OfficeEvent =>
 	toolName === undefined
@@ -44,13 +80,20 @@ export function piEventToOffice(event: PiEvent, usage?: UsageReading): OfficeEve
 			];
 			const feature = featureForTool(event.toolName);
 			if (feature) out.push({ v: OFFICE_EVENT_VERSION, type: "feature", feature, detail: event.toolName });
+			if (event.toolName.startsWith(ASK_TOOL_PREFIX)) {
+				const questions = askQuestions(event.args);
+				if (questions.length > 0) out.push({ v: OFFICE_EVENT_VERSION, type: "ask", phase: "open", questions });
+			}
 			return out;
 		}
-		case "tool_execution_end":
-			return [
+		case "tool_execution_end": {
+			const out: OfficeEvent[] = [
 				{ v: OFFICE_EVENT_VERSION, type: "tool", actor: "orchestrator", toolName: event.toolName, phase: "end", ok: !event.isError },
 				orchestrator("thinking"),
 			];
+			if (event.toolName.startsWith(ASK_TOOL_PREFIX)) out.push({ v: OFFICE_EVENT_VERSION, type: "ask", phase: "close" });
+			return out;
+		}
 		case "session_before_compact":
 			return [{ v: OFFICE_EVENT_VERSION, type: "compaction", phase: "start" }];
 		case "session_compact":

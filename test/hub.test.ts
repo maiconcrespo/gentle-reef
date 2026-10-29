@@ -33,6 +33,7 @@ describe("OfficeHub snapshot", () => {
 			context: { percent: 30 },
 			compaction: "start",
 			agents: [],
+			ask: null,
 		});
 	});
 
@@ -108,5 +109,20 @@ describe("OfficeHub compaction", () => {
 		hub.publish({ v: 1, type: "compaction", phase: "end" });
 		assert.deepEqual(hub.snapshot().context, { percent: null });
 		assert.equal(hub.snapshot().compaction, "end");
+	});
+});
+
+describe("OfficeHub ask dialog", () => {
+	const open: OfficeEvent = { v: 1, type: "ask", phase: "open", questions: [{ question: "Pick one?", options: ["A", "B"], multiSelect: false }] };
+	it("keeps the open ask in the snapshot so a late window shows it, and clears it on close and reset", () => {
+		const hub = new OfficeHub();
+		assert.equal(hub.snapshot().ask, null);
+		hub.publish(open);
+		assert.deepEqual(hub.snapshot().ask, { questions: [{ question: "Pick one?", options: ["A", "B"], multiSelect: false }] });
+		hub.publish({ v: 1, type: "ask", phase: "close" });
+		assert.equal(hub.snapshot().ask, null);
+		hub.publish(open);
+		hub.reset();
+		assert.equal(hub.snapshot().ask, null);
 	});
 });

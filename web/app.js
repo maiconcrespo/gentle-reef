@@ -15,6 +15,7 @@ const logEl = $("log");
 const crewEl = $("crew");
 const canvas = $("office");
 const potCtx = $("pot").getContext("2d");
+const askEl = $("askDialog");
 
 const ROLE_LABEL = { explore: "Explore", worker: "Worker", verify: "Verify" };
 const STATUS_LABEL = {
@@ -145,6 +146,52 @@ function dispatch(action) {
 	renderLog();
 }
 
+const isText = (value) => typeof value === "string" && value !== "";
+
+// ask_user dialog: shows the open prompt, display only. Text goes in through textContent.
+function renderAsk(ask) {
+	const questions = ask && Array.isArray(ask.questions) ? ask.questions.filter((q) => q && isText(q.question)) : [];
+	if (questions.length === 0) {
+		askEl.hidden = true;
+		askEl.replaceChildren();
+		return;
+	}
+	const blocks = questions.map((q) => {
+		const block = el("div", "q");
+		if (isText(q.header)) {
+			const head = el("div", "head");
+			head.textContent = q.multiSelect ? `${q.header} · pick any` : q.header;
+			block.append(head);
+		}
+		const line = el("p");
+		line.style.margin = "4px 0 0";
+		const who = el("span", "who");
+		who.textContent = "ORCHESTRATOR:";
+		const text = el("span");
+		text.textContent = q.question;
+		line.append(who, text);
+		block.append(line);
+		const options = Array.isArray(q.options) ? q.options.filter(isText) : [];
+		if (options.length > 0) {
+			const list = el("ul");
+			for (const option of options) {
+				const item = el("li");
+				item.textContent = option;
+				list.append(item);
+			}
+			block.append(list);
+		}
+		return block;
+	});
+	const hint = el("div", "hint");
+	hint.textContent = "Answer in the terminal.";
+	const caret = el("span", "caret");
+	caret.textContent = "▼";
+	caret.setAttribute("aria-hidden", "true");
+	askEl.replaceChildren(...blocks, hint, caret);
+	askEl.hidden = false;
+}
+
 function setLive(text, state) {
 	liveEl.textContent = text;
 	liveEl.className = state === "live" ? "live" : `live ${state}`;
@@ -166,11 +213,15 @@ source.addEventListener("open", () => {
 });
 source.addEventListener("snapshot", (message) => {
 	const snapshot = parse(message.data);
-	if (snapshot) dispatch({ type: "snapshot", snapshot, at: Date.now() });
+	if (!snapshot) return;
+	dispatch({ type: "snapshot", snapshot, at: Date.now() });
+	renderAsk(snapshot.ask);
 });
 source.addEventListener("office", (message) => {
 	const envelope = parse(message.data);
-	if (envelope) dispatch({ type: "event", seq: envelope.seq, event: envelope.event, at: Date.now() });
+	if (!envelope) return;
+	dispatch({ type: "event", seq: envelope.seq, event: envelope.event, at: Date.now() });
+	if (envelope.event && envelope.event.type === "ask") renderAsk(envelope.event.phase === "open" ? envelope.event : null);
 });
 source.addEventListener("error", () => {
 	hasDropped = true;

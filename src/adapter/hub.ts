@@ -1,6 +1,7 @@
 import { roleForAgent } from "../contract/classify.ts";
 import {
 	OFFICE_EVENT_VERSION,
+	type AskQuestion,
 	type CompactionPhase,
 	type OfficeEvent,
 	type OfficeTaskStatus,
@@ -25,6 +26,8 @@ export interface OfficeSnapshot {
 	readonly context: { readonly percent: number | null };
 	readonly compaction: CompactionPhase | null;
 	readonly agents: readonly SubagentEvent[];
+	/** The ask_user prompt waiting for the user, or null. */
+	readonly ask: { readonly questions: readonly AskQuestion[] } | null;
 }
 
 export interface HubStats {
@@ -55,6 +58,7 @@ export class OfficeHub {
 	#orchestrator: OrchestratorView = { state: "idle" };
 	#context: { percent: number | null } = { percent: null };
 	#compaction: CompactionPhase | null = null;
+	#ask: { questions: readonly AskQuestion[] } | null = null;
 	#seq = 0;
 	#dropped = 0;
 	#listenerErrors = 0;
@@ -98,6 +102,7 @@ export class OfficeHub {
 			context: { ...this.#context },
 			compaction: this.#compaction,
 			agents: [...this.#agents.values()].map(agent => ({ ...agent })),
+			ask: this.#ask === null ? null : { questions: this.#ask.questions.map(question => ({ ...question })) },
 		};
 	}
 
@@ -119,6 +124,7 @@ export class OfficeHub {
 		this.#orchestrator = { state: "idle" };
 		this.#context = { percent: null };
 		this.#compaction = null;
+		this.#ask = null;
 	}
 
 	#apply(event: OfficeEvent): void {
@@ -136,6 +142,9 @@ export class OfficeHub {
 				return;
 			case "subagent":
 				this.#upsertAgent(event);
+				return;
+			case "ask":
+				this.#ask = event.phase === "open" ? { questions: event.questions } : null;
 				return;
 			default:
 				return;

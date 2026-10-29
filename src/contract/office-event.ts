@@ -75,7 +75,20 @@ export interface FeatureEvent {
 	readonly detail: string;
 }
 
+/** One question of an open ask_user prompt, as the window shows it. Display only: the window cannot answer it. */
+export interface AskQuestion {
+	readonly header?: string;
+	readonly question: string;
+	readonly options: readonly string[];
+	readonly multiSelect: boolean;
+}
+
+export type AskEvent =
+	| { readonly v: typeof OFFICE_EVENT_VERSION; readonly type: "ask"; readonly phase: "open"; readonly questions: readonly AskQuestion[] }
+	| { readonly v: typeof OFFICE_EVENT_VERSION; readonly type: "ask"; readonly phase: "close" };
+
 export type OfficeEvent =
+	| AskEvent
 	| OrchestratorEvent
 	| ToolEvent
 	| SubagentEvent

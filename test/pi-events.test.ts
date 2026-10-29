@@ -59,4 +59,61 @@ describe("piEventToOffice", () => {
 	it("ignores Pi events the office does not render", () => {
 		assert.deepEqual(piEventToOffice({ type: "message_update" } as unknown as PiEvent), []);
 	});
+
+	it("opens an ask dialog with each question and its option labels from ask_user_question args", () => {
+		const out = piEventToOffice({
+			type: "tool_execution_start",
+			toolName: "ask_user_question",
+			args: { questions: [
+				{ header: "Dialog", question: "Show only or answer too?", multiSelect: false, options: [{ label: "Show only", description: "d1" }, { label: "Show and answer", description: "d2" }] },
+				{ header: "Fixes", question: "Start now?", multiSelect: true, options: [{ label: "Yes", description: "" }, { label: "After T9", description: "" }] },
+			] },
+		});
+		assert.deepEqual(out.at(-1), {
+			v: 1, type: "ask", phase: "open", questions: [
+				{ header: "Dialog", question: "Show only or answer too?", options: ["Show only", "Show and answer"], multiSelect: false },
+				{ header: "Fixes", question: "Start now?", options: ["Yes", "After T9"], multiSelect: true },
+			],
+		});
+	});
+
+	it("opens an ask dialog from ask_user_choice args, without a header", () => {
+		const out = piEventToOffice({
+			type: "tool_execution_start",
+			toolName: "ask_user_choice",
+			args: { question: "Which floor color?", options: [{ label: "Lighter", description: "x", value: "a" }, { label: "Dusty rose", description: "y", value: "b" }] },
+		});
+		assert.deepEqual(out.at(-1), { v: 1, type: "ask", phase: "open", questions: [{ question: "Which floor color?", options: ["Lighter", "Dusty rose"], multiSelect: false }] });
+	});
+
+	it("bounds the dialog: at most 4 questions, 4 options each, 300 characters per text, and drops malformed entries", () => {
+		const long = "x".repeat(500);
+		const out = piEventToOffice({
+			type: "tool_execution_start",
+			toolName: "ask_user_question",
+			args: { questions: [
+				{ question: long, options: [{ label: "a" }, { label: "b" }, { label: "c" }, { label: "d" }, { label: "e" }, { nope: 1 }] },
+				{ question: 42, options: [] },
+				{ question: "q2", options: [{ label: "a" }] },
+				{ question: "q3", options: [{ label: "a" }] },
+				{ question: "q4", options: [{ label: "a" }] },
+				{ question: "q5", options: [{ label: "a" }] },
+			] },
+		});
+		const ask = out.at(-1) as { questions: { question: string; options: string[] }[] };
+		assert.equal(ask.questions.length, 4);
+		assert.equal(ask.questions[0]!.question, "x".repeat(299) + "…");
+		assert.deepEqual(ask.questions[0]!.options, ["a", "b", "c", "d"]);
+		assert.deepEqual(ask.questions.map(q => q.question).slice(1), ["q2", "q3", "q4"]);
+	});
+
+	it("emits no ask dialog when the ask args carry no readable question", () => {
+		const out = piEventToOffice({ type: "tool_execution_start", toolName: "ask_user_choice", args: { question: "" } });
+		assert.equal(out.some(event => event.type === "ask"), false);
+	});
+
+	it("closes the ask dialog when the ask tool ends, and only then", () => {
+		assert.deepEqual(piEventToOffice({ type: "tool_execution_end", toolName: "ask_user_choice", isError: false }).at(-1), { v: 1, type: "ask", phase: "close" });
+		assert.equal(piEventToOffice({ type: "tool_execution_end", toolName: "bash", isError: false }).some(event => event.type === "ask"), false);
+	});
 });
