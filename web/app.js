@@ -40,6 +40,47 @@ const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {
 	onDeparted: (id) => dispatch({ type: "departed", id }),
 });
 
+// Integer-scale fit: the room is shown at the largest whole multiple (1x, 2x, 3x...) that fits the stage column and keeps the
+// whole room on screen. Whole multiples keep the pixel art crisp; the scale never drops below 1x.
+const mainEl = document.querySelector("main");
+const asideEl = document.querySelector("aside");
+const frameEl = canvas.parentElement;
+let fittedScale = 0;
+
+function fitCanvas() {
+	const main = getComputedStyle(mainEl);
+	const frame = getComputedStyle(frameEl);
+	const num = (style, prop) => parseFloat(style[prop]) || 0;
+	// Two grid tracks means the sidebar sits beside the stage; one track means it sits under it.
+	const sideBySide = main.gridTemplateColumns.trim().split(/\s+/).length > 1;
+	const roomW = mainEl.clientWidth - num(main, "paddingLeft") - num(main, "paddingRight")
+		- (sideBySide ? asideEl.offsetWidth + num(main, "columnGap") : 0);
+	const frameX = num(frame, "paddingLeft") + num(frame, "paddingRight") + num(frame, "borderLeftWidth") + num(frame, "borderRightWidth");
+	// Height left for the canvas: viewport minus header, footer, main padding and everything else in the stage (frame chrome, legend).
+	const stageRest = canvas.closest(".stage").offsetHeight - canvas.offsetHeight;
+	const roomH = window.innerHeight - document.querySelector("header").offsetHeight - document.querySelector("footer").offsetHeight
+		- num(main, "paddingTop") - num(main, "paddingBottom") - stageRest;
+	const fits = Math.min(Math.floor((roomW - frameX) / canvas.width), Math.floor(roomH / canvas.height));
+	const scale = Number.isFinite(fits) ? Math.max(1, fits) : 1;
+	if (scale === fittedScale) return;
+	fittedScale = scale;
+	canvas.style.width = `${canvas.width * scale}px`;
+	canvas.style.height = `${canvas.height * scale}px`;
+}
+
+// Refit on every page resize (window or stage). Queued to the next frame so the observer never fires mid-layout.
+let fitQueued = false;
+const queueFit = () => {
+	if (fitQueued) return;
+	fitQueued = true;
+	requestAnimationFrame(() => {
+		fitQueued = false;
+		fitCanvas();
+	});
+};
+fitCanvas();
+new ResizeObserver(queueFit).observe(mainEl);
+
 const stamp = (at) => (at > 0 ? new Date(at).toTimeString().slice(0, 8) : "--:--:--");
 
 function orchestratorLabel(current) {

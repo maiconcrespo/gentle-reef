@@ -148,3 +148,20 @@ describe("sprite size", () => {
 		assert.ok(rects.every(args => args.every(Number.isFinite)), "no drawn rectangle has a NaN coordinate");
 	});
 });
+
+describe("desk chairs and bench queue", () => {
+	it("queued bubbles on the bench sit below every desk chair", () => {
+		const rects: number[][] = [];
+		const engine = createOfficeEngine({ width: 0, height: 0, getContext: () => recordingContext(rects) }, OFFICE_CONFIG);
+		engine.setScene(view(Array.from({ length: 6 }, (_, i) => resident(`b${i}`, seat("bench", i), "queued", true))));
+		run(1);
+		rects.length = 0;
+		run(1 / 60);
+		engine.destroy();
+		// A bubble is an 18x14 box. A chair ends 13 px under its desk's bottom edge (see drawChair).
+		const bubbles = rects.filter(([, , w, h]) => w === 18 && h === 14);
+		const lowestChair = Math.max(...OFFICE_CONFIG.desks.map(d => (d.y + 1) * OFFICE_CONFIG.tile + 13));
+		assert.equal(bubbles.length, 6, "one queue bubble per queued agent");
+		for (const [, y] of bubbles) assert.ok(y > lowestChair, `bubble top ${y} clears the chairs, which end at ${lowestChair}`);
+	});
+});

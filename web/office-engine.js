@@ -469,7 +469,9 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		R(x + 36, y + 9, 6, 6, P.text); R(x + 36, y + 9, 6, 1, P.sec); R(x + 42, y + 11, 2, 2, P.text);
 	}
 
-	/* Empty chair, sized for the 24 px sitter: the seat cushion under the seat spot and the backrest in front. */
+	/* Chairs are drawn CHAIR_LIFT px above their seat spot, so the seat cushion starts 2 px under the desk edge. */
+	const CHAIR_LIFT = 12;
+	/* Empty chair, sized for the 24 px sitter: the seat cushion and the backrest in front. The caller passes the lifted seat line. */
 	function drawChair(px, py, front) {
 		if (!front) { R(px - 8, py + 2, 16, 4, P.muted); R(px - 8, py + 2, 16, 1, P.steel); return; }
 		R(px - 7, py - 4, 14, 8, P.muted); R(px - 7, py - 4, 14, 1, P.steel); R(px - 7, py + 3, 14, 1, shade(P.muted));
@@ -807,10 +809,11 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		drawWhiteboard();
 		const list = [];
 		cfg.desks.forEach((d, i) => {
-			const s = deskSpot(d);
+			const s = deskSpot(d), chairY = s.py - CHAIR_LIFT;
 			list.push({ k: (d.y + 1) * T - 1, f: () => drawDesk(d, i) });
-			list.push({ k: s.py - 0.5, f: () => drawChair(s.px, s.py, false) });
-			list.push({ k: s.py + 0.5, f: () => drawChair(s.px, s.py, true) });
+			/* Both chair halves sort before the resident on the seat, so a seated figure covers its chair. */
+			list.push({ k: s.py - 0.6, f: () => drawChair(s.px, chairY, false) });
+			list.push({ k: s.py - 0.5, f: () => drawChair(s.px, chairY, true) });
 		});
 		list.push({ k: (tb.y + tb.h) * T - 1, f: drawTable });
 		list.push({ k: (cf.y + 1) * T - 1, f: drawCoffee });
@@ -820,8 +823,8 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		residents.forEach(c => list.push({ k: c.y, f: () => drawResident(c) }));
 		list.sort((p, q) => p.k - q.k).forEach(o => o.f());
 		drawOrchBubble();
-		/* A seated resident's bubble rises above its desk monitor instead of covering the screen. */
-		residents.forEach(c => { if (c.bubble) drawBubble(Math.round(c.x) - 9, Math.round(c.y) - 35 - (c.sit ? 36 : 27), c.bubble.icon); });
+		/* A seated resident's bubble rises above its desk monitor. A standing one (bench queue) sits just over its head, clear of the desk chairs. */
+		residents.forEach(c => { if (c.bubble) drawBubble(Math.round(c.x) - 9, Math.round(c.y) - 35 - (c.sit ? 36 : 14), c.bubble.icon); });
 	}
 
 	let last = performance.now();
