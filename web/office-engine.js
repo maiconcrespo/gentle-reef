@@ -12,6 +12,33 @@ export const OFFICE_CONFIG = {
 	bench: { x: 2, w: 6 }
 };
 
+/* One prop per gentle-shell feature (S8). Each footprint is tiles walkers cannot stand on. The rack is the existing one (cfg.rack).
+   Kept free on purpose: coffee spot (17,4), whiteboard spot (9,3), front (8,6), rest (9,5), door approach (9-10,11), bench overflow (row 11, x 2-13). */
+export const FEATURE_PROPS = [
+	{ feature: 'music', x: 13, y: 3, w: 2, h: 2 },
+	{ feature: 'design', x: 15, y: 3, w: 2, h: 2 },
+	{ feature: 'memory', x: 18, y: 3, w: 1, h: 2 },
+	{ feature: 'ask', x: 18, y: 6, w: 1, h: 2 },
+	{ feature: 'todo', x: 17, y: 8, w: 2, h: 2 },
+	{ feature: 'mcp', x: OFFICE_CONFIG.rack.x, y: OFFICE_CONFIG.rack.y, w: 1, h: 2 },
+	{ feature: 'web', x: 14, y: 11, w: 1, h: 2 },
+	{ feature: 'codegraph', x: 15, y: 11, w: 2, h: 2 }
+];
+
+/* The grid a figure walks on: true where it cannot stand. Walls, furniture and feature props block; the rug, floor and door do not. */
+export function walkableGrid(cfg, props = FEATURE_PROPS) {
+	const block = Array.from({ length: cfg.rows }, (_, y) => Array(cfg.cols).fill(y < 2));
+	const mark = (x, y, w, h) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (block[j] && i < cfg.cols) block[j][i] = true; };
+	cfg.desks.forEach(d => mark(d.x, d.y, 2, 1));
+	mark(cfg.table.x, cfg.table.y, cfg.table.w, cfg.table.h);
+	mark(cfg.coffee.x, cfg.coffee.y, cfg.coffee.w, 1);
+	cfg.plants.forEach(p => mark(p.x, p.y, 1, 1));
+	mark(cfg.rack.x, cfg.rack.y, 1, 2);
+	mark(cfg.bench.x, cfg.rows - 1, cfg.bench.w, 1);
+	props.forEach(p => mark(p.x, p.y, p.w, p.h));
+	return block;
+}
+
 const P = {
 	bg: '#060407', panel: '#100A0F', user: '#2A1523', sel: '#28121E', border: '#563040',
 	text: '#F6EFF3', muted: '#A78E9B', dim: '#76616B', gold: '#E0C27A', blue: '#A9C7EE', sky: '#C4DAF6',
@@ -158,15 +185,8 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	}
 
 	/* ---------- walkable grid ---------- */
-	const block = Array.from({ length: ROWS }, (_, y) => Array(COLS).fill(y < 2));
-	const mark = (x, y, w, h) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (block[j] && i < COLS) block[j][i] = true; };
-	cfg.desks.forEach(d => mark(d.x, d.y, 2, 1));
+	const block = walkableGrid(cfg);
 	const tb = cfg.table, cf = cfg.coffee, wb = cfg.whiteboard;
-	mark(tb.x, tb.y, tb.w, tb.h);
-	mark(cf.x, cf.y, cf.w, 1);
-	cfg.plants.forEach(p => mark(p.x, p.y, 1, 1));
-	mark(cfg.rack.x, cfg.rack.y, 1, 2);
-	mark(cfg.bench.x, ROWS - 1, cfg.bench.w, 1);
 
 	function path(fx, fy, tx, ty) {
 		const key = (x, y) => y * COLS + x, prev = new Map([[key(fx, fy), null]]), q = [[fx, fy]];
@@ -215,6 +235,8 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	let time = 0, intent = null, view = null, potShown = 1, potTarget = 1, brewingNow = false;
 	let wbLines = 2, wbChecks = 1, wbWriting = false, wbPartial = 1, wbHold = 0;
 	let hudT = 0;
+	/* Which feature props are lit this frame, by feature name. */
+	let lit = {};
 	const orch = {
 		x: FX(cfg.orchStart.x), y: FY(cfg.orchStart.y), path: [], face: 'down', sit: false, moving: false,
 		mode: 'idle', wait: 0.5, bubble: null, step: 0, onArrive: null, target: null
@@ -531,17 +553,144 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		});
 	}
 
-	function drawRack() {
+	/* ---------- feature props (S8): each one is drawn inside its footprint and lights while its feature is active ----------
+	   Under reduced motion an active prop shows its static "on" state; nothing moves. */
+	const PAINTS = [P.purple, P.blue, P.gold, P.green, P.deep, P.sand];
+	const CORK = goMix(P.sand, P.plum, 0.35);
+	const MAP = goMix(P.sand, P.text, 0.45);
+	const PIGEON = ['....KKKK....', '...KggggK...', '..KgggEgK...', '.KllgggggggK', 'KggggggggggK', 'KsggggggggK.', '.KssssssK...', '..KKKKKK....'];
+	const PIGEON_MAP = { K: INK, g: P.steel, l: P.sec, s: shade(P.steel), E: P.gold };
+
+	/* A filled disc of radius r centred on (cx, cy), one rectangle per row. */
+	function disc(cx, cy, r, c) {
+		for (let j = -r; j <= r; j++) { const half = Math.round(Math.sqrt(r * r - j * j)); R(cx - half, cy + j, half * 2, 1, c); }
+	}
+	/* A 1 px line from (x1, y1) to (x2, y2). */
+	function line(x1, y1, x2, y2, c) {
+		const n = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) || 1;
+		for (let k = 0; k <= n; k++) R(x1 + Math.round((x2 - x1) * k / n), y1 + Math.round((y2 - y1) * k / n), 1, 1, c);
+	}
+
+	/* Music: a turntable on a cabinet. The record turns and a glint sweeps while music plays; a speaker rim lights and notes rise. */
+	function drawMusic(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 3, y + 26, 42, 20, C.wood); R(x + 3, y + 26, 42, 1, C.woodH); R(x + 3, y + 45, 42, 1, C.woodS);
+		R(x + 4, y + 46, 4, 2, P.border); R(x + 40, y + 46, 4, 2, P.border);
+		const cx = x + 14, cy = y + 30;
+		disc(cx, cy, 8, P.steel); disc(cx, cy, 7, P.bg); disc(cx, cy, 3, P.gold); R(cx, cy, 1, 1, P.text);
+		const a = on && !reduced ? time * 4 : 0;
+		R(cx + Math.round(Math.cos(a) * 5), cy + Math.round(Math.sin(a) * 5), 1, 1, P.sky);
+		line(x + 25, y + 24, x + 20, y + 28, P.steel);
+		R(x + 27, y + 34, 14, 10, P.bg); R(x + 27, y + 34, 14, 1, on ? P.gold : P.steel);
+		for (let k = 0; k < 4; k++) R(x + 29, y + 36 + k * 2, 10, 1, P.border);
+		R(x + 38, y + 28, 2, 2, on ? P.green : P.dim);
+		if (on) for (let i = 0; i < 3; i++) {
+			const nx = x + 19 + i * 5, ny = reduced ? y + 8 + i * 4 : y + 18 - ((time * 0.9 + i / 3) % 1) * 14;
+			const c = i % 2 ? P.violet : P.gold;
+			R(nx + 2, ny, 1, 4, c); R(nx, ny + 3, 2, 2, c); R(nx + 3, ny, 2, 1, c);
+		}
+	}
+
+	/* Design: an easel with a canvas. While gentle_design runs the strokes are painted one after another; a finished canvas holds. */
+	function drawDesign(p, on) {
+		const x = p.x * T, y = p.y * T;
+		line(x + 12, y + 46, x + 24, y + 12, C.woodS); line(x + 36, y + 46, x + 24, y + 12, C.woodS);
+		R(x + 16, y + 38, 16, 2, C.wood);
+		R(x + 7, y + 3, 34, 29, C.woodS); R(x + 9, y + 5, 30, 25, P.text);
+		R(x + 9, y + 31, 30, 2, C.wood);
+		R(x + 13, y + 32, 3, 2, P.purple); R(x + 18, y + 32, 3, 2, P.blue); R(x + 23, y + 32, 3, 2, P.gold);
+		const strokes = 6, progress = on ? (reduced ? strokes : ((time * 0.5) % 1) * strokes) : 0;
+		for (let k = 0; k < strokes; k++) {
+			const f = Math.min(1, Math.max(0, progress - k));
+			if (f <= 0) continue;
+			const len = Math.max(1, Math.round((6 + Math.floor(hash(k + 9) * 10)) * f));
+			R(x + 11 + Math.floor(hash(k + 1) * 12), y + 8 + k * 3, len, 2, PAINTS[k % PAINTS.length]);
+		}
+	}
+
+	/* Memory: a filing cabinet. The second drawer slides out while a mem_* tool runs, with paper showing at its top. */
+	function drawMemory(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 1, y + 1, 22, 46, P.border); R(x + 1, y + 1, 22, 1, P.steel);
+		const open = on ? (reduced ? 3 : 2 + Math.round(triangle(time * 0.7))) : 0;
+		for (let d = 0; d < 4; d++) {
+			const top = y + 3 + d * 11, out = d === 1 ? open : 0, fy = top + out;
+			if (out) { R(x + 3, top, 18, 2, P.bg); R(x + 5, top - 2, 9, 2, P.text); R(x + 10, top - 3, 7, 2, P.sec); }
+			R(x + 3, fy, 18, 9, P.steel); R(x + 3, fy, 18, 1, P.sec); R(x + 3, fy + 8, 18, 1, shade(P.steel));
+			R(x + 9, fy + 3, 6, 1, P.gold); R(x + 6, fy + 6, 12, 1, P.muted);
+		}
+	}
+
+	/* Ask: a side table with a brass desk bell. While an ask_user prompt is open the bell shakes and rings out on both sides. */
+	function drawAsk(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 3, y + 28, 18, 3, C.woodH); R(x + 3, y + 28, 18, 1, '#FFD9A6'); R(x + 3, y + 31, 18, 1, C.woodS);
+		R(x + 4, y + 32, 2, 14, C.woodS); R(x + 18, y + 32, 2, 14, C.woodS);
+		const bx = x + 12 + (on && !reduced && Math.floor(time * 16) % 2 ? 1 : 0);
+		R(bx - 1, y + 16, 2, 2, P.gold); R(bx - 2, y + 18, 4, 2, P.gold); R(bx - 4, y + 20, 8, 2, P.gold); R(bx - 5, y + 22, 10, 4, P.gold);
+		R(bx - 3, y + 21, 2, 2, hi(P.gold)); R(bx - 6, y + 26, 12, 2, shade(P.gold));
+		if (on) { R(x + 2, y + 19, 1, 4, P.violet); R(x + 1, y + 20, 1, 2, P.violet); R(x + 21, y + 19, 1, 4, P.violet); R(x + 22, y + 20, 1, 2, P.violet); }
+	}
+
+	/* Todo: a corkboard of sticky notes. Each time the todo list updates a note gets a check; idle keeps the board as it was. */
+	function drawTodo(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 8, y + 34, 3, 13, C.woodS); R(x + 37, y + 34, 3, 13, C.woodS);
+		R(x + 2, y + 2, 44, 33, C.woodS); R(x + 4, y + 4, 40, 29, CORK);
+		const notes = [[6, 6, P.gold], [18, 5, P.purple], [30, 7, P.green], [9, 18, P.blue], [21, 19, P.violet], [33, 17, P.gold]];
+		const checked = on ? (reduced ? 4 : Math.floor(time * 1.5) % (notes.length + 1)) : 2;
+		notes.forEach(([nx, ny, c], i) => {
+			R(x + nx, y + ny, 8, 7, c); R(x + nx, y + ny + 6, 8, 1, shade(c));
+			R(x + nx + 3, y + ny - 1, 2, 2, P.red);
+			if (i < checked) { line(x + nx + 2, y + ny + 3, x + nx + 3, y + ny + 4, P.bg); line(x + nx + 3, y + ny + 4, x + nx + 5, y + ny + 2, P.bg); }
+		});
+	}
+
+	/* Web: a pigeon on a perch. While web_search or fetch_content runs it hops and flaps; idle it sits. */
+	function drawPigeon(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 10, y + 21, 4, 27, C.woodS); R(x + 4, y + 20, 16, 2, C.woodH); R(x + 4, y + 22, 16, 1, C.woodS);
+		const hop = on && !reduced ? Math.round(triangle(time * 0.9) * 4) : 0, ox = x + 4, oy = y + 12 - hop;
+		sprite(PIGEON, PIGEON_MAP, ox, oy, false);
+		R(ox + 10, oy + 3, 2, 1, P.sand);
+		if (on && !reduced && Math.floor(time * 6) % 2) R(ox + 2, oy - 1, 5, 2, PIGEON_MAP.s);
+		else if (on) R(ox + 2, oy + 3, 5, 2, PIGEON_MAP.s);
+	}
+
+	/* Codegraph: a map board on a stand with pins. The pins light up while codegraph runs; idle they are grey. */
+	function drawCodegraph(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 6, y + 34, 3, 13, C.woodS); R(x + 39, y + 34, 3, 13, C.woodS);
+		R(x + 2, y + 2, 44, 33, P.border); R(x + 4, y + 4, 40, 29, MAP);
+		line(x + 6, y + 10, x + 42, y + 10, goMix(MAP, P.border, 0.5));
+		line(x + 14, y + 6, x + 14, y + 30, goMix(MAP, P.border, 0.5));
+		line(x + 30, y + 6, x + 30, y + 30, goMix(MAP, P.border, 0.5));
+		for (let k = 0; k < 36; k++) R(x + 5 + k, y + 22 + Math.round(Math.sin(k / 4) * 2), 1, 2, P.blue);
+		[[10, 8], [22, 16], [34, 9], [16, 25], [38, 24]].forEach(([px, py], i) => {
+			const lit = on && (reduced || Math.floor(time * 4 + i * 1.7) % 5 !== 0);
+			R(x + px - 1, y + py + 2, 1, 2, P.border);
+			R(x + px - 1, y + py - 1, 3, 3, lit ? (i % 2 ? P.gold : P.red) : P.steel);
+		});
+	}
+
+	/* MCP: the rack. Its LEDs sit dim at rest and blink while mcp or codemode runs (a fixed pattern under reduced motion). */
+	function drawRack(on) {
 		const x = cfg.rack.x * T, y = cfg.rack.y * T;
 		R(x + 2, y - 6, 20, 46, P.border); R(x + 2, y - 6, 20, 1, P.steel);
 		for (let i = 0; i < 7; i++) {
 			const yy = y - 3 + i * 6;
 			R(x + 4, yy, 16, 4, P.sel); R(x + 4, yy, 16, 1, P.border);
-			const on = reduced ? i % 2 === 0 : hash(i + Math.floor(time * 4) * 7) > 0.35;
-			R(x + 6, yy + 2, 1, 1, on ? P.green : P.bg); R(x + 9, yy + 2, 1, 1, i % 2 ? P.blue : P.gold);
+			const blink = on && (reduced ? i % 2 === 0 : hash(i + Math.floor(time * 4) * 7) > 0.35);
+			R(x + 6, yy + 2, 1, 1, !on ? P.dim : blink ? P.green : P.bg);
+			R(x + 9, yy + 2, 1, 1, !on ? P.dim : i % 2 ? P.blue : P.gold);
 			R(x + 12, yy + 1, 6, 2, P.bg);
 		}
 	}
+
+	const PROP_DRAWERS = {
+		music: drawMusic, design: drawDesign, memory: drawMemory, ask: drawAsk,
+		todo: drawTodo, web: drawPigeon, codegraph: drawCodegraph, mcp: (p, on) => drawRack(on)
+	};
 
 	/* ---------- figures: one body template for the orchestrator and every resident ---------- */
 	/* Sprite box is 24x36 with the feet on the last row (oy + 35). Rows: head 0-13, neck 14, torso 15-25, legs 26-33, shoes 34-35. */
@@ -796,7 +945,17 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		});
 	}
 
+	/* Same rule as scene-reducer featureActive(): a tool is running, or the feature is inside its linger. Read every frame so a prop goes idle on time. */
+	function updateLit() {
+		const wall = Date.now();
+		for (const p of FEATURE_PROPS) {
+			const entry = view && view.features ? view.features[p.feature] : undefined;
+			lit[p.feature] = !!entry && (!!entry.running || wall < entry.until);
+		}
+	}
+
 	function update(dt) {
+		updateLit();
 		moveChar(orch, dt);
 		if (orch.bubble) { orch.bubble.t -= dt; if (orch.bubble.t <= 0) orch.bubble = null; }
 		updateOrch(dt);
@@ -821,7 +980,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		list.push({ k: (tb.y + tb.h) * T - 1, f: drawTable });
 		list.push({ k: (cf.y + 1) * T - 1, f: drawCoffee });
 		cfg.plants.forEach(p => list.push({ k: (p.y + 1) * T - 1, f: () => drawPlant(p) }));
-		list.push({ k: (cfg.rack.y + 2) * T - 1, f: drawRack });
+		FEATURE_PROPS.forEach(p => list.push({ k: (p.y + p.h) * T - 1, f: () => PROP_DRAWERS[p.feature](p, lit[p.feature]) }));
 		list.push({ k: orch.y, f: () => drawOrchestrator(orch) });
 		residents.forEach(c => list.push({ k: c.y, f: () => drawResident(c) }));
 		list.sort((p, q) => p.k - q.k).forEach(o => o.f());

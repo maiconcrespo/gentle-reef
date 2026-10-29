@@ -22,15 +22,15 @@ export function roleForAgent(agent: string | undefined): Role {
 
 const TOOL_FEATURES: ReadonlyArray<readonly [(name: string) => boolean, Feature]> = [
 	[name => name.startsWith("mem_"), "memory"],
-	[name => name.startsWith("web_search") || name === "fetch_content", "web"],
+	[name => name.startsWith("web_search") || name === "fetch_content" || name === "get_search_content", "web"],
 	[name => name.startsWith("gentle_design"), "design"],
 	[name => name === "todo" || name.startsWith("todo_"), "todo"],
 	[name => name.startsWith("ask_user"), "ask"],
 	[name => name.startsWith("gentle_review"), "review"],
 	[name => name.includes("codegraph"), "codegraph"],
-	[name => name === "mcp", "mcp"],
-	// Not in the spec's tool list; a guess from the gentle-stream naming. Verify before T6.
-	[name => name.startsWith("gentle_stream") || name.includes("music"), "music"],
+	// `mcp` is the MCP proxy tool; `codemode` is the built-in code runner that calls MCP tools.
+	[name => name === "mcp" || name === "codemode", "mcp"],
+	// No music entry on purpose: `/gentle:music` (gentle-pi gentle-music.ts) registers a command, not a tool, and emits no pi event.
 ];
 
 export function featureForTool(toolName: string): Feature | undefined {

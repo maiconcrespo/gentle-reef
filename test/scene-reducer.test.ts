@@ -2,6 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 // Plain ES module shared with the browser page (web/); no build step, so Node loads it directly.
 import { SCENE_LOG_LIMIT, initialScene, reduceScene, sceneView } from "../web/scene-reducer.js";
+// Feature helpers are read through the namespace so the rest of this file still runs while they are missing.
+import * as reducer from "../web/scene-reducer.js";
 
 type Scene = ReturnType<typeof initialScene>;
 
@@ -150,7 +152,9 @@ describe("events and snapshot", () => {
 	it("feature events are logged but do not move the scene", () => {
 		const before = sceneView(run(orchestrator("idle")));
 		const state = run(orchestrator("idle"), event({ type: "feature", feature: "memory", detail: "mem_search" }));
-		assert.deepEqual(sceneView(state), before);
+		const { features: _lit, ...rest } = sceneView(state);
+		const { features: _before, ...restBefore } = before;
+		assert.deepEqual(rest, restBefore);
 		assert.equal(state.log[0].text, "memory: mem_search");
 	});
 
@@ -181,5 +185,54 @@ describe("events and snapshot", () => {
 		const state = reduceScene(initialScene(), { type: "note", kind: "info", text: "Reconnected", at });
 		assert.equal(state.log[0].text, "Reconnected");
 		assert.equal(state.log[0].at, at);
+	});
+});
+
+describe("feature props light while their feature is active", () => {
+	const FEATURES = ["music", "design", "memory", "web", "todo", "ask", "mcp", "codegraph"];
+	const featureAt = (when: number, feature: string, detail: string) =>
+		({ type: "event", seq: 1, at: when, event: { v: 1, type: "feature", feature, detail } });
+	const toolAt = (when: number, phase: "start" | "end", toolName: string) =>
+		({ type: "event", seq: 1, at: when, event: { v: 1, type: "tool", actor: "orchestrator", toolName, phase, ok: true } });
+	const litAt = (state: Scene, feature: string, now: number) =>
+		reducer.featureActive(sceneView(state).features[feature as keyof ReturnType<typeof sceneView>["features"]], now);
+
+	it("every prop feature is idle before any event", () => {
+		for (const feature of FEATURES) assert.equal(litAt(initialScene(), feature, at), false, feature);
+	});
+
+	it("a finished tool lights its prop for the linger time, then the prop expires to idle", () => {
+		// Real order: the feature event comes with the tool start, and the tool end comes later.
+		const state = run(featureAt(at, "memory", "mem_search"), toolAt(at, "start", "mem_search"), toolAt(at + 1_000, "end", "mem_search"));
+		assert.equal(litAt(state, "memory", at + 1_000 + reducer.FEATURE_LINGER_MS - 1), true);
+		assert.equal(litAt(state, "memory", at + 1_000 + reducer.FEATURE_LINGER_MS), false);
+	});
+
+	it("only the prop of the event's feature lights", () => {
+		const state = run(featureAt(at, "memory", "mem_search"));
+		for (const other of FEATURES.filter(feature => feature !== "memory")) assert.equal(litAt(state, other, at), false, other);
+	});
+
+	it("a running tool keeps its prop lit past the linger time, and it lingers again after the end", () => {
+		const running = run(featureAt(at, "web", "web_search"), toolAt(at, "start", "web_search"));
+		assert.equal(litAt(running, "web", at + 60_000), true, "still running");
+		const ended = reduceScene(running, toolAt(at + 60_000, "end", "web_search"));
+		assert.equal(litAt(ended, "web", at + 60_000 + reducer.FEATURE_LINGER_MS - 1), true, "lingers after the end");
+		assert.equal(litAt(ended, "web", at + 60_000 + reducer.FEATURE_LINGER_MS), false);
+	});
+
+	it("a feature stays lit until every one of its running tools has ended", () => {
+		const state = run(
+			featureAt(at, "memory", "mem_search"), toolAt(at, "start", "mem_search"),
+			featureAt(at, "memory", "mem_save"), toolAt(at, "start", "mem_save"),
+			toolAt(at + 1_000, "end", "mem_search"),
+		);
+		assert.equal(litAt(state, "memory", at + 60_000), true, "mem_save is still running");
+	});
+
+	it("a snapshot that no longer reports a running tool clears its activity", () => {
+		const running = run(featureAt(at, "ask", "ask_user_question"), toolAt(at, "start", "ask_user_question"));
+		const snapped = reduceScene(running, { type: "snapshot", at: at + 5_000, snapshot: { v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [] } });
+		assert.equal(litAt(snapped, "ask", at + 5_000), false);
 	});
 });

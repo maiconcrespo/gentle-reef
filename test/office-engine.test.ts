@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 // Browser module, loaded as-is. The canvas and frame loop are stubbed below; the engine is driven frame by frame.
 import { HEAD_MAPS, OFFICE_CONFIG, SPRITE, createOfficeEngine } from "../web/office-engine.js";
+// Feature props are read through the namespace so the rest of this file still runs while they are missing.
+import * as engineModule from "../web/office-engine.js";
 
 // A 2D context that accepts any call and any property write.
 const fakeContext = (): Record<string, unknown> =>
@@ -16,6 +18,16 @@ const recordingContext = (rects: number[][]): Record<string, unknown> =>
 	new Proxy({} as Record<string, unknown>, {
 		get: (target, key) => {
 			if (key === "fillRect") return (...args: number[]) => { rects.push(args); };
+			return key in target ? target[key as string] : () => undefined;
+		},
+		set: (target, key, value) => { target[key as string] = value; return true; },
+	});
+
+// Like recordingContext, but each rectangle also carries the fill colour it was drawn with.
+const styledContext = (rects: unknown[][]): Record<string, unknown> =>
+	new Proxy({} as Record<string, unknown>, {
+		get: (target, key) => {
+			if (key === "fillRect") return (...args: number[]) => { rects.push([...args, target.fillStyle]); };
 			return key in target ? target[key as string] : () => undefined;
 		},
 		set: (target, key, value) => { target[key as string] = value; return true; },
@@ -62,9 +74,9 @@ const resident = (id: string, where: { zone: "desk" | "bench"; index: number }, 
 	leaving: !["queued", "running", "waiting"].includes(status),
 	instant,
 });
-const view = (agents: unknown[]) => ({
+const view = (agents: unknown[], features: Record<string, unknown> = {}) => ({
 	intent: "floor", writing: false, bubble: null, brewing: false, orchestrator: "idle",
-	percent: null, potLevel: 1, activeAgents: 0, agents,
+	percent: null, potLevel: 1, activeAgents: 0, agents, features,
 });
 
 describe("resident sprites in the engine", () => {
@@ -163,5 +175,108 @@ describe("desk chairs and bench queue", () => {
 		const lowestChair = Math.max(...OFFICE_CONFIG.desks.map(d => (d.y + 1) * OFFICE_CONFIG.tile + 13));
 		assert.equal(bubbles.length, 6, "one queue bubble per queued agent");
 		for (const [, y] of bubbles) assert.ok(y > lowestChair, `bubble top ${y} clears the chairs, which end at ${lowestChair}`);
+	});
+});
+
+describe("feature props", () => {
+	const FEATURES = ["music", "design", "memory", "web", "todo", "ask", "mcp", "codegraph"];
+	type Prop = { feature: string; x: number; y: number; w: number; h: number };
+	const props = (): Prop[] => (engineModule as unknown as { FEATURE_PROPS: Prop[] }).FEATURE_PROPS;
+	const active = (feature: string) => ({ [feature]: { running: true, until: 0 } });
+
+	/** Walkable-area check: breadth-first search over the grid the engine walks (true = blocked). */
+	function reachableFrom(block: boolean[][], from: [number, number]): Set<string> {
+		const seen = new Set<string>([from.join(",")]);
+		const queue: Array<[number, number]> = [from];
+		while (queue.length) {
+			const [x, y] = queue.shift()!;
+			for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+				const nx = x + dx, ny = y + dy;
+				if (ny < 0 || nx < 0 || ny >= block.length || nx >= block[0].length || block[ny][nx]) continue;
+				const key = `${nx},${ny}`;
+				if (seen.has(key)) continue;
+				seen.add(key);
+				queue.push([nx, ny]);
+			}
+		}
+		return seen;
+	}
+
+	/** The rectangles one frame draws inside a prop's footprint, after `warm` seconds of animation. */
+	function propFrame(prop: Prop, features: Record<string, unknown>, warm: number): unknown[][] {
+		const rects: unknown[][] = [];
+		// A fixed random source keeps the idle orchestrator at its rest spot, so no figure walks through a footprint.
+		const random = Math.random;
+		Math.random = () => 0.5;
+		let engine: { destroy(): void };
+		try {
+			engine = createOfficeEngine({ width: 0, height: 0, getContext: () => styledContext(rects) }, OFFICE_CONFIG);
+			(engine as { setScene(v: unknown): void }).setScene(view([], features));
+			run(warm);
+			rects.length = 0;
+			run(1 / 60);
+		} finally {
+			Math.random = random;
+		}
+		engine.destroy();
+		const T = OFFICE_CONFIG.tile;
+		const [x0, y0, x1, y1] = [prop.x * T, prop.y * T, (prop.x + prop.w) * T, (prop.y + prop.h) * T];
+		return rects.filter(([x, y]) => (x as number) >= x0 && (x as number) < x1 && (y as number) >= y0 && (y as number) < y1);
+	}
+
+	it("keeps every prop inside the room, off the wall and on its own tiles", () => {
+		const taken = new Set<string>();
+		for (const prop of props()) {
+			assert.ok(prop.x >= 0 && prop.y >= 2 && prop.x + prop.w <= OFFICE_CONFIG.cols && prop.y + prop.h <= OFFICE_CONFIG.rows, `${prop.feature} fits the room`);
+			for (let j = prop.y; j < prop.y + prop.h; j++) for (let i = prop.x; i < prop.x + prop.w; i++) {
+				assert.ok(!taken.has(`${i},${j}`), `${prop.feature} overlaps another prop at ${i},${j}`);
+				taken.add(`${i},${j}`);
+			}
+		}
+		assert.deepEqual([...new Set(props().map(p => p.feature))].sort(), [...FEATURES].sort(), "one prop per feature");
+	});
+
+	it("walk spots, desks, the bench and the door stay reachable with every prop placed", () => {
+		const block = engineModule.walkableGrid(OFFICE_CONFIG, props());
+		const rest: [number, number] = [OFFICE_CONFIG.orchStart.x, OFFICE_CONFIG.orchStart.y];
+		const seen = reachableFrom(block, rest);
+		const spots: Array<[number, number, string]> = [
+			[9, 3, "whiteboard"], [17, 4, "coffee"], [8, 6, "front"], [9, 5, "rest"],
+			[1, 5, "desk 1"], [5, 5, "desk 2"], [1, 9, "desk 3"], [5, 9, "desk 4"],
+			[9, 12, "door"], [10, 12, "door"],
+		];
+		for (let i = 2; i < 2 + 12; i++) spots.push([i, 11, "bench overflow"]);
+		for (const [x, y, name] of spots) assert.ok(seen.has(`${x},${y}`), `${name} at ${x},${y} is reachable`);
+	});
+
+	it("a scene with every feature active renders without errors", () => {
+		const everyFeature = Object.fromEntries(FEATURES.map(feature => [feature, { running: true, until: 0 }]));
+		const rects: number[][] = [];
+		const engine = createOfficeEngine({ width: 0, height: 0, getContext: () => recordingContext(rects) }, OFFICE_CONFIG);
+		assert.doesNotThrow(() => {
+			engine.setScene(view([resident("t1", seat("desk", 0), "running", true)], everyFeature));
+			run(5);
+		});
+		engine.destroy();
+		assert.ok(rects.length > 0);
+		assert.ok(rects.every(args => args.every(Number.isFinite)), "no drawn rectangle has a NaN coordinate");
+	});
+
+	it("each prop draws differently when its feature is active than when idle", () => {
+		for (const prop of props()) {
+			const idle = propFrame(prop, {}, 1);
+			const on = propFrame(prop, active(prop.feature), 1);
+			assert.notDeepEqual(on, idle, `${prop.feature} shows activity`);
+		}
+	});
+
+	it("under reduced motion an active prop holds the same pixels from one moment to the next", () => {
+		reduced = true;
+		for (const prop of props()) {
+			const early = propFrame(prop, active(prop.feature), 0.5);
+			const later = propFrame(prop, active(prop.feature), 2.5);
+			assert.ok(later.length > 0, `${prop.feature} draws its on state`);
+			assert.deepEqual(later, early, `${prop.feature} does not move under reduced motion`);
+		}
 	});
 });

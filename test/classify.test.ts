@@ -35,6 +35,18 @@ describe("featureForTool", () => {
 		assert.equal(featureForTool("gentle_review_capture"), "review");
 		assert.equal(featureForTool("codegraph"), "codegraph");
 		assert.equal(featureForTool("mcp"), "mcp");
+		assert.equal(featureForTool("web_search"), "web");
+		assert.equal(featureForTool("get_search_content"), "web");
+	});
+
+	it("maps codemode, the built-in code runner, to the mcp feature", () => {
+		assert.equal(featureForTool("codemode"), "mcp");
+	});
+
+	it("maps no tool to music: gentle music is a /gentle:music command with no tool or event", () => {
+		assert.equal(featureForTool("gentle_stream"), undefined);
+		assert.equal(featureForTool("gentle_music"), undefined);
+		assert.equal(featureForTool("music"), undefined);
 	});
 
 	it("returns undefined for tools without a feature", () => {

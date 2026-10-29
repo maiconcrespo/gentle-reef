@@ -5,6 +5,9 @@
 
 export const SCENE_LOG_LIMIT = 40;
 export const DESK_COUNT = 4;
+// A feature prop stays lit this long after its last event, and for as long as one of its tools is still running.
+export const FEATURE_LINGER_MS = 4000;
+const FEATURE_NAMES = ["music", "design", "memory", "web", "todo", "ask", "mcp", "codegraph"];
 const CONTRACT_VERSION = 1;
 
 const ORCHESTRATOR_STATES = new Set(["thinking", "tool", "idle", "waiting-user"]);
@@ -36,6 +39,9 @@ export function initialScene(deskCount = DESK_COUNT) {
     seats: { desks: Array(deskCount).fill(null), bench: [] },
     // toolStarts[name] is when that tool last started, so its end can log one line with the duration.
     toolStarts: {},
+    // features[feature].until is when its prop goes idle again; running[toolName] is the feature of a tool still in flight.
+    features: {},
+    running: {},
     log: [],
     logSeq: 0,
   };
@@ -79,6 +85,8 @@ function applySnapshot(state, { snapshot }) {
   return {
     ...state,
     orchestrator: orchestratorOf(snapshot.orchestrator),
+    // Only the tool the snapshot still reports can be running; any other end was missed while disconnected.
+    running: keepRunning(state.running, snapshot.orchestrator.toolName),
     context: { percent },
     compaction: COMPACTION_PHASES.has(snapshot.compaction) ? snapshot.compaction : null,
     agents: agents.filter((agent) => isActive(agent) || seatOf(seats, agent.id) !== null),
@@ -110,7 +118,7 @@ function applyEvent(state, { event, at = 0 }) {
       if (event.phase === "end") {
         const startedAt = Object.hasOwn(starts, event.toolName) ? starts[event.toolName] : undefined;
         const { [event.toolName]: _done, ...rest } = starts;
-        const next = { ...state, toolStarts: rest };
+        const next = endFeature({ ...state, toolStarts: rest }, event.toolName, at);
         const failed = event.ok === false;
         const text = startedAt === undefined
           ? `${event.toolName} ${failed ? "failed" : "finished"}`
@@ -125,7 +133,7 @@ function applyEvent(state, { event, at = 0 }) {
     }
     case "feature": {
       if (typeof event.feature !== "string" || typeof event.detail !== "string") return state;
-      return pushLog(state, { kind: "feature", text: `${event.feature}: ${event.detail}`, at });
+      return lightFeature(pushLog(state, { kind: "feature", text: `${event.feature}: ${event.detail}`, at }), event.feature, event.detail, at);
     }
     default:
       return state;
@@ -159,6 +167,32 @@ function applyDeparture(state, id) {
   if (seatOf(state.seats, id) === null) return state;
   const agents = state.agents.filter((agent) => agent.id !== id);
   return { ...state, agents, seats: settle(removeSeat(state.seats, id), agents) };
+}
+
+/** A feature event is sent when its tool starts: the prop lights and stays lit while that tool runs. */
+function lightFeature(state, feature, toolName, at) {
+  return {
+    ...state,
+    features: { ...(state.features ?? {}), [feature]: { until: at + FEATURE_LINGER_MS } },
+    running: { ...(state.running ?? {}), [toolName]: feature },
+  };
+}
+
+/** The tool ended: its prop lingers for the usual time from now. */
+function endFeature(state, toolName, at) {
+  const running = state.running ?? {};
+  if (!Object.hasOwn(running, toolName)) return state;
+  const { [toolName]: feature, ...rest } = running;
+  return { ...state, running: rest, features: { ...(state.features ?? {}), [feature]: { until: at + FEATURE_LINGER_MS } } };
+}
+
+function keepRunning(running = {}, toolName) {
+  return Object.fromEntries(Object.entries(running).filter(([tool]) => tool === toolName));
+}
+
+/** Whether a prop entry from sceneView is lit at `now` (the page's clock, in the same units as `at`). */
+export function featureActive(entry, now) {
+  return Boolean(entry) && (entry.running || now < entry.until);
 }
 
 function applyCompaction(state, phase, at) {
@@ -274,5 +308,10 @@ export function sceneView(state) {
     potLevel: percent === null ? 1 : Math.round((1 - percent / 100) * 10000) / 10000,
     activeAgents: state.agents.filter(isActive).length,
     agents,
+    // Per prop: `running` while one of its tools is in flight, and `until` for the linger. Use featureActive(entry, now).
+    features: Object.fromEntries(FEATURE_NAMES.map((name) => [name, {
+      running: Object.values(state.running ?? {}).includes(name),
+      until: state.features?.[name]?.until ?? 0,
+    }])),
   };
 }
