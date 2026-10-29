@@ -99,3 +99,14 @@ describe("OfficeHub subscribers", () => {
 		assert.equal(hub.publish(thinking).seq, 2);
 	});
 });
+
+describe("OfficeHub compaction", () => {
+	it("forgets the stale usage reading when compaction ends, so the snapshot does not show pre-compaction usage", () => {
+		const hub = new OfficeHub();
+		hub.publish(context(90));
+		hub.publish({ v: 1, type: "compaction", phase: "start" });
+		hub.publish({ v: 1, type: "compaction", phase: "end" });
+		assert.deepEqual(hub.snapshot().context, { percent: null });
+		assert.equal(hub.snapshot().compaction, "end");
+	});
+});

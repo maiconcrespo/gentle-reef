@@ -1,0 +1,139 @@
+// Gentle Office page: connects the SSE stream to the scene reducer, the canvas engine and the sidebar.
+// Everything from the stream goes in through textContent, never innerHTML.
+import { SCENE_LOG_LIMIT, initialScene, reduceScene, sceneView } from "./scene-reducer.js";
+import { OFFICE_CONFIG, createOfficeEngine, drawPot } from "./office-engine.js";
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, className) => {
+	const node = document.createElement(tag);
+	if (className) node.className = className;
+	return node;
+};
+
+const liveEl = $("live");
+const logEl = $("log");
+const canvas = $("office");
+const potCtx = $("pot").getContext("2d");
+
+let scene = initialScene();
+let view = sceneView(scene);
+let seenLogId = 0;
+let lastLabel = "";
+let hasDropped = false;
+
+const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {
+	onPot: ({ level, brewing, time }) => drawPot(potCtx, level, time, brewing),
+});
+
+const stamp = (at) => (at > 0 ? new Date(at).toTimeString().slice(0, 8) : "--:--:--");
+
+function orchestratorLabel(current) {
+	if (current.brewing) return "brewing a fresh pot";
+	switch (current.orchestrator) {
+		case "thinking": return "planning on the whiteboard";
+		case "tool": return "running a tool";
+		case "waiting-user": return "waiting for you";
+		default: return "idle on the floor";
+	}
+}
+
+function renderStage() {
+	const label = orchestratorLabel(view);
+	if (label === lastLabel) return;
+	lastLabel = label;
+	const usage = view.percent === null ? "usage not reported yet" : `${view.percent} percent of context used`;
+	const description = `Pixel-art office. The orchestrator is ${label}. ${usage}.`;
+	canvas.setAttribute("aria-label", description);
+	$("orchState").textContent = label;
+	$("footState").textContent = view.orchestrator;
+}
+
+function renderBrew() {
+	const left = view.percent === null ? null : 100 - view.percent;
+	$("brewLeft").textContent = left === null ? "—" : `${left}%`;
+	$("brewSub").textContent = left === null ? "context usage not reported yet" : "of the context window left";
+	$("footCtx").textContent = `ctx ${view.percent === null ? "—" : `${view.percent}%`}`;
+	const cups = Math.round(view.potLevel * 10);
+	const cupEls = Array.from({ length: 10 }, (_, i) => {
+		const cup = el("i", i < cups ? "" : "empty");
+		return cup;
+	});
+	$("cups").replaceChildren(...cupEls);
+	const note = $("brewNote");
+	if (view.brewing) {
+		note.textContent = "Compacting: the orchestrator is brewing a fresh pot.";
+		note.className = "brew-note warn";
+	} else if (view.percent !== null && view.potLevel < 0.15) {
+		note.textContent = "Pot almost empty: compaction is coming.";
+		note.className = "brew-note warn";
+	} else {
+		note.textContent = "The pot drains as context fills. Compaction brews a fresh one.";
+		note.className = "brew-note";
+	}
+	$("agentCount").textContent = view.activeAgents === 0 ? "none running" : `${view.activeAgents} running`;
+	$("footAgents").textContent = `${view.activeAgents} subagent${view.activeAgents === 1 ? "" : "s"}`;
+}
+
+function renderLog() {
+	// Prepend only the new lines so a polite live region announces what changed, not the whole list.
+	const fresh = scene.log.filter((entry) => entry.id > seenLogId);
+	if (fresh.length === 0) return;
+	seenLogId = scene.log[0].id;
+	for (const entry of fresh.slice().reverse()) {
+		const li = el("li");
+		const time = el("time");
+		time.textContent = stamp(entry.at);
+		const text = el("span", `k-${entry.kind}`);
+		text.textContent = entry.text;
+		li.append(time, text);
+		logEl.prepend(li);
+	}
+	while (logEl.children.length > SCENE_LOG_LIMIT) logEl.lastElementChild.remove();
+}
+
+function dispatch(action) {
+	const next = reduceScene(scene, action);
+	if (next === scene) return;
+	scene = next;
+	view = sceneView(scene);
+	engine.setScene(view);
+	renderStage();
+	renderBrew();
+	renderLog();
+}
+
+function setLive(text, state) {
+	liveEl.textContent = text;
+	liveEl.className = state === "live" ? "live" : `live ${state}`;
+}
+
+function parse(data) {
+	try {
+		return JSON.parse(data);
+	} catch {
+		return undefined;
+	}
+}
+
+// EventSource reconnects by itself. Each new connection starts with a snapshot, so the scene resyncs on its own.
+const source = new EventSource("events");
+source.addEventListener("open", () => {
+	setLive("live", "live");
+	if (hasDropped) dispatch({ type: "note", kind: "info", text: "Reconnected: state re-synced", at: Date.now() });
+});
+source.addEventListener("snapshot", (message) => {
+	const snapshot = parse(message.data);
+	if (snapshot) dispatch({ type: "snapshot", snapshot, at: Date.now() });
+});
+source.addEventListener("office", (message) => {
+	const envelope = parse(message.data);
+	if (envelope) dispatch({ type: "event", seq: envelope.seq, event: envelope.event, at: Date.now() });
+});
+source.addEventListener("error", () => {
+	hasDropped = true;
+	if (source.readyState === EventSource.CLOSED) setLive("offline: run /office open again", "bad");
+	else setLive("reconnecting…", "warn");
+});
+
+renderStage();
+renderBrew();

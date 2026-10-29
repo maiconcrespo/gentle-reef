@@ -2,10 +2,13 @@ import { piEventToOffice, type PiEvent, type UsageReading } from "./adapter/pi-e
 import { GENTLE_NOTIFICATION_SOURCE_EVENT, subagentFromNotification } from "./adapter/task-status.ts";
 import { OfficeHub, type HubStats } from "./adapter/hub.ts";
 import type { OfficeEvent } from "./contract/office-event.ts";
+import type { OfficeServer } from "./server/office-server.ts";
 import { officeSettingsPath, readOfficeSettings, writeOfficeSettings } from "./settings.ts";
 
 export const OFFICE_COMMAND_NAME = "office";
-const OFFICE_COMMAND_DESCRIPTION = "Turn the Gentle Office on, off, or show its status";
+const OFFICE_COMMAND_DESCRIPTION = "Turn the Gentle Office on, off, show its status, or open its window";
+/** Pi shuts the session down: the window server stops with it. Attached only while enabled. */
+export const OFFICE_SHUTDOWN_EVENT = "session_shutdown";
 
 /** Pi events the office renders. Attached only while the module is on. */
 export const OFFICE_PI_EVENTS = [
@@ -39,9 +42,13 @@ export interface OfficeHost {
 	registerCommand(name: string, options: { description: string; handler: (args: string, ctx: OfficeCommandContext) => unknown }): void;
 }
 
+/** The part of the window server the command needs. Optional: a host without one can still toggle the module. */
+export type OfficeWindow = Pick<OfficeServer, "open" | "stop" | "status">;
+
 export interface OfficeController {
 	readonly hub: OfficeHub;
 	readonly settingsPath: string;
+	readonly server: OfficeWindow | undefined;
 	isEnabled(): boolean;
 	setEnabled(enabled: boolean): { ok: true } | { ok: false; error: string };
 }
@@ -55,10 +62,13 @@ function usageOf(ctx: PiContext | undefined): UsageReading | undefined {
  * Registers `/office` and attaches listeners only while enabled. When off, the
  * only registration is the command. Reads the settings file once, here.
  */
-export function registerOffice(host: OfficeHost, options: { agentDir: string; hub: OfficeHub }): OfficeController {
-	const { agentDir, hub } = options;
+export function registerOffice(host: OfficeHost, options: { agentDir: string; hub: OfficeHub; server?: OfficeWindow }): OfficeController {
+	const { agentDir, hub, server } = options;
 	let enabled = false;
 	let detachers: Array<() => void> = [];
+	const stopWindow = (): void => {
+		if (server) void server.stop().catch(() => undefined);
+	};
 
 	const publish = (events: readonly OfficeEvent[]): void => {
 		try {
@@ -77,6 +87,7 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 				const event = subagentFromNotification(data);
 				if (event) publish([event]);
 			}),
+			host.on(OFFICE_SHUTDOWN_EVENT, () => stopWindow()),
 		];
 	};
 
@@ -85,11 +96,13 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 		enabled = false;
 		for (const off of detachers) off();
 		detachers = [];
+		stopWindow();
 		hub.reset();
 	};
 
 	const controller: OfficeController = {
 		hub,
+		server,
 		settingsPath: officeSettingsPath(agentDir),
 		isEnabled: () => enabled,
 		setEnabled(next) {
@@ -106,6 +119,10 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 	host.registerCommand(OFFICE_COMMAND_NAME, {
 		description: OFFICE_COMMAND_DESCRIPTION,
 		handler: (args, ctx) => {
+			// `open` is async (the server may need to start); everything else answers synchronously.
+			if (args.trim().toLowerCase() === "open") {
+				return openOffice(controller).then(result => ctx.ui.notify(result.message, result.level));
+			}
 			const result = runOfficeCommand(args, controller);
 			ctx.ui.notify(result.message, result.level);
 		},
@@ -121,6 +138,25 @@ export interface OfficeCommandResult {
 const statsLine = (stats: HubStats): string =>
 	`subscribers ${stats.subscribers} · buffered ${stats.buffered} · published ${stats.published} · dropped ${stats.dropped}`;
 
+const windowLine = (server: OfficeWindow | undefined): string => {
+	if (server === undefined) return "";
+	const status = server.status();
+	return status.running && status.url !== undefined ? ` · window ${status.url} (${status.clients} connected)` : " · window closed";
+};
+
+/** `/office open`: only while enabled. Starts the single window server if needed, then opens its URL. */
+export async function openOffice(controller: OfficeController): Promise<OfficeCommandResult> {
+	if (!controller.isEnabled()) return { level: "warning", message: "Gentle Office is off. Run /office on first." };
+	if (controller.server === undefined) return { level: "error", message: "Gentle Office window is not available in this host." };
+	try {
+		const result = await controller.server.open();
+		if (!result.opened) return { level: "warning", message: `Gentle Office window: ${result.url} (no browser opened: ${result.error ?? "unknown error"}; open the URL by hand)` };
+		return { level: "info", message: `Gentle Office window opened: ${result.url}` };
+	} catch (error) {
+		return { level: "error", message: `Gentle Office window could not start: ${error instanceof Error ? error.message : String(error)}` };
+	}
+}
+
 export function runOfficeCommand(args: string, controller: OfficeController): OfficeCommandResult {
 	const subcommand = args.trim().toLowerCase();
 	if (subcommand === "on" || subcommand === "off") {
@@ -131,7 +167,7 @@ export function runOfficeCommand(args: string, controller: OfficeController): Of
 	}
 	if (subcommand === "" || subcommand === "status") {
 		const state = controller.isEnabled() ? "enabled" : "disabled";
-		return { level: "info", message: `Gentle Office ${state} · ${statsLine(controller.hub.stats())}` };
+		return { level: "info", message: `Gentle Office ${state} · ${statsLine(controller.hub.stats())}${windowLine(controller.server)}` };
 	}
-	return { level: "warning", message: "Usage: /office on | off | status" };
+	return { level: "warning", message: "Usage: /office on | off | status | open" };
 }

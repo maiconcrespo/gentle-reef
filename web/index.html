@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Gentle Office</title>
+<link rel="stylesheet" href="office.css">
+</head>
+<body>
+<header>
+  <span class="brand">✿ Gentle Shell</span>
+  <span class="crumb">~/gentle-reef ▸ <b>office</b></span>
+  <span class="live" id="live" role="status" aria-live="polite">connecting…</span>
+</header>
+<main>
+  <section class="stage" aria-label="Agent office">
+    <div class="frame">
+      <span class="frame-title">Agent office · floor 1</span>
+      <canvas class="office" id="office" width="480" height="312" role="img" aria-label="Pixel-art office: connecting to gentle-shell."></canvas>
+    </div>
+    <dl class="map" aria-label="How the office maps to the shell">
+      <div><dt>Desk + monitor</dt><dd>one subagent session (arrives with T3)</dd></div>
+      <div><dt>Whiteboard</dt><dd>orchestrator thinking or running a tool</dd></div>
+      <div><dt>Front</dt><dd>orchestrator waiting for your answer</dd></div>
+      <div><dt>Coffee pot</dt><dd>context left; compaction brews a fresh pot</dd></div>
+    </dl>
+  </section>
+  <aside>
+    <section class="card" aria-labelledby="hBrew">
+      <h2 id="hBrew">Context brew</h2>
+      <div class="brew">
+        <canvas class="pot" id="pot" width="32" height="38" role="img" aria-label="Coffee pot showing remaining context"></canvas>
+        <div>
+          <div class="brew-num" id="brewLeft">—</div>
+          <div class="brew-sub" id="brewSub">context usage not reported yet</div>
+          <div class="cups" id="cups" aria-hidden="true"></div>
+        </div>
+      </div>
+      <p class="brew-note" id="brewNote">Waiting for gentle-shell.</p>
+    </section>
+    <section class="card" aria-labelledby="hTeam">
+      <h2 id="hTeam">Team</h2>
+      <ul class="team" id="team">
+        <li><span class="dot" id="orchDot"></span><span class="who"><b>Orchestrator</b><small id="orchState">connecting</small></span></li>
+        <li class="plain"><span class="who"><b>Desks</b><small>4 desks, empty until resident agents arrive</small></span></li>
+        <li class="plain"><span class="who"><b>Subagents</b><small id="agentCount">none running</small></span></li>
+      </ul>
+    </section>
+    <section class="card log" aria-labelledby="hLog">
+      <h2 id="hLog">Activity</h2>
+      <ol id="log" aria-live="polite"></ol>
+    </section>
+  </aside>
+</main>
+<footer>
+  <span><b>●</b> orchestrator: <span id="footState">connecting</span></span>
+  <span id="footCtx">ctx —</span>
+  <span id="footAgents">0 subagents</span>
+  <span class="footer-end">loopback only · read-only view</span>
+</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>

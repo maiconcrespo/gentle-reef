@@ -131,6 +131,8 @@ export class OfficeHub {
 				return;
 			case "compaction":
 				this.#compaction = event.phase;
+				// Pi reports no usage right after compaction; the pre-compaction reading is no longer true.
+				if (event.phase === "end") this.#context = { percent: null };
 				return;
 			case "subagent":
 				this.#upsertAgent(event);
