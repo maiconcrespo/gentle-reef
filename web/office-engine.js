@@ -8,7 +8,7 @@ export const OFFICE_CONFIG = {
 	whiteboard: { x: 8, w: 4 }, coffee: { x: 16, y: 2, w: 3 }, table: { x: 11, y: 7, w: 4, h: 2 },
 	rug: { x: 10, y: 5, w: 7, h: 6 }, window: { x: 1, w: 3 }, shelf: 13, clock: 6, door: { x: 9, w: 2 },
 	plants: [{ x: 0, y: 2 }, { x: 19, y: 2 }, { x: 0, y: 12 }, { x: 19, y: 12 }], rack: { x: 19, y: 6 },
-	orchStart: { x: 9, y: 5 }, front: { x: 8, y: 10 },
+	orchStart: { x: 9, y: 5 }, front: { x: 8, y: 6 },
 	bench: { x: 2, w: 6 }
 };
 
