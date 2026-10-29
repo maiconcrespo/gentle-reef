@@ -12,15 +12,35 @@
   <span class="brand">✿ Gentle Shell</span>
   <span class="crumb">~/gentle-reef ▸ <b>office</b></span>
   <span class="live" id="live" role="status" aria-live="polite">connecting…</span>
-  <button type="button" class="layout-toggle" id="layoutToggle">Compact</button>
+  <div class="layout-switch" id="layoutToggle" role="group" aria-label="Layout">
+    <button type="button" data-layout="full" aria-pressed="false">Full</button>
+    <button type="button" data-layout="dock" aria-pressed="false">Compact</button>
+    <button type="button" data-layout="story" aria-pressed="false">Story</button>
+  </div>
 </header>
 <main>
   <section class="stage" aria-label="Agent office">
     <div class="frame">
       <span class="frame-title">Agent office · floor 1</span>
       <canvas class="office" id="office" width="480" height="312" role="img" aria-label="Pixel-art office: connecting to gentle-shell."></canvas>
+      <section class="story-hud" aria-label="Story overlays">
+        <section class="story-box story-brew" aria-labelledby="sBrewTitle">
+          <div class="row"><span class="name" id="sBrewTitle">CONTEXT BREW</span><span class="num" id="sBrewNum">—</span></div>
+          <div class="meter"><b>POT</b><div class="track"><div class="fill" id="sBrewFill"></div></div></div>
+          <div class="sub" id="sBrewSub">context usage not reported yet</div>
+        </section>
+        <section class="story-box story-party" aria-labelledby="sPartyTitle">
+          <h2 id="sPartyTitle">PARTY</h2>
+          <ul id="sParty"></ul>
+        </section>
+      </section>
       <section class="dialog" id="askDialog" role="status" aria-live="polite" hidden></section>
+      <section class="dialog say" id="narration" aria-label="Narration" hidden>
+        <p class="say-text"><span class="who" id="sayWho"></span> <span id="sayText"></span></p>
+        <span class="caret" id="sayCaret" aria-hidden="true" hidden>▼</span>
+      </section>
     </div>
+    <p class="caption" id="caption" aria-live="polite" hidden><b class="who" id="capWho"></b> <span id="capText"></span></p>
     <dl class="map" aria-label="How the office maps to the shell">
       <div><dt>Desk + monitor</dt><dd>resident subagent, typing while it runs</dd></div>
       <div><dt>Whiteboard</dt><dd>orchestrator thinking or running a tool</dd></div>
@@ -59,6 +79,7 @@
   <span><b>●</b> orchestrator: <span id="footState">connecting</span></span>
   <span id="footCtx">ctx —</span>
   <span id="footAgents">0 subagents</span>
+  <span class="keys">Space or click: next line</span>
   <span class="footer-end">loopback only · read-only view</span>
 </footer>
 <script type="module" src="app.js"></script>

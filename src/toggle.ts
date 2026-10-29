@@ -7,9 +7,11 @@ import type { OfficeServer } from "./server/office-server.ts";
 import { officeSettingsPath, readOfficeSettings, writeOfficeSettings } from "./settings.ts";
 
 export const OFFICE_COMMAND_NAME = "office";
-const OFFICE_COMMAND_DESCRIPTION = "Open the Gentle Office menu, or run /office on | off | status | open | dock";
+const OFFICE_COMMAND_DESCRIPTION = "Open the Gentle Office menu, or run /office on | off | status | open | dock | story";
 /** Query the window page reads to pick the compact (dock) layout. The token path is unchanged. */
 const COMPACT_LAYOUT_QUERY = "layout=dock";
+/** Query the window page reads to pick the story layout (close-up camera, dialog). The token path is unchanged. */
+const STORY_LAYOUT_QUERY = "layout=story";
 /** Pi shuts the session down: the window server stops with it. Attached only while enabled. */
 export const OFFICE_SHUTDOWN_EVENT = "session_shutdown";
 
@@ -143,10 +145,11 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 	return controller;
 }
 
-/** `open` and `dock` are async (the server may need to start); everything else answers synchronously. */
+/** `open`, `dock` and `story` are async (the server may need to start); everything else answers synchronously. */
 function runSubcommand(subcommand: string, controller: OfficeController, ctx: OfficeCommandContext): Promise<void> | void {
 	if (subcommand === "open") return openOffice(controller).then(result => ctx.ui.notify(result.message, result.level));
 	if (subcommand === "dock") return openOffice(controller, COMPACT_LAYOUT_QUERY).then(result => ctx.ui.notify(result.message, result.level));
+	if (subcommand === "story") return openOffice(controller, STORY_LAYOUT_QUERY).then(result => ctx.ui.notify(result.message, result.level));
 	const result = runOfficeCommand(subcommand, controller);
 	ctx.ui.notify(result.message, result.level);
 }
@@ -156,12 +159,14 @@ const MENU_WHEN_OFF: ReadonlyArray<readonly [string, readonly string[]]> = [
 	["Turn on", ["on"]],
 	["Turn on and open the window", ["on", "open"]],
 	["Turn on and open the compact window", ["on", "dock"]],
+	["Turn on and open in story mode", ["on", "story"]],
 	["Status", ["status"]],
 ];
 const MENU_WHEN_ON: ReadonlyArray<readonly [string, readonly string[]]> = [
 	["Open the window", ["open"]],
 	["Turn off", ["off"]],
 	["Open the compact window", ["dock"]],
+	["Open in story mode", ["story"]],
 	["Status", ["status"]],
 ];
 
@@ -217,5 +222,5 @@ export function runOfficeCommand(args: string, controller: OfficeController): Of
 		const state = controller.isEnabled() ? "enabled" : "disabled";
 		return { level: "info", message: `Gentle Office ${state} · ${statsLine(controller.hub.stats())}${windowLine(controller.server)}` };
 	}
-	return { level: "warning", message: "Usage: /office on | off | status | open | dock" };
+	return { level: "warning", message: "Usage: /office on | off | status | open | dock | story" };
 }

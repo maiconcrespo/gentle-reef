@@ -280,3 +280,82 @@ describe("feature props", () => {
 		}
 	});
 });
+
+describe("story camera: an optional view transform", () => {
+	// Records every setTransform call and fillRect on the on-screen canvas, so the camera's transform can be read back.
+	const cameraContext = (transforms: number[][], rects: number[][]): Record<string, unknown> =>
+		new Proxy({} as Record<string, unknown>, {
+			get: (target, key) => {
+				if (key === "setTransform") return (...args: number[]) => { transforms.push(args); };
+				if (key === "fillRect") return (...args: number[]) => { rects.push(args); };
+				return key in target ? target[key as string] : () => undefined;
+			},
+			set: (target, key, value) => { target[key as string] = value; return true; },
+		});
+
+	/** The browser's canvas: `width` and `height` are the backing store the engine sets. */
+	function onScreen() {
+		const transforms: number[][] = [];
+		const rects: number[][] = [];
+		const canvas = { width: 0, height: 0, getContext: () => cameraContext(transforms, rects) };
+		return { canvas, transforms, rects };
+	}
+
+	it("the zoom is an integer that fits the window, at least 1", () => {
+		assert.equal(typeof engineModule.storyZoom, "function", "storyZoom is exported");
+		assert.equal(engineModule.storyZoom(1860, 900), 4);
+		assert.equal(engineModule.storyZoom(520, 900), 3);
+		assert.equal(engineModule.storyZoom(200, 150), 1);
+	});
+
+	it("without a camera nothing is transformed and the canvas keeps the room size", () => {
+		const { canvas, transforms } = onScreen();
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
+		engine.setScene(view([resident("t1", seat("desk", 0), "running")]));
+		run(2);
+		assert.equal(transforms.length, 0);
+		assert.equal(canvas.width, OFFICE_CONFIG.cols * OFFICE_CONFIG.tile);
+		assert.equal(canvas.height, OFFICE_CONFIG.rows * OFFICE_CONFIG.tile);
+		engine.destroy();
+	});
+
+	it("a camera sizes the canvas to the window and renders with its zoom without errors", () => {
+		const { canvas, transforms } = onScreen();
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
+		engine.setScene(view([resident("t1", seat("desk", 0), "running")]));
+		engine.setCamera({ zoom: 4, width: 400, height: 300, target: { kind: "orchestrator" } });
+		assert.equal(canvas.width, 400);
+		assert.equal(canvas.height, 300);
+		assert.doesNotThrow(() => run(2));
+		assert.ok(transforms.length > 0);
+		assert.deepEqual(transforms.at(-1)?.slice(0, 2), [4, 0], "scale is the zoom, no skew");
+		engine.destroy();
+	});
+
+	it("the camera eases to a feature prop and clamps the view inside the room", () => {
+		const { canvas, transforms } = onScreen();
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
+		engine.setScene(view([]));
+		// memory prop: x 18, y 3, 1x2 tiles, so its centre is (444, 96) in room pixels. The view is 200x120 at zoom 2: half 50x30.
+		engine.setCamera({ zoom: 2, width: 200, height: 120, target: { kind: "feature", feature: "memory" } });
+		run(5);
+		// x clamps to 480 - 50 = 430 (room width) and y stays at 96. The translation puts that point at the view centre.
+		assert.deepEqual(transforms.at(-1), [2, 0, 0, 2, -760, -132]);
+		engine.destroy();
+	});
+
+	it("a point target is followed, and clearing the camera restores the room size and drawing", () => {
+		const { canvas, transforms } = onScreen();
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
+		engine.setScene(view([]));
+		engine.setCamera({ zoom: 1, width: 480, height: 312, target: { x: 240, y: 156 } });
+		run(1);
+		const before = transforms.length;
+		engine.setCamera(null);
+		assert.equal(canvas.width, 480);
+		assert.equal(canvas.height, 312);
+		run(1);
+		assert.equal(transforms.length, before, "no transform once the camera is off");
+		engine.destroy();
+	});
+});

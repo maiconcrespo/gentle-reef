@@ -263,7 +263,7 @@ function nameOf(agent) {
 }
 
 /** 0.4s under ten seconds, 13s under a minute, then 1m 05s. */
-function formatDuration(ms) {
+export function formatDuration(ms) {
   const safe = Math.max(0, ms);
   if (safe < 10_000) return `${(safe / 1000).toFixed(1)}s`;
   const seconds = Math.round(safe / 1000);
@@ -314,4 +314,210 @@ export function sceneView(state) {
       until: state.features?.[name]?.until ?? 0,
     }])),
   };
+}
+
+/* ---------- Narrator (T14): contract events to dialog lines, and the dialog queue. ---------- */
+
+export const NARRATOR_QUEUE_LIMIT = 20;
+/** Typewriter speed: one character per this many milliseconds. */
+export const TYPE_MS_PER_CHAR = 28;
+/** A finished line waits this long before the next queued line replaces it. */
+export const AUTO_ADVANCE_MS = 2500;
+/** Pause before a backlog moves on: with three or more lines waiting, each one gets this shorter pause. */
+export const BACKLOG_ADVANCE_MS = 800;
+const BACKLOG_AT = 3;
+
+const ORCHESTRATOR = "ORCHESTRATOR";
+// One sentence per feature prop (S8). Unknown features fall back to a generic line.
+const FEATURE_SENTENCE = {
+  music: "playing gentle music",
+  design: "sketching on the easel",
+  memory: "saving to memory",
+  web: "searching the web",
+  todo: "updating the to-do board",
+  ask: "asking you a question",
+  review: "calling the inspectors",
+  judgment: "calling the judges",
+  mcp: "calling an MCP tool",
+  codegraph: "reading the code map",
+};
+// Status changes a subagent can narrate. A first sighting gets an "arrived, " prefix.
+const AGENT_SENTENCE = {
+  queued: "waiting for a desk.",
+  running: "starts typing…",
+  waiting: "waiting for a reply.",
+  completed: "finished ✓",
+  failed: "failed !",
+  cancelled: "cancelled !",
+  timed_out: "timed out !",
+};
+const AGENT_BAD = new Set(["failed", "cancelled", "timed_out"]);
+
+// ask_user tools have their own line: the orchestrator's waiting state says it, so the tool itself stays quiet.
+const isAskTool = (name) => typeof name === "string" && name.startsWith("ask_user");
+
+export function initialNarrator() {
+  return { orchestrator: "idle", statuses: {}, toolStarts: {} };
+}
+
+const say = (speaker, text, tone = "info") => ({ speaker, text, tone });
+
+/**
+ * One contract event in, the lines it produces out. `state` is the narrator's own memory (last orchestrator state,
+ * last status per subagent, tool start times). Returns { state, lines }.
+ */
+export function narrate(state, event, at = 0) {
+  if (!isRecord(event) || event.v !== CONTRACT_VERSION) return { state, lines: [] };
+  switch (event.type) {
+    case "orchestrator":
+      return narrateOrchestrator(state, event);
+    case "tool":
+      return narrateTool(state, event, at);
+    case "feature": {
+      const sentence = FEATURE_SENTENCE[event.feature] ?? "using a tool";
+      return { state, lines: [say(ORCHESTRATOR, `${sentence}…`)] };
+    }
+    case "compaction":
+      return narrateCompaction(state, event.phase);
+    case "subagent":
+      return narrateSubagent(state, event);
+    default:
+      return { state, lines: [] };
+  }
+}
+
+function narrateOrchestrator(state, event) {
+  if (!ORCHESTRATOR_STATES.has(event.state)) return { state, lines: [] };
+  const previous = state.orchestrator;
+  const next = { ...state, orchestrator: event.state };
+  // A turn starts from the floor or after an answer; a tool hand-back inside the turn is not a new line.
+  if (event.state === "thinking" && (previous === "idle" || previous === "waiting-user")) {
+    return { state: next, lines: [say(ORCHESTRATOR, "thinking…")] };
+  }
+  if (event.state === "waiting-user" && previous !== "waiting-user") {
+    return { state: next, lines: [say(ORCHESTRATOR, "waiting for your answer.", "ask")] };
+  }
+  if (event.state === "idle" && previous !== "idle" && previous !== "waiting-user") {
+    return { state: next, lines: [say(ORCHESTRATOR, "done, back on the floor.", "ok")] };
+  }
+  return { state: next, lines: [] };
+}
+
+function narrateTool(state, event, at) {
+  const name = event.toolName;
+  if (typeof name !== "string" || isAskTool(name)) return { state, lines: [] };
+  if (event.phase === "start") {
+    return { state: { ...state, toolStarts: { ...state.toolStarts, [name]: at } }, lines: [say(ORCHESTRATOR, `running ${name}…`)] };
+  }
+  if (event.phase !== "end") return { state, lines: [] };
+  const { [name]: startedAt, ...rest } = state.toolStarts;
+  const failed = event.ok === false;
+  const outcome = failed ? "failed !" : "done ✓";
+  const text = startedAt === undefined ? `${name} ${outcome}` : `${name} ${outcome} · ${formatDuration(at - startedAt)}`;
+  return { state: { ...state, toolStarts: rest }, lines: [say(ORCHESTRATOR, text, failed ? "fail" : "ok")] };
+}
+
+function narrateCompaction(state, phase) {
+  if (phase === "start") return { state, lines: [say(ORCHESTRATOR, "compacting: brewing a fresh pot…", "coffee")] };
+  if (phase === "end") return { state, lines: [say(ORCHESTRATOR, "fresh pot brewed. Context compacted.", "coffee")] };
+  if (phase === "failed") return { state, lines: [say(ORCHESTRATOR, "compaction failed !", "fail")] };
+  return { state, lines: [] };
+}
+
+function narrateSubagent(state, event) {
+  if (typeof event.id !== "string" || !Object.hasOwn(AGENT_SENTENCE, event.status)) return { state, lines: [] };
+  const previous = Object.hasOwn(state.statuses, event.id) ? state.statuses[event.id] : undefined;
+  const next = { ...state, statuses: { ...state.statuses, [event.id]: event.status } };
+  if (previous === event.status) return { state: next, lines: [] };
+  const sentence = AGENT_SENTENCE[event.status];
+  const text = previous === undefined ? `arrived, ${sentence}` : sentence;
+  const tone = event.status === "completed" ? "ok" : AGENT_BAD.has(event.status) ? "fail" : "info";
+  return { state: next, lines: [say(speakerOf(event), text, tone)] };
+}
+
+/** The label the player knows the agent by; the role stands in when the label is empty. */
+function speakerOf(event) {
+  if (typeof event.label === "string" && event.label !== "") return event.label;
+  if (typeof event.agent === "string" && event.agent !== "unknown") return event.agent;
+  return String(event.role ?? "agent");
+}
+
+/** The page reconnected: remember what the snapshot shows so its agents do not arrive again as news. No lines. */
+export function narrateSnapshot(state, snapshot) {
+  if (!isRecord(snapshot) || snapshot.v !== CONTRACT_VERSION || !isRecord(snapshot.orchestrator)) return state;
+  const orchestrator = ORCHESTRATOR_STATES.has(snapshot.orchestrator.state) ? snapshot.orchestrator.state : state.orchestrator;
+  const statuses = {};
+  for (const agent of Array.isArray(snapshot.agents) ? snapshot.agents : []) {
+    if (isRecord(agent) && typeof agent.id === "string" && Object.hasOwn(AGENT_SENTENCE, agent.status)) statuses[agent.id] = agent.status;
+  }
+  return { ...state, orchestrator, statuses };
+}
+
+/**
+ * Which actor the story camera should follow for this event, or null when the event does not move it.
+ * The page passes the result to the engine: the orchestrator, a resident by id, or a feature prop by name.
+ */
+export function actorOf(event) {
+  if (!isRecord(event) || event.v !== CONTRACT_VERSION) return null;
+  switch (event.type) {
+    case "orchestrator":
+    case "tool":
+    case "compaction":
+      return { kind: "orchestrator" };
+    case "subagent":
+      return typeof event.id === "string" ? { kind: "resident", id: event.id } : null;
+    case "feature":
+      return typeof event.feature === "string" ? { kind: "feature", feature: event.feature } : null;
+    default:
+      return null;
+  }
+}
+
+/** The dialog box: the line on screen, the lines waiting behind it, and whether an ask prompt holds the box. */
+export function initialDialog() {
+  return { current: null, queue: [], askOpen: false, seq: 0 };
+}
+
+export function reduceDialog(state, action) {
+  switch (action.type) {
+    case "lines": {
+      let seq = state.seq;
+      const fresh = [];
+      for (const line of action.lines) fresh.push({ id: ++seq, ...line });
+      let queue = [...state.queue, ...fresh];
+      let current = state.current;
+      if (current === null && queue.length > 0) current = queue.shift();
+      // Overflow drops the oldest pending lines: the player sees what happened most recently.
+      if (queue.length > NARRATOR_QUEUE_LIMIT) queue = queue.slice(-NARRATOR_QUEUE_LIMIT);
+      return { ...state, current, queue, seq };
+    }
+    case "next": {
+      // With nothing queued the last line stays on screen, like a game text box.
+      if (state.queue.length === 0) return state;
+      const [current, ...queue] = state.queue;
+      return { ...state, current, queue };
+    }
+    case "ask":
+      return { ...state, askOpen: Boolean(action.open) };
+    default:
+      return state;
+  }
+}
+
+/** What the box shows: the ask prompt while it is open (it takes priority), else the current line, else nothing. */
+export function dialogView(state) {
+  const mode = state.askOpen ? "ask" : state.current ? "line" : "none";
+  return { mode, line: state.current, pending: state.queue.length };
+}
+
+/** How long a finished line stays before the next one takes the box, given how many lines wait behind it. */
+export function dwellMs(pending) {
+  return pending >= BACKLOG_AT ? BACKLOG_ADVANCE_MS : AUTO_ADVANCE_MS;
+}
+
+/** How many characters of `text` the typewriter has revealed after `elapsedMs`. Reduced motion shows the whole line. */
+export function typedLength(text, elapsedMs, reduced) {
+  if (reduced) return text.length;
+  if (elapsedMs <= 0) return 0;
+  return Math.min(text.length, Math.floor(elapsedMs / TYPE_MS_PER_CHAR));
 }

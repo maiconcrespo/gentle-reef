@@ -80,10 +80,22 @@ footer b { color: var(--gold); font-weight: 600; }
 @keyframes bob { 50% { transform: translateY(3px); } }
 @media (prefers-reduced-motion: reduce) { .dialog .caret { animation: none; } }
 
-/* Layout toggle in the header: shows the layout it switches to (see app.js applyLayout). */
-.layout-toggle { font: inherit; font-size: 12px; color: var(--muted); background: var(--user); border: 1px solid var(--border); padding: 2px 10px; cursor: pointer; }
-.layout-toggle:hover { border-color: var(--blue); color: var(--blue); }
-.layout-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+/* Layout switch in the header: Full / Compact / Story, the active one pressed (see app.js applyLayout). */
+.layout-switch { display: inline-flex; border: 1px solid var(--border); background: var(--user); }
+.layout-switch button { font: inherit; font-size: 12px; color: var(--muted); background: transparent; border: 0; padding: 2px 10px; cursor: pointer; }
+.layout-switch button + button { border-left: 1px solid var(--border); }
+.layout-switch button:hover { color: var(--blue); }
+.layout-switch button[aria-pressed="true"] { color: var(--gold); background: var(--sel); }
+.layout-switch button:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+/* One line under the room in full and compact: the current narration line (app.js renderNarration). */
+.caption { width: 0; min-width: 100%; margin: 0; padding: 6px 10px; border: 1px solid var(--border); background: var(--panel); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.caption[hidden] { display: none; }
+.caption .who { color: var(--gold); margin-right: 6px; }
+.caption[data-tone="ok"] .who { color: var(--green); }
+.caption[data-tone="fail"] .who { color: var(--red); }
+.caption[data-tone="ask"] .who { color: var(--purple); }
+.caption[data-tone="coffee"] .who { color: var(--sand); }
+.keys { display: none; }
 /* Dock layout (design/agent-office/02-dock-pane.html): one narrow column, the room at 1x on top, then brew, team and activity.
    Room is 480 px wide, so the column is 520 px and the frame keeps 4 px of padding; the scale stays 1x at this width.
    The legend is left out (the design has none; the canvas label carries the state). The ask dialog overlays the bottom of the
@@ -109,3 +121,53 @@ footer b { color: var(--gold); font-weight: 600; }
 [data-layout="dock"] .dialog { left: 10px; right: 10px; bottom: -64px; max-height: 204px; padding: 10px 14px 12px; font-size: 13px; line-height: 1.4; }
 [data-layout="dock"] .dialog .hint { margin-top: 6px; }
 [data-layout="dock"] footer { padding: 0 12px; gap: 12px; font-size: 11px; }
+
+/* Story layout (T14, design/agent-office/03-story-mode.html): the room fills the window at a whole-number zoom (app.js fitStory),
+   the camera follows the last actor, and the brew box, party box and dialog overlay it. Full and compact never match these rules. */
+[data-layout="story"] main { display: block; position: relative; padding: 0; min-height: 0; overflow: hidden; }
+[data-layout="story"] aside, [data-layout="story"] .map, [data-layout="story"] .caption, [data-layout="story"] .frame-title { display: none; }
+/* Full and compact centre the stage with justify-self / align-self. On an absolutely positioned box those shrink it to its content, so story stretches both boxes to the inset edges. */
+[data-layout="story"] .stage { position: absolute; inset: 0; width: auto; max-width: none; gap: 0; justify-self: stretch; align-self: stretch; }
+[data-layout="story"] .frame { position: absolute; inset: 0; padding: 0; border: 0; box-shadow: none; max-width: none; justify-self: stretch; align-self: stretch; }
+[data-layout="story"] canvas.office { display: block; }
+[data-layout="story"] .footer-end { display: none; }
+[data-layout="story"] .keys { display: inline; color: var(--dim); }
+.story-hud { display: none; }
+[data-layout="story"] .story-hud { display: block; }
+.story-box { position: absolute; top: 14px; background: var(--panel); border: 3px solid var(--text); box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 5px var(--sel), 6px 6px 0 rgba(6, 4, 7, .7); padding: 10px 14px 12px; }
+.story-brew { left: 14px; width: min(360px, 42%); }
+.story-brew .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.story-brew .name { font-size: 16px; font-weight: 700; letter-spacing: .04em; }
+.story-brew .num { font-size: 18px; color: var(--sand); font-weight: 700; }
+.story-brew .meter { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; margin-top: 8px; }
+.story-brew .meter b { color: var(--gold); font-size: 12px; }
+.story-brew .track { height: 14px; padding: 2px; background: var(--bg); border: 2px solid var(--border); }
+.story-brew .fill { height: 100%; background: var(--sand); box-shadow: inset 0 3px 0 var(--gold); transition: width .3s steps(6); }
+.story-brew .sub { margin-top: 4px; text-align: right; color: var(--muted); font-size: 12px; }
+.story-party { right: 14px; width: min(280px, 34%); }
+.story-party h2 { margin: 0 0 8px; font-size: 12px; letter-spacing: .1em; color: var(--heading); font-weight: 600; }
+.story-party ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.story-party li { display: grid; grid-template-columns: 12px 1fr; gap: 10px; align-items: center; }
+.story-party li[aria-current="true"] b::before { content: "▶ "; color: var(--gold); }
+.story-party small { color: var(--muted); font-size: 11px; }
+/* The narration box is the story dialog: same frame as the ask dialog, sized for a line of text. Speaker colour follows the tone. */
+[data-layout="story"] .dialog { left: 14px; right: 14px; bottom: 14px; max-height: none; min-height: 92px; padding: 16px 24px 18px; font-size: 18px; line-height: 1.5; }
+[data-layout="story"] .dialog .caret { right: 18px; bottom: 10px; }
+.say .who, .caption .who { text-transform: uppercase; }
+.say[data-tone="ok"] .who { color: var(--green); }
+.say[data-tone="fail"] .who { color: var(--red); }
+.say[data-tone="ask"] .who { color: var(--purple); }
+.say[data-tone="coffee"] .who { color: var(--sand); }
+.say-text { margin: 0; }
+/* Narrow windows (the compact width or a phone-sized pane): one line per bar, and the two story boxes side by side without overlap. */
+@media (max-width: 720px) {
+  header, footer { white-space: nowrap; overflow: hidden; }
+  .crumb, footer #footAgents { display: none; }
+  [data-layout="story"] .dialog { font-size: 14px; padding: 10px 14px 12px; min-height: 64px; }
+  .story-brew { width: 54%; padding: 8px 10px; }
+  .story-brew .name { font-size: 13px; }
+  .story-brew .sub { font-size: 11px; }
+  .story-party { width: 36%; padding: 8px 10px; }
+  .story-party li { gap: 6px; }
+  .story-party small { font-size: 10px; }
+}

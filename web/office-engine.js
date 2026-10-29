@@ -12,6 +12,12 @@ export const OFFICE_CONFIG = {
 	bench: { x: 2, w: 6 }
 };
 
+/* Story layout (T14): the room is shown zoomed by a whole number, so pixels stay square. Taller windows zoom in further, never past 4x. */
+export const STORY_ZOOM_MAX = 4;
+export function storyZoom(width, height) {
+	return Math.max(1, Math.min(STORY_ZOOM_MAX, Math.floor(Math.min(height / 200, width / 160))));
+}
+
 /* One prop per gentle-shell feature (S8). Each footprint is tiles walkers cannot stand on. The rack is the existing one (cfg.rack).
    Kept free on purpose: coffee spot (17,4), whiteboard spot (9,3), front (8,6), rest (9,5), door approach (9-10,11), bench overflow (row 11, x 2-13). */
 export const FEATURE_PROPS = [
@@ -237,6 +243,9 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	let hudT = 0;
 	/* Which feature props are lit this frame, by feature name. */
 	let lit = {};
+	/* Story camera (T14). Null in full and compact, so their drawing never goes through a transform. */
+	let camera = null;
+	const cam = { x: W / 2, y: H / 2, placed: false, tx: 0, ty: 0 };
 	const orch = {
 		x: FX(cfg.orchStart.x), y: FY(cfg.orchStart.y), path: [], face: 'down', sit: false, moving: false,
 		mode: 'idle', wait: 0.5, bubble: null, step: 0, onArrive: null, target: null
@@ -960,6 +969,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		if (orch.bubble) { orch.bubble.t -= dt; if (orch.bubble.t <= 0) orch.bubble = null; }
 		updateOrch(dt);
 		updateResidents(dt);
+		if (camera) updateCamera(dt);
 		potShown += (potTarget - potShown) * Math.min(1, dt * 1.2);
 		brewingNow = !!(view && view.brewing) && orch.mode === 'brew';
 	}
@@ -989,6 +999,75 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		residents.forEach(c => { if (c.bubble) drawBubble(Math.round(c.x) - 9, Math.round(c.y) - 35 - (c.sit ? 36 : 14), c.bubble.icon); });
 	}
 
+	/* ---------- story camera (T14) ---------- */
+	/* Share of the remaining gap closed per second when the camera follows a new actor. */
+	const CAMERA_EASE = 3;
+	/* Where a camera target is right now, in room pixels. Null when it cannot be found (for example a resident that left). */
+	function cameraPoint(target) {
+		if (!target) return null;
+		if (typeof target.x === 'number' && typeof target.y === 'number') return { x: target.x, y: target.y };
+		if (target.kind === 'orchestrator') return { x: orch.x, y: orch.y - 20 };
+		if (target.kind === 'resident') {
+			const c = residents.get(target.id);
+			return c ? { x: c.x, y: c.y - 20 } : null;
+		}
+		if (target.kind === 'feature') {
+			const p = FEATURE_PROPS.find(q => q.feature === target.feature);
+			return p ? { x: (p.x + p.w / 2) * T, y: (p.y + p.h / 2) * T } : null;
+		}
+		return null;
+	}
+	/* Moves the camera centre toward its target, then clamps it so the view never shows past the room. A view wider or taller than the room is centred. */
+	function updateCamera(dt) {
+		const wanted = cameraPoint(camera.target);
+		if (wanted && cam.placed) {
+			const k = reduced ? 1 : 1 - Math.exp(-CAMERA_EASE * dt);
+			cam.x += (wanted.x - cam.x) * k;
+			cam.y += (wanted.y - cam.y) * k;
+		} else if (wanted) {
+			/* First placement snaps: the camera does not slide in from the room centre. */
+			cam.x = wanted.x; cam.y = wanted.y; cam.placed = true;
+		} else if (!cam.placed) {
+			cam.x = W / 2; cam.y = H / 2; cam.placed = true;
+		}
+		const halfW = camera.vw / (2 * camera.zoom), halfH = camera.vh / (2 * camera.zoom);
+		cam.x = 2 * halfW >= W ? W / 2 : Math.min(W - halfW, Math.max(halfW, cam.x));
+		cam.y = 2 * halfH >= H ? H / 2 : Math.min(H - halfH, Math.max(halfH, cam.y));
+		/* Whole-pixel offsets keep the scaled pixels crisp. */
+		cam.tx = Math.round(camera.vw / 2 - cam.x * camera.zoom);
+		cam.ty = Math.round(camera.vh / 2 - cam.y * camera.zoom);
+	}
+	/* Without a camera the frame is drawn exactly as before. With one, the view is cleared and the room is drawn through the zoom. */
+	function paint() {
+		if (!camera) { draw(); return; }
+		g.fillStyle = P.bg;
+		g.fillRect(0, 0, camera.vw, camera.vh);
+		g.save();
+		g.setTransform(camera.zoom, 0, 0, camera.zoom, cam.tx, cam.ty);
+		draw();
+		g.restore();
+	}
+	/* Story layout on: the canvas takes the window's size and the room is drawn at `zoom` around the camera. Null: back to the room's own size. */
+	function setCamera(next) {
+		if (!next) {
+			camera = null;
+			cam.placed = false;
+			canvas.width = W; canvas.height = H;
+			g.imageSmoothingEnabled = false;
+			return;
+		}
+		camera = {
+			zoom: Math.max(1, Math.floor(next.zoom)),
+			vw: Math.max(1, Math.round(next.width)),
+			vh: Math.max(1, Math.round(next.height)),
+			target: next.target ?? null,
+		};
+		/* Resizing a canvas resets its context state, so it is only resized when the size changes; the smoothing flag is set again either way. */
+		if (canvas.width !== camera.vw) canvas.width = camera.vw;
+		if (canvas.height !== camera.vh) canvas.height = camera.vh;
+		g.imageSmoothingEnabled = false;
+	}
+
 	let last = performance.now();
 	let stopped = false;
 	function frame(now) {
@@ -998,7 +1077,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		last = now;
 		time += dt;
 		update(dt);
-		draw();
+		paint();
 		hudT -= dt;
 		if (hudT <= 0) {
 			hudT = 0.15;
@@ -1017,6 +1096,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 
 	return {
 		setScene,
+		setCamera,
 		destroy() {
 			stopped = true;
 			if (reducedQuery && reducedQuery.removeEventListener) reducedQuery.removeEventListener('change', onMotionChange);

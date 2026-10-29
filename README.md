@@ -2,7 +2,7 @@
 
 A pixel-art office that shows real gentle-shell activity: the orchestrator, subagents, and tokens as a coffee pot. It ships as a standalone Pi package from this repo.
 
-**Status (T3):** event contract, adapter, hub, toggle, `/office` command, and the browser window. The window shows the orchestrator, the coffee pot, and resident subagents (explore, worker, verify) at the four desks; extra agents wait on a bench by the door.
+**Status (T14):** event contract, adapter, hub, toggle, `/office` command, and the browser window with three layouts (full, compact, story). The window shows the orchestrator, the coffee pot, and resident subagents (explore, worker, verify) at the four desks; extra agents wait on a bench by the door. The story layout has a close-up camera and a narration dialog.
 
 ## Install
 
@@ -21,13 +21,14 @@ Or add the path to the `packages` list in your Pi `settings.json`.
 /office on       # attach listeners
 /office open     # start the window (once per session) and open it in the browser
 /office dock     # same as open, in the compact layout (?layout=dock)
+/office story    # same as open, in the story layout (?layout=story)
 /office off      # detach listeners, close the window, clear the hub
 /office status   # enabled state, hub stats, and the window URL while it runs
 ```
 
 The module is off by default. When it is off, the only thing registered is the `/office` command, and `/office open` and `/office dock` refuse until you run `/office on`.
 
-The menu lists the same actions as the subcommands. While the module is off: Turn on, Turn on and open the window, Turn on and open the compact window, Status. While it is on: Open the window, Turn off, Open the compact window, Status.
+The menu lists the same actions as the subcommands. While the module is off: Turn on, Turn on and open the window, Turn on and open the compact window, Turn on and open in story mode, Status. While it is on: Open the window, Turn off, Open the compact window, Open in story mode, Status.
 
 ## The window
 
@@ -38,6 +39,7 @@ The menu lists the same actions as the subcommands. While the module is off: Tur
 - a story-mode dialog box with the question and its options while an `ask_user` prompt is open. It is display only: you still answer in the terminal, and it closes when the prompt ends;
 - the coffee pot: it drains as context fills (level = 1 - percent/100), and compaction walks the orchestrator to the coffee machine to brew a fresh one;
 - feature props that light up while their tool runs and for 4 s after it ends: a record player (music; idle for now, because gentle music emits no event the office can see), an easel (`gentle_design`), a filing cabinet (`mem_*`), a desk bell (`ask_user_*`), a corkboard (`todo`), the MCP rack (`mcp`, `codemode`), a pigeon (`web_search`, `fetch_content`, `get_search_content`) and a pinned map (codegraph);
+- a narration dialog: one line per real event with a speaker (see [Narration](#narration));
 - an activity log with tool and compaction lines;
 - a connection indicator (`live`, `reconnecting…`, or `offline`). The page reconnects by itself and resyncs from a fresh snapshot.
 
@@ -50,7 +52,33 @@ The window has two layouts that share one page and one state:
 - **Full** (default): the desk window described above.
 - **Compact** (`design/agent-office/02-dock-pane.html`): one narrow column, 520 px at most. The room is on top at 1x, then the context brew, the team and the activity. The legend is left out, and the ask dialog overlays the bottom of the room and runs a little past it, so its top stays below the orchestrator's front spot.
 
-Open the compact layout with `/office dock`, or with "Open the compact window" / "Turn on and open the compact window" in the menu. The URL gets `?layout=dock` after the token; the token, path and checks are unchanged. The header button ("Compact" / "Full") switches without reloading. Its choice is saved in the browser's localStorage and written into the URL, so a reload keeps it. A `?layout=` already in the URL wins over the saved choice for that load, so `/office dock` always shows the compact layout. The room stays at 1x, so below about 490 px of window width the page scrolls sideways.
+Open the compact layout with `/office dock`, or with "Open the compact window" / "Turn on and open the compact window" in the menu. The URL gets `?layout=dock` after the token; the token, path and checks are unchanged. The header switch (Full / Compact / Story) changes layout without reloading. Its choice is saved in the browser's localStorage and written into the URL, so a reload keeps it. A `?layout=` already in the URL wins over the saved choice for that load, so `/office dock` always shows the compact layout. The room stays at 1x, so below about 490 px of window width the page scrolls sideways.
+
+### Story layout
+
+`/office story`, or "Open in story mode" / "Turn on and open in story mode" in the menu, opens the window at `?layout=story` (`design/agent-office/03-story-mode.html`). Story fills the whole window with a close-up of the room:
+
+- **Camera.** The room is drawn at a whole-number zoom (up to 4x), so the pixels stay square. The window is the camera: it eases toward the actor that acted last and never shows past the room's edge. Orchestrator events move it to the orchestrator, a subagent event to that resident, and a feature event to its prop.
+- **CONTEXT BREW** (top left): the context left as a rounded percent, with an HP-style bar. It shows "—" until Pi reports usage.
+- **PARTY** (top right): the orchestrator and each resident with its state. The row the camera follows is marked with ▶.
+- **Dialog** (bottom): the narration, or the `ask_user` prompt while one is open. The footer shows the key hint: Space or a click moves to the next line.
+
+Full and compact have no camera and take the same drawing path as before.
+
+### Narration
+
+The dialog narrates real events, one line each, with a speaker:
+
+- `ORCHESTRATOR: thinking…` when a turn starts; `running bash…` at a tool start; `bash done ✓ · 0.4s` or `bash failed ! · 13s` at its end; `waiting for your answer.` while an `ask_user` prompt is open; `done, back on the floor.` when the turn ends.
+- Feature props say what they do, for example `ORCHESTRATOR: saving to memory…`.
+- Compaction: brewing a fresh pot, the fresh pot, or a failure.
+- Subagents: `scout: arrived, waiting for a desk.`, `starts typing…`, `waiting for a reply.`, then `finished ✓`, `failed !`, `cancelled !` or `timed out !`.
+
+Subagents' internal tool calls are not visible to the window, so their lines cover only arrival, status and the end.
+
+Lines queue and page like a game text box: the typewriter reveals each line, a finished line waits a short time (less when several lines back up), and the next one takes the box. Space or a click finishes the typewriter, or moves on. With `prefers-reduced-motion` the line shows at once. An open `ask_user` prompt takes the box, and narration waits behind it.
+
+In story the narration is the big bottom box. In full and compact it is a one-line caption under the room, showing the current line. The narrator is pure and tested (`test/narrator.test.ts`); the page only renders what it returns.
 
 ### Local-only guards
 
@@ -77,6 +105,6 @@ A missing or invalid file means disabled. Only an explicit `"enabled": true` tur
 - `src/adapter/`: maps Pi events and gentle-pi task status to contract events, plus the in-memory `OfficeHub`. Pure.
 - `src/server/`: the loopback window server (`office-server.ts`) and the platform browser opener (`open-browser.ts`).
 - `src/settings.ts`, `src/toggle.ts`: settings file and the on/off controller.
-- `web/`: the page. `scene-reducer.js` is pure and tested from node; `office-engine.js` is the 32-bit canvas engine from `design/agent-office/01-overworld-hq.html`; `app.js` connects the stream to both.
+- `web/`: the page. `scene-reducer.js` is pure and tested from node, and holds the narrator (`narrate`, the dialog queue); `office-engine.js` is the 32-bit canvas engine from `design/agent-office/01-overworld-hq.html`, with an optional story camera (`setCamera`); `app.js` connects the stream to both. The server serves a fixed list of files, so the narrator lives in `scene-reducer.js` rather than a separate module.
 - `extensions/gentle-office.ts`: thin Pi wiring.
 - `test/`: `npm test` runs the suite with Node's built-in test runner and TypeScript type stripping. No dependencies to install.

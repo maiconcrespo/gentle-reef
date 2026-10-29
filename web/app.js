@@ -1,7 +1,21 @@
-// Gentle Office page: connects the SSE stream to the scene reducer, the canvas engine and the sidebar.
+// Gentle Office page: connects the SSE stream to the scene reducer, the narrator, the canvas engine and the sidebar.
 // Everything from the stream goes in through textContent, never innerHTML.
-import { SCENE_LOG_LIMIT, initialScene, reduceScene, sceneView } from "./scene-reducer.js";
-import { OFFICE_CONFIG, createOfficeEngine, drawPot } from "./office-engine.js";
+import {
+	dwellMs,
+	SCENE_LOG_LIMIT,
+	actorOf,
+	dialogView,
+	initialDialog,
+	initialNarrator,
+	initialScene,
+	narrate,
+	narrateSnapshot,
+	reduceDialog,
+	reduceScene,
+	sceneView,
+	typedLength,
+} from "./scene-reducer.js";
+import { OFFICE_CONFIG, createOfficeEngine, drawPot, storyZoom } from "./office-engine.js";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, className) => {
@@ -16,6 +30,14 @@ const crewEl = $("crew");
 const canvas = $("office");
 const potCtx = $("pot").getContext("2d");
 const askEl = $("askDialog");
+const frameEl = canvas.parentElement;
+const sayEl = $("narration");
+const sayWho = $("sayWho");
+const sayText = $("sayText");
+const sayCaret = $("sayCaret");
+const captionEl = $("caption");
+const capWho = $("capWho");
+const capText = $("capText");
 
 const ROLE_LABEL = { explore: "Explore", worker: "Worker", verify: "Verify" };
 const STATUS_LABEL = {
@@ -34,19 +56,36 @@ let seenLogId = 0;
 let lastLabel = "";
 let hasDropped = false;
 
+// Narration: the narrator turns events into lines, the dialog box pages them. The box and the caption both read `dialog`.
+let narrator = initialNarrator();
+let dialog = initialDialog();
+// Typewriter and auto-advance clocks for the line on screen (page time, never inside the pure modules).
+let typedId = -1;
+let typeStart = 0;
+let finishedId = -1;
+let finishedAt = 0;
+// The actor the story camera is on: the orchestrator until an event says otherwise.
+let follow = { kind: "orchestrator" };
+// Story camera size, set by fitStory: the engine gets it again whenever the followed actor changes.
+let storyFrame = null;
+
+const reducedQuery = matchMedia("(prefers-reduced-motion: reduce)");
+let reduced = reducedQuery.matches;
+reducedQuery.addEventListener("change", (event) => { reduced = event.matches; });
+
 const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {
 	onPot: ({ level, brewing, time }) => drawPot(potCtx, level, time, brewing),
 	// An agent has walked out of the door: its seat frees up for the next one in the bench.
 	onDeparted: (id) => dispatch({ type: "departed", id }),
 });
 
-// Layout: "full" is the desk window; "dock" is the narrow pane from design/agent-office/02-dock-pane.html. ?layout= wins for
-// this load (the /office dock entry uses it); otherwise the saved toggle choice; otherwise full. The toggle saves its choice
-// and rewrites ?layout= so a reload keeps it.
-const LAYOUTS = ["full", "dock"];
-const LAYOUT_LABEL = { full: "Full", dock: "Compact" };
+// Layout: "full" is the desk window, "dock" the narrow pane (design/agent-office/02-dock-pane.html), "story" the close-up
+// that fills the window (design/agent-office/03-story-mode.html). ?layout= wins for this load (the /office menu entries use it);
+// otherwise the saved choice; otherwise full. The header switch saves its choice and rewrites ?layout= so a reload keeps it.
+const LAYOUTS = ["full", "dock", "story"];
 const LAYOUT_KEY = "gentle-office.layout";
-const layoutToggle = $("layoutToggle");
+const layoutButtons = Array.from(document.querySelectorAll(".layout-switch button"));
+const isStory = () => document.documentElement.dataset.layout === "story";
 
 function storedLayout() {
 	try {
@@ -63,12 +102,15 @@ function initialLayout() {
 	return LAYOUTS.includes(saved) ? saved : "full";
 }
 
-// The toggle shows the layout it switches to. CSS keys off <html data-layout>, so the grid refits on its own.
+// CSS keys off <html data-layout>, so the grid refits on its own. The pressed button is the layout on screen.
 function applyLayout(layout, { remember }) {
 	document.documentElement.dataset.layout = layout;
-	const next = layout === "dock" ? "full" : "dock";
-	layoutToggle.textContent = LAYOUT_LABEL[next];
-	layoutToggle.setAttribute("aria-label", `Switch to the ${LAYOUT_LABEL[next].toLowerCase()} layout`);
+	for (const button of layoutButtons) button.setAttribute("aria-pressed", String(button.dataset.layout === layout));
+	// Only the story layout has a camera. Full and compact go back to the room's own size.
+	if (layout !== "story") engine.setCamera(null);
+	fitCanvas();
+	renderNarration();
+	renderParty();
 	if (!remember) return;
 	try {
 		localStorage.setItem(LAYOUT_KEY, layout);
@@ -80,19 +122,18 @@ function applyLayout(layout, { remember }) {
 	history.replaceState(null, "", url);
 }
 
-applyLayout(initialLayout(), { remember: false });
-layoutToggle.addEventListener("click", () => {
-	applyLayout(document.documentElement.dataset.layout === "dock" ? "full" : "dock", { remember: true });
-});
+for (const button of layoutButtons) {
+	button.addEventListener("click", () => applyLayout(button.dataset.layout, { remember: true }));
+}
 
-// Integer-scale fit: the room is shown at the largest whole multiple (1x, 2x, 3x...) that fits the stage column and keeps the
-// whole room on screen. Whole multiples keep the pixel art crisp; the scale never drops below 1x.
+// Integer-scale fit for full and compact: the room is shown at the largest whole multiple (1x, 2x, 3x...) that fits the stage
+// column and keeps the whole room on screen. Whole multiples keep the pixel art crisp; the scale never drops below 1x.
 const mainEl = document.querySelector("main");
 const asideEl = document.querySelector("aside");
-const frameEl = canvas.parentElement;
-let fittedScale = 0;
+let fitKey = "";
 
 function fitCanvas() {
+	if (isStory()) return fitStory();
 	const main = getComputedStyle(mainEl);
 	const frame = getComputedStyle(frameEl);
 	const num = (style, prop) => parseFloat(style[prop]) || 0;
@@ -107,10 +148,28 @@ function fitCanvas() {
 		- num(main, "paddingTop") - num(main, "paddingBottom") - stageRest;
 	const fits = Math.min(Math.floor((roomW - frameX) / canvas.width), Math.floor(roomH / canvas.height));
 	const scale = Number.isFinite(fits) ? Math.max(1, fits) : 1;
-	if (scale === fittedScale) return;
-	fittedScale = scale;
+	const key = `room:${scale}`;
+	if (key === fitKey) return;
+	fitKey = key;
 	canvas.style.width = `${canvas.width * scale}px`;
 	canvas.style.height = `${canvas.height * scale}px`;
+}
+
+// Story: the canvas fills the frame at a whole-number zoom. The frame is the whole main area, so its size is the window's.
+function fitStory() {
+	const width = Math.max(1, Math.floor(frameEl.clientWidth));
+	const height = Math.max(1, Math.floor(frameEl.clientHeight));
+	const key = `story:${width}x${height}`;
+	if (key === fitKey) return;
+	fitKey = key;
+	canvas.style.width = `${width}px`;
+	canvas.style.height = `${height}px`;
+	storyFrame = { zoom: storyZoom(width, height), width, height };
+	pushCamera();
+}
+
+function pushCamera() {
+	if (storyFrame) engine.setCamera({ ...storyFrame, target: follow });
 }
 
 // Refit on every page resize (window or stage). Queued to the next frame so the observer never fires mid-layout.
@@ -123,10 +182,21 @@ const queueFit = () => {
 		fitCanvas();
 	});
 };
-fitCanvas();
 new ResizeObserver(queueFit).observe(mainEl);
 
+// The story camera follows whoever acted last. The party list marks the same actor.
+function setFollow(actor) {
+	follow = actor;
+	if (isStory()) pushCamera();
+	renderParty();
+}
+
 const stamp = (at) => (at > 0 ? new Date(at).toTimeString().slice(0, 8) : "--:--:--");
+
+// Writes text only when it changes, so the per-frame typewriter does not churn the DOM.
+const setText = (node, text) => {
+	if (node.textContent !== text) node.textContent = text;
+};
 
 function orchestratorLabel(current) {
 	if (current.brewing) return "brewing a fresh pot";
@@ -154,6 +224,10 @@ function renderBrew() {
 	$("brewLeft").textContent = left === null ? "—" : `${left}%`;
 	$("brewSub").textContent = left === null ? "context usage not reported yet" : "of the context window left";
 	$("footCtx").textContent = `ctx ${view.percent === null ? "—" : `${view.percent}%`}`;
+	// Story brew box: the same rounded percent as an HP bar (fill = what is left).
+	$("sBrewNum").textContent = left === null ? "—" : `${left}%`;
+	$("sBrewSub").textContent = left === null ? "context usage not reported yet" : "of the context window left";
+	$("sBrewFill").style.width = left === null ? "0%" : `${left}%`;
 	const cups = Math.round(view.potLevel * 10);
 	const cupEls = Array.from({ length: 10 }, (_, i) => {
 		const cup = el("i", i < cups ? "" : "empty");
@@ -203,6 +277,34 @@ function renderCrew() {
 	crewEl.replaceChildren(...rows);
 }
 
+// Story party box: the orchestrator, then each resident with its state. The row the camera follows is marked.
+function renderParty() {
+	const rows = [
+		partyRow("orchestrator", "Orchestrator", orchestratorLabel(view), follow.kind === "orchestrator"),
+		...view.agents.map((agent) => partyRow(
+			agent.role,
+			agent.label || ROLE_LABEL[agent.role],
+			`${ROLE_LABEL[agent.role]} · ${STATUS_LABEL[agent.status] ?? agent.status}`,
+			follow.kind === "resident" && follow.id === agent.id,
+		)),
+	];
+	$("sParty").replaceChildren(...rows);
+}
+
+function partyRow(role, name, state, current) {
+	const li = el("li");
+	if (current) li.setAttribute("aria-current", "true");
+	const dot = el("span", `dot role-${role}`);
+	const who = el("span", "who");
+	const label = el("b");
+	label.textContent = name;
+	const status = el("small");
+	status.textContent = state;
+	who.append(label, status);
+	li.append(dot, who);
+	return li;
+}
+
 function renderLog() {
 	// Prepend only the new lines so a polite live region announces what changed, not the whole list.
 	const fresh = scene.log.filter((entry) => entry.id > seenLogId);
@@ -229,18 +331,19 @@ function dispatch(action) {
 	renderStage();
 	renderBrew();
 	renderCrew();
+	renderParty();
 	renderLog();
 }
 
 const isText = (value) => typeof value === "string" && value !== "";
 
-// ask_user dialog: shows the open prompt, display only. Text goes in through textContent.
+// ask_user dialog: shows the open prompt, display only. Text goes in through textContent. Returns whether a prompt is open.
 function renderAsk(ask) {
 	const questions = ask && Array.isArray(ask.questions) ? ask.questions.filter((q) => q && isText(q.question)) : [];
 	if (questions.length === 0) {
 		askEl.hidden = true;
 		askEl.replaceChildren();
-		return;
+		return false;
 	}
 	const blocks = questions.map((q) => {
 		const block = el("div", "q");
@@ -276,7 +379,75 @@ function renderAsk(ask) {
 	caret.setAttribute("aria-hidden", "true");
 	askEl.replaceChildren(...blocks, hint, caret);
 	askEl.hidden = false;
+	return true;
 }
+
+// Narration: the dialog queue advances through the reducer; the box and the caption render what it holds.
+function dispatchDialog(action) {
+	dialog = reduceDialog(dialog, action);
+	renderNarration();
+}
+
+function narrateEvent(event, at) {
+	const result = narrate(narrator, event, at);
+	narrator = result.state;
+	if (result.lines.length > 0) dispatchDialog({ type: "lines", lines: result.lines });
+}
+
+/**
+ * Renders the dialog. Story: the line types out in the big box, a finished line waits dwellMs (AUTO_ADVANCE_MS, less when lines back up) and then the next
+ * queued line takes the box. An open ask prompt holds the box, so narration pauses behind it. Full and compact: the
+ * current line is a one-line caption under the room.
+ */
+function renderNarration() {
+	const current = dialogView(dialog);
+	const line = current.line;
+	const story = isStory();
+	captionEl.hidden = story || !line;
+	if (line) {
+		setText(capWho, `${line.speaker}:`);
+		setText(capText, line.text);
+		captionEl.dataset.tone = line.tone;
+	}
+	sayEl.hidden = !story || current.mode !== "line";
+	if (current.mode !== "line") return;
+	const now = Date.now();
+	if (line.id !== typedId) {
+		typedId = line.id;
+		typeStart = now;
+	}
+	const shown = typedLength(line.text, now - typeStart, reduced);
+	setText(sayWho, `${line.speaker}:`);
+	setText(sayText, line.text.slice(0, shown));
+	sayEl.dataset.tone = line.tone;
+	const finished = shown >= line.text.length;
+	sayCaret.hidden = !finished;
+	if (finished && finishedId !== line.id) {
+		finishedId = line.id;
+		finishedAt = now;
+	}
+	if (finished && current.pending > 0 && now - finishedAt >= dwellMs(current.pending)) dispatchDialog({ type: "next" });
+}
+
+// Space or a click on the frame: finish the typewriter if it runs, otherwise move on to the next queued line.
+function skipLine() {
+	if (!isStory()) return;
+	const current = dialogView(dialog);
+	if (current.mode !== "line") return;
+	const line = current.line;
+	const typing = line.id === typedId && typedLength(line.text, Date.now() - typeStart, reduced) < line.text.length;
+	if (typing) typeStart = -Infinity;
+	else if (current.pending > 0) dispatchDialog({ type: "next" });
+	renderNarration();
+}
+
+frameEl.addEventListener("click", skipLine);
+document.addEventListener("keydown", (event) => {
+	// Buttons keep their own Space behaviour (the layout switch); everywhere else Space moves the dialog on.
+	if (event.key !== " " || !isStory() || event.target instanceof HTMLButtonElement) return;
+	event.preventDefault();
+	skipLine();
+});
 
 function setLive(text, state) {
 	liveEl.textContent = text;
@@ -301,13 +472,22 @@ source.addEventListener("snapshot", (message) => {
 	const snapshot = parse(message.data);
 	if (!snapshot) return;
 	dispatch({ type: "snapshot", snapshot, at: Date.now() });
-	renderAsk(snapshot.ask);
+	// A snapshot is what the page already knows after a reconnect: it sets the narrator's memory without new lines.
+	narrator = narrateSnapshot(narrator, snapshot);
+	dispatchDialog({ type: "ask", open: renderAsk(snapshot.ask) });
 });
 source.addEventListener("office", (message) => {
 	const envelope = parse(message.data);
 	if (!envelope) return;
-	dispatch({ type: "event", seq: envelope.seq, event: envelope.event, at: Date.now() });
-	if (envelope.event && envelope.event.type === "ask") renderAsk(envelope.event.phase === "open" ? envelope.event : null);
+	const at = Date.now();
+	dispatch({ type: "event", seq: envelope.seq, event: envelope.event, at });
+	const actor = actorOf(envelope.event);
+	if (actor) setFollow(actor);
+	narrateEvent(envelope.event, at);
+	if (envelope.event && envelope.event.type === "ask") {
+		const open = renderAsk(envelope.event.phase === "open" ? envelope.event : null);
+		dispatchDialog({ type: "ask", open });
+	}
 });
 source.addEventListener("error", () => {
 	hasDropped = true;
@@ -315,6 +495,15 @@ source.addEventListener("error", () => {
 	else setLive("reconnecting…", "warn");
 });
 
+// The typewriter and the auto advance run once per frame; each call only touches the DOM when something changed.
+function narrationFrame() {
+	renderNarration();
+	requestAnimationFrame(narrationFrame);
+}
+
 renderStage();
 renderBrew();
 renderCrew();
+renderParty();
+applyLayout(initialLayout(), { remember: false });
+requestAnimationFrame(narrationFrame);
