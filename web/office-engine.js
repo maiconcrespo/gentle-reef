@@ -32,6 +32,7 @@ const INK = '#060407';
 const SKIN = '#F2B86D', SKIN_SH = goMix('#F2B86D', '#2A1523', 0.4);
 const ORCH_COLOR = '#E0C27A', ORCH_HAIR = '#16101A';
 const STACHE = '#FF1F9D', STACHE_S = '#C2107A';
+const MONOCLE = '#0E0A0E', MONOCLE_H = '#3A2A34';
 const C = {
 	wood: P.sand, woodH: hi(P.sand), woodS: shade(P.sand),
 	marble: P.text, marbleS: goMix(P.text, '#2A1523', 0.25),
@@ -569,16 +570,18 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		R(ox + 7, oy + 34 - lOff, 2, 1, P.steel); R(ox + 14, oy + 34 - rOff, 2, 1, P.steel);
 	}
 
-	/* ---------- orchestrator sprite: top hat, pink handlebar mustache, gold monocle, champagne suit ---------- */
+	/* ---------- orchestrator sprite: top hat with a fuchsia rose, fuchsia handlebar mustache, black monocle, champagne suit ---------- */
 
 	function drawOrchHead(ox, oy, fam, flip) {
 		const fx = (x, w) => (flip ? ox + 23 - x - (w || 1) + 1 : ox + x);
 		const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
-		/* Top hat: dark crown with a gold band, a brim wider than the head, and a pink flower on the crown. */
+		/* Top hat: dark crown with a gold band, a brim wider than the head, and a fuchsia rose on the crown. */
 		hX(6, 12, -11, 7, P.bg); hX(7, 10, -11, 1, P.border); hX(15, 3, -9, 5, shade(P.bg));
 		hX(6, 12, -4, 1, P.gold); hX(6, 12, -3, 1, shade(P.gold));
 		hX(3, 18, -2, 1, P.border); hX(3, 18, -1, 1, P.bg);
-		hX(13, 3, -9, 3, P.purple); hX(14, 1, -8, 1, P.gold); hX(12, 1, -9, 1, P.violet); hX(14, 1, -10, 1, P.violet);
+		hX(11, 1, -7, 2, C.leafS); hX(10, 1, -6, 1, C.leafS);
+		hX(13, 3, -11, 1, STACHE); hX(12, 5, -10, 3, STACHE); hX(13, 3, -7, 1, STACHE);
+		hX(13, 2, -9, 1, STACHE_S); hX(15, 1, -10, 2, STACHE_S); hX(14, 1, -8, 1, STACHE_S); hX(13, 1, -11, 1, P.violet);
 		if (fam === 'up') {
 			/* Back view: only the handlebar tips show past the head. */
 			hX(0, 2, 9, 2, STACHE); hX(22, 2, 9, 2, STACHE); hX(0, 1, 8, 1, STACHE_S); hX(23, 1, 8, 1, STACHE_S);
@@ -586,16 +589,16 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		}
 		if (fam === 'side') {
 			/* Chain first, so the mustache covers its top. Monocle ring with a glinting lens on the visible eye. */
-			hX(8, 1, 10, 1, P.gold); hX(8, 1, 11, 1, P.sec); hX(9, 1, 12, 1, P.gold);
-			hX(6, 2, 6, 1, P.gold); hX(5, 1, 7, 2, P.gold); hX(8, 1, 7, 2, P.gold); hX(6, 2, 9, 1, P.gold);
+			hX(8, 1, 10, 1, MONOCLE); hX(8, 1, 11, 1, MONOCLE_H); hX(9, 1, 12, 1, MONOCLE);
+			hX(6, 2, 6, 1, MONOCLE); hX(5, 1, 7, 2, MONOCLE); hX(8, 1, 7, 2, MONOCLE); hX(6, 2, 9, 1, MONOCLE);
 			hX(6, 2, 7, 2, P.sky); hX(6, 1, 7, 1, P.text);
 			/* Handlebar tips poke out in front of the face. */
 			hX(3, 5, 10, 2, STACHE); hX(2, 2, 9, 1, STACHE); hX(2, 1, 8, 1, STACHE_S); hX(3, 5, 11, 1, STACHE_S);
 		} else {
 			/* Chain hangs from the monocle; the mustache covers its upper links. */
-			hX(19, 1, 10, 2, P.gold); hX(19, 1, 12, 1, P.gold); hX(19, 1, 13, 1, P.sec);
+			hX(19, 1, 10, 2, MONOCLE); hX(19, 1, 12, 1, MONOCLE_H); hX(19, 1, 13, 1, MONOCLE);
 			/* Monocle ring with a glinting lens over the right eye. */
-			hX(17, 2, 6, 1, P.gold); hX(16, 1, 7, 2, P.gold); hX(19, 1, 7, 2, P.gold); hX(17, 2, 9, 1, P.gold);
+			hX(17, 2, 6, 1, MONOCLE); hX(16, 1, 7, 2, MONOCLE); hX(19, 1, 7, 2, MONOCLE); hX(17, 2, 9, 1, MONOCLE);
 			hX(17, 2, 7, 2, P.sky); hX(17, 1, 7, 1, P.text);
 			/* Handlebar mustache: wider than the face, curled tips, shaded underside. */
 			hX(2, 20, 10, 2, STACHE); hX(3, 18, 11, 1, STACHE_S);
