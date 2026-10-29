@@ -250,3 +250,99 @@ describe("/office open and the window server", () => {
 		assert.match(notes.at(-1)!.message, new RegExp(`window ${server.status().url!.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")} \\(0 connected\\)`));
 	});
 });
+
+describe("/office with no arguments opens a selector", () => {
+	// A ctx with a scripted select: records each prompt and answers with the given choice.
+	function selectCtx(answer: string | undefined) {
+		const prompts: { title: string; options: string[] }[] = [];
+		return {
+			prompts,
+			ctx: {
+				ui: {
+					notify: (message: string, level: string) => { notes.push({ message, level }); },
+					select: async (title: string, options: string[]) => { prompts.push({ title, options }); return answer; },
+				},
+			},
+		};
+	}
+	const openServers: Array<{ stop(): Promise<void> }> = [];
+	afterEach(async () => {
+		for (const server of openServers.splice(0)) await server.stop();
+	});
+
+	it("while off, offers turn on, turn on and open, and status; picking Turn on enables the module", async () => {
+		const fake = fakeHost();
+		registerOffice(fake.host, { agentDir, hub: new OfficeHub() });
+		const { prompts, ctx: selCtx } = selectCtx("Turn on");
+		await fake.commands.get("office")!.handler("", selCtx);
+		assert.deepEqual(prompts, [{ title: "Gentle Office (off)", options: ["Turn on", "Turn on and open the window", "Status"] }]);
+		assert.equal(readOfficeSettings(agentDir).enabled, true);
+		assert.ok(fake.listeners() > 0);
+		assert.deepEqual(notes.at(-1), { message: "Gentle Office on: listeners attached.", level: "info" });
+	});
+
+	it("while on, offers open, turn off, and status; picking Turn off disables the module", async () => {
+		const fake = fakeHost();
+		registerOffice(fake.host, { agentDir, hub: new OfficeHub() });
+		run(fake, "on");
+		const { prompts, ctx: selCtx } = selectCtx("Turn off");
+		await fake.commands.get("office")!.handler("  ", selCtx);
+		assert.deepEqual(prompts, [{ title: "Gentle Office (on)", options: ["Open the window", "Turn off", "Status"] }]);
+		assert.equal(readOfficeSettings(agentDir).enabled, false);
+		assert.equal(fake.listeners(), 0);
+		assert.deepEqual(notes.at(-1), { message: "Gentle Office off: listeners detached.", level: "info" });
+	});
+
+	it("Turn on and open the window enables the module and opens one window", async () => {
+		const fake = fakeHost();
+		const hub = new OfficeHub();
+		const opened: string[] = [];
+		const server = createOfficeServer({ hub, openUrl: async (url: string) => { opened.push(url); return { opened: true }; } });
+		openServers.push(server);
+		registerOffice(fake.host, { agentDir, hub, server });
+		const { ctx: selCtx } = selectCtx("Turn on and open the window");
+		await fake.commands.get("office")!.handler("", selCtx);
+		assert.equal(readOfficeSettings(agentDir).enabled, true);
+		assert.deepEqual(opened, [server.status().url]);
+		assert.deepEqual(notes.map(n => n.level), ["info", "info"]);
+		assert.equal(notes.at(-1)!.message, `Gentle Office window opened: ${server.status().url}`);
+	});
+
+	it("Status reports the same line as /office status", async () => {
+		const fake = fakeHost();
+		registerOffice(fake.host, { agentDir, hub: new OfficeHub() });
+		const { ctx: selCtx } = selectCtx("Status");
+		await fake.commands.get("office")!.handler("", selCtx);
+		const fromSelector = notes.splice(0);
+		run(fake, "status");
+		assert.deepEqual(fromSelector, notes);
+	});
+
+	it("cancelling the selector changes nothing and prints nothing", async () => {
+		const fake = fakeHost();
+		registerOffice(fake.host, { agentDir, hub: new OfficeHub() });
+		const { prompts, ctx: selCtx } = selectCtx(undefined);
+		await fake.commands.get("office")!.handler("", selCtx);
+		assert.equal(prompts.length, 1);
+		assert.deepEqual(notes, []);
+		assert.equal(readOfficeSettings(agentDir).enabled, false);
+		assert.equal(fake.listeners(), 0);
+	});
+
+	it("a host without a selector still answers /office with the status line", () => {
+		const fake = fakeHost();
+		registerOffice(fake.host, { agentDir, hub: new OfficeHub() });
+		run(fake, "");
+		assert.equal(notes.length, 1);
+		assert.match(notes[0]!.message, /^Gentle Office disabled · subscribers 0/);
+	});
+
+	it("typed subcommands skip the selector", async () => {
+		const fake = fakeHost();
+		registerOffice(fake.host, { agentDir, hub: new OfficeHub() });
+		const { prompts, ctx: selCtx } = selectCtx("Turn off");
+		await fake.commands.get("office")!.handler("on", selCtx);
+		assert.deepEqual(prompts, []);
+		assert.equal(readOfficeSettings(agentDir).enabled, true);
+	});
+});

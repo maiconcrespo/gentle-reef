@@ -7,7 +7,7 @@ import type { OfficeServer } from "./server/office-server.ts";
 import { officeSettingsPath, readOfficeSettings, writeOfficeSettings } from "./settings.ts";
 
 export const OFFICE_COMMAND_NAME = "office";
-const OFFICE_COMMAND_DESCRIPTION = "Turn the Gentle Office on, off, show its status, or open its window";
+const OFFICE_COMMAND_DESCRIPTION = "Open the Gentle Office menu, or run /office on | off | status | open";
 /** Pi shuts the session down: the window server stops with it. Attached only while enabled. */
 export const OFFICE_SHUTDOWN_EVENT = "session_shutdown";
 
@@ -29,7 +29,11 @@ interface PiContext {
 }
 
 export interface OfficeCommandContext {
-	readonly ui: { notify(message: string, level?: "info" | "warning" | "error"): void };
+	readonly ui: {
+		notify(message: string, level?: "info" | "warning" | "error"): void;
+		/** Interactive hosts only. Resolves to the picked option, or undefined when cancelled. */
+		select?(title: string, options: string[]): Promise<string | undefined>;
+	};
 }
 
 /**
@@ -128,15 +132,45 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 	host.registerCommand(OFFICE_COMMAND_NAME, {
 		description: OFFICE_COMMAND_DESCRIPTION,
 		handler: (args, ctx) => {
-			// `open` is async (the server may need to start); everything else answers synchronously.
-			if (args.trim().toLowerCase() === "open") {
-				return openOffice(controller).then(result => ctx.ui.notify(result.message, result.level));
-			}
-			const result = runOfficeCommand(args, controller);
-			ctx.ui.notify(result.message, result.level);
+			const subcommand = args.trim().toLowerCase();
+			// No arguments on an interactive host: let the user pick instead of typing a subcommand.
+			if (subcommand === "" && ctx.ui.select) return selectOfficeAction(controller, ctx);
+			return runSubcommand(subcommand, controller, ctx);
 		},
 	});
 	return controller;
+}
+
+/** `open` is async (the server may need to start); everything else answers synchronously. */
+function runSubcommand(subcommand: string, controller: OfficeController, ctx: OfficeCommandContext): Promise<void> | void {
+	if (subcommand === "open") return openOffice(controller).then(result => ctx.ui.notify(result.message, result.level));
+	const result = runOfficeCommand(subcommand, controller);
+	ctx.ui.notify(result.message, result.level);
+}
+
+/** Selector labels mapped to the subcommands they run, in display order, per module state. */
+const MENU_WHEN_OFF: ReadonlyArray<readonly [string, readonly string[]]> = [
+	["Turn on", ["on"]],
+	["Turn on and open the window", ["on", "open"]],
+	["Status", ["status"]],
+];
+const MENU_WHEN_ON: ReadonlyArray<readonly [string, readonly string[]]> = [
+	["Open the window", ["open"]],
+	["Turn off", ["off"]],
+	["Status", ["status"]],
+];
+
+async function selectOfficeAction(controller: OfficeController, ctx: OfficeCommandContext): Promise<void> {
+	const enabled = controller.isEnabled();
+	const menu = enabled ? MENU_WHEN_ON : MENU_WHEN_OFF;
+	const picked = await ctx.ui.select!(`Gentle Office (${enabled ? "on" : "off"})`, menu.map(([label]) => label));
+	const steps = menu.find(([label]) => label === picked)?.[1];
+	if (steps === undefined) return;
+	for (const step of steps) {
+		await runSubcommand(step, controller, ctx);
+		// Stop a chain when turning on failed: opening would only add a second, misleading error.
+		if (step === "on" && !controller.isEnabled()) return;
+	}
 }
 
 export interface OfficeCommandResult {

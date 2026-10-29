@@ -17,6 +17,7 @@ Or add the path to the `packages` list in your Pi `settings.json`.
 ## Use
 
 ```text
+/office          # open a menu: turn on/off, open the window, or show status
 /office on       # attach listeners
 /office open     # start the window (once per session) and open it in the browser
 /office off      # detach listeners, close the window, clear the hub
