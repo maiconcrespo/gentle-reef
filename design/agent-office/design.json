@@ -1,0 +1,9 @@
+{
+  "title": "Gentle Office: agents at work",
+  "brief": "32-bit (GBA/SNES-like) pixel-art office for gentle-shell in the gentle-shell Gentleman-Cute theme palette (plum background, pink accents, champagne headings): 24px tiles, 16x24 sprites with outlines and 3-tone shading, role-specific agents (explorer, workers, verifier), an orchestrator with top hat, mustache and monocle, and visiting review inspectors and judgment-day judges. Each agent has a desk and a computer; the orchestrator plans at the whiteboard or walks the floor; the team meets at a table; consumed tokens are a coffee pot that drains as agents drink coffee.",
+  "artboards": [
+    { "file": "01-overworld-hq.html", "title": "Overworld HQ", "tradeoff": "Whole office at once plus a dashboard sidebar (brew, team, log); most informative, but it needs a full window", "width": 1440, "height": 900 },
+    { "file": "02-dock-pane.html", "title": "Dock pane", "tradeoff": "Narrow pane that lives beside the terminal with a Game Boy text box; always visible, but less detail and no history", "width": 480, "height": 900 },
+    { "file": "03-story-mode.html", "title": "Story mode", "tradeoff": "Close-up camera, HP-style brew bar and Pokemon dialog narrating each event; the most charming, but you see one thing at a time", "width": 1440, "height": 900 }
+  ]
+}

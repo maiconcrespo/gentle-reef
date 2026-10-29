@@ -1,0 +1,1174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gentle Office: Story mode</title>
+<style>
+  :root {
+    --bg: #060407; --panel: #100A0F; --user: #2A1523; --sel: #28121E; --border: #563040;
+    --text: #F6EFF3; --muted: #A78E9B; --dim: #76616B; --gold: #E0C27A; --blue: #A9C7EE;
+    --green: #B4E7C7; --red: #FF718F; --sand: #F2B86D; --heading: #E0C27A; --pink: #F095C8;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--mono); }
+  body { width: 1440px; height: 900px; overflow: hidden; display: grid; grid-template-rows: 808px 92px; }
+  .stage { position: relative; }
+  canvas.office { display: block; width: 1440px; height: 808px; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .box { position: absolute; background: var(--panel); border: 3px solid var(--text); box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 5px var(--sel), 6px 6px 0 rgba(6, 4, 7, .7); }
+  .hp { top: 28px; left: 28px; width: 420px; padding: 14px 20px 16px; }
+  .hp .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .hp .name { font-size: 20px; font-weight: 700; letter-spacing: .04em; }
+  .hp .lv { color: var(--gold); font-weight: 700; }
+  .meter { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; margin-top: 10px; }
+  .meter b { color: var(--gold); font-size: 13px; }
+  .track { height: 14px; padding: 2px; background: var(--bg); border: 2px solid var(--border); }
+  .fill { height: 100%; background: var(--sand); box-shadow: inset 0 3px 0 var(--gold); transition: width .3s steps(6); }
+  .fill.low { background: var(--red); box-shadow: inset 0 3px 0 #FFB1DD; }
+  .hp .num { text-align: right; margin-top: 6px; font-size: 18px; color: var(--sand); font-weight: 700; }
+  .hp .num small { color: var(--muted); font-size: 13px; font-weight: 400; }
+  .party { top: 28px; right: 28px; width: 330px; padding: 12px 16px; }
+  .party h2 { margin: 0 0 8px; font-size: 12px; letter-spacing: .1em; color: var(--heading); }
+  .party ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+  .party li { display: grid; grid-template-columns: 14px 1fr; gap: 4px 10px; align-items: center; cursor: pointer; }
+  .party li i { width: 14px; height: 14px; }
+  .party li .st { color: var(--muted); font-size: 12px; float: right; }
+  .party li .mini { grid-column: 2; height: 4px; background: var(--sel); }
+  .party li .mini span { display: block; height: 100%; }
+  .party li[aria-current="true"] b::before { content: "▶ "; color: var(--gold); }
+  .dialog { left: 28px; right: 28px; bottom: 24px; min-height: 132px; padding: 22px 30px; font-size: 22px; line-height: 1.55; }
+  .dialog .who { color: var(--gold); font-weight: 700; }
+  .dialog .caret { position: absolute; right: 24px; bottom: 14px; color: var(--gold); animation: bob 0.8s steps(2) infinite; }
+  @keyframes bob { 50% { transform: translateY(4px); } }
+  .bar { display: flex; align-items: center; gap: 14px; padding: 0 28px; background: var(--panel); border-top: 1px solid #C96AA2; }
+  .bar .brand { color: var(--gold); font-weight: 700; margin-right: 10px; }
+  button { font: inherit; color: var(--text); background: var(--user); border: 1px solid var(--border); padding: 8px 16px; cursor: pointer; box-shadow: 3px 3px 0 var(--bg); }
+  button:hover { border-color: var(--blue); color: var(--blue); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  button kbd { font: inherit; color: var(--gold); margin-right: 6px; }
+  .bar .meta { margin-left: auto; color: var(--muted); font-size: 12px; }
+  @media (prefers-reduced-motion: reduce) { .dialog .caret { animation: none; } .fill { transition: none; } }
+</style>
+</head>
+<body>
+<main class="stage">
+  <canvas class="office" id="office" role="img" aria-label="Close-up pixel-art camera following whoever is acting in the agent office."></canvas>
+  <section class="box hp" aria-label="Context brew">
+    <div class="row"><span class="name">CONTEXT BREW</span><span class="lv" id="lv">Lv.26</span></div>
+    <div class="meter"><b>POT</b><div class="track"><div class="fill" id="fill" style="width:74%"></div></div></div>
+    <div class="num"><span id="left">148</span><small> / 200k tokens</small></div>
+  </section>
+  <section class="box party" aria-labelledby="hParty">
+    <h2 id="hParty">PARTY · tap to follow</h2>
+    <ul id="party"></ul>
+  </section>
+  <section class="box dialog" role="status" aria-live="polite">
+    <span id="say"><span class="who">ORCHESTRATOR:</span> A new session begins. The coffee is fresh!</span>
+    <span class="caret" aria-hidden="true">▼</span>
+  </section>
+</main>
+<nav class="bar" aria-label="Office controls">
+  <span class="brand">✿ Gentle Shell · office</span>
+  <button id="bPlan"><kbd>P</kbd>Plan</button>
+  <button id="bMeet"><kbd>M</kbd>Meeting</button>
+  <button id="bBrew"><kbd>C</kbd>Compact</button>
+  <button id="bReview"><kbd>R</kbd>Inspectors</button>
+  <button id="bJudge"><kbd>J</kbd>Judgment</button>
+  <button id="bPause" aria-pressed="false"><kbd>Space</kbd><span>Pause</span></button>
+  <span class="meta">camera follows the last agent that acted · refactor-auth · opus-5.5</span>
+</nav>
+<script>
+/* Gentle Office: pixel-art agent office engine (shared by every artboard). */
+const GO_PAL = {
+  bg: '#060407', panel: '#100A0F', user: '#2A1523', sel: '#28121E', border: '#563040',
+  text: '#F6EFF3', muted: '#A78E9B', dim: '#76616B', gold: '#E0C27A', champagne: '#E0C27A',
+  blue: '#A9C7EE', sky: '#C4DAF6', sec: '#D2CBD0', pearl: '#D2CBD0', lav: '#D7A0B8', softRose: '#D7A0B8',
+  green: '#B4E7C7', mint: '#B4E7C7', sand: '#F2B86D', peach: '#F2B86D', red: '#FF718F', error: '#FF718F',
+  purple: '#F095C8', accent: '#F095C8', deep: '#C96AA2', deepPink: '#C96AA2', violet: '#FFB1DD', activePink: '#FFB1DD',
+  steel: '#A78E9B', floorA: '#140C12', floorB: '#1B1018', seam: '#0B070A', plum: '#2A1523'
+};
+
+/* Mix two #rrggbb colors; t=0 gives a, t=1 gives b. Used for 3-tone shading. */
+function goMix(a, b, t) {
+  const p = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+  const A = p(a), B = p(b);
+  return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+const GO_SHADE = c => goMix(c, '#2A1523', 0.45);
+const GO_LIGHT = c => goMix(c, '#F6EFF3', 0.35);
+
+/* Ink outline + skin + hair tones shared by every sprite. */
+const GO_INK = '#060407';
+const GO_SKIN = '#F2B86D', GO_SKIN_SH = goMix('#F2B86D', '#2A1523', 0.4), GO_SKIN_HI = goMix('#F2B86D', '#F6EFF3', 0.35);
+
+const GO_AGENTS = [
+  { id: 'orch', name: 'Orchestrator', role: 'gentle orchestrator', color: '#E0C27A', hair: '#D2CBD0', orch: true },
+  { id: 'explore', name: 'Explore', role: 'gentle-ai-explore', color: '#A9C7EE', hair: '#E0C27A', desk: 0, kit: 'explore' },
+  { id: 'worker', name: 'Worker A', role: 'gentle-ai-worker', color: '#B4E7C7', hair: '#F095C8', desk: 1, kit: 'worker' },
+  { id: 'worker2', name: 'Worker B', role: 'gentle-ai-worker', color: '#C4DAF6', hair: '#A78E9B', desk: 2, kit: 'worker' },
+  { id: 'verify', name: 'Verify', role: 'gentle-ai-verify', color: '#F095C8', hair: '#563040', desk: 3, kit: 'verify' }
+];
+
+/* Visitors: present only during their scene; shown in onAgents as 'Off site' when away. */
+const GO_VISITORS = [
+  { id: 'insp1', name: 'Inspector Risk', role: 'review lens: risk', color: '#76616B', hair: '#563040', visitor: 'inspector', kind: 'review' },
+  { id: 'insp2', name: 'Inspector Reliability', role: 'review lens: reliability', color: '#76616B', hair: '#A78E9B', visitor: 'inspector', kind: 'review' },
+  { id: 'judgeA', name: 'Judge A', role: 'judgment day', color: '#D2CBD0', hair: '#F6EFF3', visitor: 'judge', kind: 'judge' },
+  { id: 'judgeB', name: 'Judge B', role: 'judgment day', color: '#D2CBD0', hair: '#F6EFF3', visitor: 'judge', kind: 'judge' }
+];
+
+const GO_TASKS = [
+  'Map the footer data sources', 'Write the RED test for the parser', 'Split auth into work units',
+  'Verify S1-S4 against the specs', 'Review the diff of PR #142', 'Refactor the session loader',
+  'Document the new --dry-run flag', 'Reproduce the compaction bug'
+];
+
+function GentleOffice(canvas, cfg, hooks) {
+  hooks = hooks || {};
+  const P = GO_PAL, T = 24, COLS = cfg.cols, ROWS = cfg.rows, W = COLS * T, H = ROWS * T;
+  const world = document.createElement('canvas');
+  world.width = W; world.height = H;
+  const g = world.getContext('2d');
+  const VW = cfg.view ? cfg.view.w : W, VH = cfg.view ? cfg.view.h : H;
+  canvas.width = VW; canvas.height = VH;
+  const out = canvas.getContext('2d');
+  out.imageSmoothingEnabled = false;
+  /* Static floor, wall and fixed props are painted once into this layer. */
+  const bgLayer = document.createElement('canvas');
+  bgLayer.width = W; bgLayer.height = H;
+  const bg = bgLayer.getContext('2d');
+
+  const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); };
+  const B = (x, y, w, h, c) => { bg.fillStyle = c; bg.fillRect(Math.round(x), Math.round(y), w, h); };
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const hash = n => { n = Math.sin(n * 127.1) * 43758.5453; return n - Math.floor(n); };
+  const fmtK = n => (n / 1000).toFixed(1) + 'k';
+
+  /* Draw a pixel map: rows of palette letters, '.' is transparent. */
+  function sprite(rows, map, x, y, flip) {
+    for (let j = 0; j < rows.length; j++) {
+      const row = rows[j];
+      for (let i = 0; i < row.length; i++) {
+        const ch = row[i];
+        if (ch === '.' || !map[ch]) continue;
+        const px = flip ? x + row.length - 1 - i : x + i;
+        R(px, y + j, 1, 1, map[ch]);
+      }
+    }
+  }
+
+  /* ---------- walkable grid ---------- */
+  const block = Array.from({ length: ROWS }, (_, y) => Array(COLS).fill(y < 2));
+  const mark = (x, y, w, h) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (block[j] && i < COLS) block[j][i] = true; };
+  cfg.desks.forEach(d => mark(d.x, d.y, 2, 1));
+  const tb = cfg.table, cf = cfg.coffee, wb = cfg.whiteboard;
+  mark(tb.x, tb.y, tb.w, tb.h);
+  mark(cf.x, cf.y, cf.w, 1);
+  (cfg.plants || []).forEach(p => mark(p.x, p.y, 1, 1));
+  if (cfg.rack) mark(cfg.rack.x, cfg.rack.y, 1, 2);
+
+  function path(fx, fy, tx, ty) {
+    const key = (x, y) => y * COLS + x, prev = new Map([[key(fx, fy), null]]), q = [[fx, fy]];
+    while (q.length) {
+      const [x, y] = q.shift();
+      if (x === tx && y === ty) break;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || block[ny][nx]) continue;
+        const k = key(nx, ny);
+        if (prev.has(k)) continue;
+        prev.set(k, [x, y]); q.push([nx, ny]);
+      }
+    }
+    if (!prev.has(key(tx, ty))) return [];
+    const res = []; let cur = [tx, ty];
+    while (cur) { res.unshift(cur); cur = prev.get(key(cur[0], cur[1])); }
+    return res;
+  }
+
+  /* Feet anchor: x is tile centre, y sits 4px above the tile bottom. */
+  const FX = tx => tx * T + T / 2, FY = ty => ty * T + T - 4;
+
+  /* ---------- spots ---------- */
+  const deskSpot = d => ({ tx: d.x, ty: d.y + 1, px: FX(d.x + 1) - 4, py: FY(d.y + 1) - 2, face: 'up', sit: true });
+  const wbSpot = { tx: wb.x + 1, ty: 2, px: FX(wb.x + 2), py: FY(2), face: 'up' };
+  const cfSpot = { tx: cf.x + 1, ty: cf.y + 1, face: 'up' };
+  const headSpot = { tx: tb.x + tb.w, ty: tb.y, px: FX(tb.x + tb.w) + 4, py: FY(tb.y + 1), face: 'left' };
+  const seat = k => ({ tx: tb.x + (k % tb.w), ty: k % 2 ? tb.y + tb.h : tb.y - 1, face: k % 2 ? 'up' : 'down' });
+  const doorSpot = { tx: cfg.door.x, ty: ROWS - 1 };
+  function randomSpot() {
+    for (let n = 0; n < 200; n++) {
+      const x = Math.floor(rnd(0, COLS)), y = Math.floor(rnd(3, ROWS - 1));
+      if (!block[y][x]) return { tx: x, ty: y, face: pick(['down', 'left', 'right']) };
+    }
+    return { tx: 3, ty: 3, face: 'down' };
+  }
+
+  /* ---------- state ---------- */
+  const budget = cfg.budget || 200000;
+  let used = cfg.startUsed || 52000, time = 0, paused = false, speed = 1;
+  let wbLines = 2, wbChecks = 1, wbWriting = false, wbPartial = 1;
+  let coffeeBusy = null, brewing = 0, brewTarget = 0, meeting = null, dirI = 0, focusId = 'orch';
+  let sceneCycle = 0, sceneCount = 0;
+  let scene = null; /* 'review' | 'judgment' | null: guards overlapping visitor scenes */
+  const timers = [];
+  const after = (t, cb) => timers.push({ t, cb });
+  const agents = GO_AGENTS.map((a, i) => Object.assign({}, a, {
+    i, x: 0, y: 0, path: [], face: 'up', sit: false, moving: false, mode: 'work', timer: rnd(5, 16),
+    bubble: null, mug: 0, step: 0, onArrive: null, target: null, wait: 1, progress: rnd(0.1, 0.7),
+    task: GO_TASKS[i % GO_TASKS.length], arrived: false, present: true, prop: 0
+  }));
+  const visitors = GO_VISITORS.map((a, i) => Object.assign({}, a, {
+    i: agents.length + i, x: 0, y: 0, path: [], face: 'up', sit: false, moving: false, mode: 'off', timer: 0,
+    bubble: null, mug: 0, step: 0, onArrive: null, target: null, wait: 0, progress: null,
+    task: null, arrived: false, present: false, prop: 0, visitorOnly: true
+  }));
+  const everyone = agents.concat(visitors);
+  const orch = agents[0], workers = agents.filter(a => a.desk != null);
+  workers.forEach(a => { const s = deskSpot(cfg.desks[a.desk]); a.x = s.px; a.y = s.py; a.sit = true; a.face = 'up'; });
+  orch.x = FX(cfg.orchStart ? cfg.orchStart.x : 8); orch.y = FY(cfg.orchStart ? cfg.orchStart.y : 6);
+  orch.mode = 'idle'; orch.face = 'down';
+  visitors.forEach(v => { v.x = FX(doorSpot.tx); v.y = FY(ROWS - 1) + 10; });
+
+  function emit(text, kind, subject) {
+    if (subject) focusId = subject;
+    hooks.onEvent && hooks.onEvent({ text, kind: kind || 'info', subject: subject || 'orch', time });
+  }
+  const sip = n => { used = Math.min(budget, used + n); };
+
+  /* ---------- movement ---------- */
+  function goTo(c, s, cb) {
+    const fx = Math.floor(c.x / T), fy = Math.max(2, Math.floor((c.y - 2) / T));
+    const pts = path(fx, fy, s.tx, s.ty).map(([x, y]) => ({ x: FX(x), y: FY(y) }));
+    if (pts.length) pts.shift();
+    pts.unshift({ x: FX(fx), y: FY(fy) });
+    if (!pts.length || pts[pts.length - 1].x !== FX(s.tx) || pts[pts.length - 1].y !== FY(s.ty)) pts.push({ x: FX(s.tx), y: FY(s.ty) });
+    if (s.px != null) pts.push({ x: s.px, y: s.py });
+    c.path = pts; c.sit = false; c.target = s; c.onArrive = cb || null;
+  }
+  function moveChar(c, dt) {
+    if (!c.path.length) { c.moving = false; return; }
+    const t = c.path[0], dx = t.x - c.x, dy = t.y - c.y, d = Math.hypot(dx, dy), sp = (c.orch ? 44 : 40) * dt;
+    c.moving = true; c.step += dt * 8;
+    if (d > 0.5) { if (Math.abs(dx) > Math.abs(dy)) c.face = dx > 0 ? 'right' : 'left'; else c.face = dy > 0 ? 'down' : 'up'; }
+    if (d <= sp) {
+      c.x = t.x; c.y = t.y; c.path.shift();
+      if (!c.path.length) {
+        c.moving = false;
+        if (c.target) { c.face = c.target.face || c.face; c.sit = !!c.target.sit; }
+        const cb = c.onArrive; c.onArrive = null; cb && cb();
+      }
+    } else { c.x += dx / d * sp; c.y += dy / d * sp; }
+  }
+
+  /* Timed script: [[delay, fn], ...]; each delay is added to the previous one. */
+  function run(steps) {
+    let acc = 0;
+    steps.forEach(([d, f]) => { acc += d; after(acc, f); });
+  }
+  const visit = (c, s, cb) => { c.mode = c.visitorOnly ? 'walk' : c.mode; goTo(c, s, cb); };
+  function enter(v) {
+    v.present = true; v.sit = false; v.mode = 'walk'; v.path = []; v.onArrive = null;
+    v.x = FX(doorSpot.tx); v.y = FY(ROWS - 1); v.face = 'up';
+  }
+  function leave(v) {
+    visit(v, doorSpot, () => { v.present = false; v.mode = 'off'; v.bubble = null; });
+  }
+
+  /* ---------- behaviour: workers ---------- */
+  function backToDesk(a) {
+    a.mode = 'return';
+    goTo(a, deskSpot(cfg.desks[a.desk]), () => { a.mode = 'work'; a.timer = rnd(12, 24); });
+  }
+  function goCoffee(a) {
+    coffeeBusy = a; a.mode = 'coffee';
+    emit(`${a.name} gets up for coffee`, 'coffee', a.id);
+    goTo(a, cfSpot, () => {
+      a.bubble = { icon: 'cup', t: 2.2 };
+      after(1.8, () => {
+        if (a.mode !== 'coffee') return;
+        const amt = Math.round(rnd(3, 9)) * 1000;
+        sip(amt); a.mug = rnd(10, 18); coffeeBusy = null;
+        emit(`${a.name} poured a cup: -${fmtK(amt)} tokens`, 'coffee', a.id);
+        backToDesk(a);
+      });
+    });
+  }
+  function updateWorker(a, dt) {
+    if (a.mode !== 'work' || !a.sit) return;
+    sip(dt * (cfg.burn || 240) * (a.mug > 0 ? 1.25 : 1));
+    a.progress += dt * 0.018;
+    if (a.progress >= 1) {
+      a.progress = 0; a.bubble = { icon: 'check', t: 2 };
+      emit(`${a.name} finished: ${a.task}`, 'done', a.id);
+      a.task = pick(GO_TASKS);
+    }
+    a.timer -= dt;
+    if (a.timer <= 0) {
+      if (!coffeeBusy && !meeting && !scene && brewing === 0) goCoffee(a); else a.timer = rnd(3, 6);
+    }
+    if (!a.bubble && Math.random() < dt * 0.04) a.bubble = { icon: 'dots', t: 1.6 };
+  }
+
+  /* ---------- behaviour: orchestrator ---------- */
+  function startPlan() {
+    if (meeting || scene || brewing !== 0) return;
+    orch.mode = 'walk';
+    emit('Orchestrator heads to the whiteboard', 'plan', 'orch');
+    goTo(orch, wbSpot, () => {
+      orch.mode = 'plan'; orch.wait = 6; wbWriting = true; wbPartial = 0;
+      if (wbLines >= 5) { wbLines = 1; wbChecks = 0; }
+      orch.bubble = { icon: 'idea', t: 2 };
+      emit('Orchestrator is planning: ' + pick(GO_TASKS), 'plan', 'orch');
+    });
+  }
+  function callMeeting() {
+    if (meeting || scene || brewing !== 0) return;
+    meeting = { phase: 'gather', t: 0 };
+    wbWriting = false;
+    if (coffeeBusy && coffeeBusy !== orch) coffeeBusy = null;
+    emit('Orchestrator calls a sync meeting', 'meet', 'orch');
+    orch.bubble = { icon: 'bang', t: 1.5 };
+    workers.forEach((a, k) => { a.mode = 'meeting'; a.arrived = false; goTo(a, seat(k), () => { a.arrived = true; }); });
+    orch.mode = 'meeting'; orch.arrived = false;
+    goTo(orch, headSpot, () => { orch.arrived = true; });
+  }
+  function refill(reason) {
+    if (brewing !== 0 || meeting || scene) return false;
+    brewing = -1; coffeeBusy = orch; orch.mode = 'brew';
+    brewTarget = Math.round(budget * 0.28);
+    emit(reason || 'Context almost full: compacting, brewing a fresh pot', 'brew', 'orch');
+    goTo(orch, cfSpot, () => { brewing = 4; orch.bubble = { icon: 'cup', t: 3 }; });
+    return true;
+  }
+  function orchNext() {
+    sceneCycle++;
+    /* Director: every 11th idle step the office runs a visitor scene, alternating review and judgment. */
+    if (sceneCycle % 11 === 0 && !meeting && !scene && brewing === 0) {
+      return sceneCount++ % 2 ? runJudgment() : runReview();
+    }
+    const dir = cfg.director || ['wander', 'plan', 'wander', 'wander', 'meeting'];
+    const step = dir[dirI++ % dir.length];
+    if (step === 'plan') return startPlan();
+    if (step === 'meeting') return callMeeting();
+    orch.mode = 'walk';
+    goTo(orch, randomSpot(), () => { orch.mode = 'idle'; orch.wait = rnd(1, 2.5); });
+  }
+  function updateOrch(dt) {
+    if (orch.mode === 'plan') {
+      orch.wait -= dt;
+      wbPartial = Math.min(1, wbPartial + dt * 0.7);
+      if (wbPartial >= 1 && wbLines < 5) { wbLines++; wbPartial = 0; }
+      if (orch.wait <= 0) { wbWriting = false; orch.mode = 'idle'; orch.wait = 0.6; }
+    } else if (orch.mode === 'idle') {
+      orch.wait -= dt;
+      if (orch.wait <= 0) orchNext();
+    }
+  }
+
+  /* ---------- behaviour: sync meeting ---------- */
+  function updateMeeting(dt) {
+    if (!meeting) return;
+    if (meeting.phase === 'gather') {
+      if (orch.arrived && workers.every(a => a.arrived)) {
+        meeting = { phase: 'talk', t: 7 };
+        emit('Sync meeting: reviewing the plan together', 'meet', 'orch');
+      }
+      return;
+    }
+    meeting.t -= dt;
+    sip(dt * 150);
+    const speaker = workers[Math.floor(meeting.t * 0.9) % workers.length];
+    workers.forEach(a => { if (a === speaker && !a.bubble) a.bubble = { icon: 'talk', t: 1 }; });
+    if (meeting.t <= 0) {
+      meeting = null;
+      wbChecks = Math.min(wbLines, wbChecks + 1);
+      workers.forEach(a => { a.task = pick(GO_TASKS); backToDesk(a); });
+      emit('Tasks delegated: everyone back to their desks', 'delegate', 'orch');
+      workers.forEach(a => emit(`${a.name} <- ${a.task}`, 'delegate', a.id));
+      orch.mode = 'idle'; orch.wait = 1.5; focusId = 'orch';
+    }
+  }
+
+  /* Calls cb once n callers have finished. */
+  const together = (n, cb) => { let k = n; return () => { if (--k === 0) cb(); }; };
+
+  /* ---------- visitor scene: review inspectors ---------- */
+  function runReview() {
+    if (scene || meeting || brewing !== 0) return false;
+    scene = 'review';
+    orch.path = []; orch.onArrive = null; orch.mode = 'scene'; wbWriting = false;
+    const [r, l] = visitors.filter(v => v.kind === 'review');
+    /* Each inspector walks to the north side of two desks, pauses with the magnifier, then moves on. */
+    const inspect = (v, desks, done) => {
+      const step = i => {
+        if (i >= desks.length) return done();
+        const d = cfg.desks[desks[i]], owner = workers.find(a => a.desk === desks[i]);
+        visit(v, { tx: d.x + 2, ty: d.y, face: 'left' }, () => {
+          v.face = 'left'; v.mode = 'inspect';
+          v.bubble = { icon: 'lens', t: 2.4 };
+          emit(`${v.name}: checking ${owner.name}'s monitor`, 'review', v.id);
+          after(2.6, () => step(i + 1));
+        });
+      };
+      step(0);
+    };
+    enter(r); enter(l);
+    emit('Review lenses arrive at the door: inspectors are on site', 'review', r.id);
+    const gather = together(2, () => {
+      visit(r, seat(0), () => { r.mode = 'talk'; r.face = 'down'; });
+      visit(l, seat(1), () => { l.mode = 'talk'; l.face = 'up'; });
+      visit(orch, headSpot, () => {
+        orch.mode = 'scene'; orch.face = 'left';
+        run([
+          [0.8, () => { r.bubble = { icon: 'talk', t: 2 }; emit('Inspector Risk: no blocking findings', 'review', r.id); }],
+          [2.4, () => { l.bubble = { icon: 'talk', t: 2 }; emit('Inspector Reliability: one flaky test flagged, not blocking', 'review', l.id); }],
+          [2.6, () => { orch.bubble = { icon: 'check', t: 2 }; emit('Orchestrator: review passed, merge gate stays open', 'review', 'orch'); }],
+          [2.6, () => { emit('Inspectors leave through the door', 'review', r.id); leave(r); leave(l); }],
+          [3.5, () => { orch.mode = 'idle'; orch.wait = 1.5; scene = null; }]
+        ]);
+      });
+    });
+    inspect(r, [0, 1], gather);
+    inspect(l, [2, 3], gather);
+    return true;
+  }
+
+  /* ---------- visitor scene: judgment day judges ---------- */
+  function runJudgment() {
+    if (scene || meeting || brewing !== 0) return false;
+    scene = 'judgment';
+    orch.path = []; orch.onArrive = null; orch.mode = 'scene'; wbWriting = false;
+    const [a, b] = visitors.filter(v => v.kind === 'judge');
+    /* Opposite sides of the table: judge A north, judge B south, orchestrator at the head. */
+    const northSpot = { tx: tb.x + 1, ty: tb.y - 1, face: 'down' };
+    const southSpot = { tx: tb.x + 2, ty: tb.y + tb.h, face: 'up' };
+    enter(a); enter(b);
+    emit('Judgment day: two judges take their places', 'judge', 'orch');
+    const seated = together(3, () => {
+      const say = (who, icon, text) => { who.bubble = { icon, t: 2.1 }; emit(text, 'judge', who.id); };
+      run([
+        [0.6, () => say(a, 'talk', 'Judge A: that retry loop can hang')],
+        [2.4, () => say(b, 'talk', 'Judge B: disagree, the timeout covers it')],
+        [2.4, () => say(a, 'question', 'Judge A: is the timeout set on every path?')],
+        [2.4, () => say(b, 'excl', 'Judge B: every path. Checked it twice')],
+        [2.4, () => { b.bubble = { icon: 'gavel', t: 1.2 }; emit('Gavel: order in the court', 'judge', b.id); }],
+        [1.6, () => { orch.bubble = { icon: 'idea', t: 2.2 }; emit('Verdict: approved after 1 fix', 'judge', 'orch'); }],
+        [2.6, () => { leave(a); leave(b); emit('Judges leave the office', 'judge', a.id); }],
+        [3.0, () => { orch.mode = 'idle'; orch.wait = 1.5; scene = null; }]
+      ]);
+    });
+    visit(a, northSpot, () => { a.mode = 'debate'; a.face = 'down'; seated(); });
+    visit(b, southSpot, () => { b.mode = 'debate'; b.face = 'up'; seated(); });
+    visit(orch, headSpot, () => { orch.mode = 'scene'; orch.face = 'left'; seated(); });
+    return true;
+  }
+
+  /* ---------- palette helpers for 3-tone shading ---------- */
+  const shade = c => goMix(c, '#2A1523', 0.4), hi = c => goMix(c, '#F6EFF3', 0.3);
+  const C = {
+    wood: P.sand, woodH: hi(P.sand), woodS: shade(P.sand),
+    marble: P.text, marbleS: goMix(P.text, '#2A1523', 0.25),
+    steelH: hi(P.steel), steelS: shade(P.steel),
+    pearlS: shade(P.pearl), pearlH: '#F6EFF3',
+    pink: P.purple, pinkS: P.deepPink, pinkH: P.violet,
+    leaf: P.green, leafS: shade(P.green), leafH: hi(P.green),
+    coffee: goMix(P.sand, '#2A1523', 0.3), coffeeH: goMix(P.sand, '#2A1523', 0.1)
+  };
+  const box3 = (x, y, w, h, base, hiC, shC, f) => {
+    f(x, y, w, h, base); f(x, y, w, 1, hiC); f(x, y + h - 1, w, 1, shC);
+  };
+
+  /* ---------- static background: wall, floor, props (painted once) ---------- */
+  function paintStatic() {
+    const Bx = (x, y, w, h, c) => B(x, y, w, h, c);
+    /* Wall band: crown molding, wallpaper with diamond damask, chair rail, wainscot. */
+    Bx(0, 0, W, 2 * T, P.bg);
+    Bx(0, 0, W, 6, P.border); Bx(0, 0, W, 1, P.deep); Bx(0, 6, W, 2, shade(P.border));
+    Bx(0, 8, W, 22, P.sel);
+    for (let y = 9; y < 30; y += 6) for (let x = (y % 12 ? 4 : 0); x < W; x += 8) Bx(x, y, 1, 1, goMix(P.sel, P.border, 0.5));
+    Bx(0, 30, W, 2, P.border); Bx(0, 32, W, 2, P.deep);
+    Bx(0, 34, W, 14, P.panel);
+    for (let x = 0; x < W; x += 12) { Bx(x, 36, 1, 10, P.border); Bx(x + 1, 36, 1, 10, P.bg); }
+    Bx(0, 46, W, 2, P.border);
+    /* Floor: staggered wood planks with grain and seams. */
+    for (let y = 2; y < ROWS; y++) {
+      const top = y * T;
+      for (let p = 0; p < 4; p++) {
+        const py = top + p * 6, off = ((y * 7 + p * 5) % 13) * 2;
+        for (let x = -off; x < W; x += 52) {
+          const base = ((Math.floor(x / 52) + p + y) % 3) ? P.floorA : P.floorB;
+          Bx(Math.max(0, x), py, Math.min(52, W - Math.max(0, x)) - (x < 0 ? -x : 0), 6, base);
+          Bx(Math.max(0, x), py + 5, Math.min(52, W - Math.max(0, x)), 1, P.seam);
+          const gx = Math.max(0, x) + 6 + ((p * 11) % 17);
+          if (gx < W) Bx(gx, py + 2, 10, 1, goMix(base, '#2A1523', 0.25));
+          if (gx + 22 < W) Bx(gx + 22, py + 3, 6, 1, goMix(base, '#2A1523', 0.2));
+        }
+      }
+      Bx(0, top + T - 2, W, 2, P.seam);
+    }
+    /* Baseboard along the bottom of the wall. */
+    Bx(0, 2 * T - 2, W, 2, P.panel);
+    /* Window: night city skyline with a moon. */
+    if (cfg.window) {
+      const wx = cfg.window.x * T + 3, ww = cfg.window.w * T - 6, wy = 8, wh = 22;
+      Bx(wx - 2, wy - 2, ww + 4, wh + 4, P.border);
+      Bx(wx, wy, ww, wh, P.bg);
+      for (let s = 0; s < 6; s++) Bx(wx, wy + s * 4, ww, 4, goMix(P.bg, P.user, s / 6));
+      Bx(wx + ww - 9, wy + 4, 5, 5, P.pearl); Bx(wx + ww - 8, wy + 3, 3, 1, P.pearl); Bx(wx + ww - 7, wy + 4, 2, 1, P.sec);
+      let sx = wx;
+      let k = 0;
+      while (sx < wx + ww) {
+        const bw = 4 + Math.floor(hash(k + 1) * 5), bh = 6 + Math.floor(hash(k + 7) * 12);
+        const col = k % 2 ? P.panel : P.sel;
+        Bx(sx, wy + wh - bh, Math.min(bw, wx + ww - sx), bh, col);
+        for (let wy2 = wy + wh - bh + 2; wy2 < wy + wh - 2; wy2 += 3) {
+          for (let wx2 = sx + 1; wx2 < sx + bw - 1; wx2 += 3) {
+            if (hash(wx2 * 3 + wy2 * 5 + k) > 0.55 && wx2 < wx + ww - 1) Bx(wx2, wy2, 1, 1, P.gold);
+          }
+        }
+        sx += bw; k++;
+      }
+      Bx(wx + Math.floor(ww / 2) - 1, wy, 2, wh, P.border);
+      Bx(wx, wy + Math.floor(wh / 2) - 1, ww, 2, P.border);
+      Bx(wx - 2, wy + wh + 2, ww + 4, 2, P.border);
+    }
+    /* Whiteboard frame (content is drawn live). */
+    if (wb) {
+      const x = wb.x * T + 3, w = wb.w * T - 6;
+      Bx(x, 5, w, 26, P.steel); Bx(x + 2, 7, w - 4, 22, P.text);
+      Bx(x + 2, 7, w - 4, 1, P.sec);
+      Bx(x + 6, 31, w - 12, 2, P.border);
+    }
+    /* Clock on the wall. */
+    if (cfg.clock != null) {
+      const cx = cfg.clock * T + 12, cy = 18;
+      Bx(cx - 7, cy - 7, 14, 14, P.border); Bx(cx - 6, cy - 6, 12, 12, P.text); Bx(cx - 5, cy - 5, 10, 10, P.panel);
+      for (let a = 0; a < 12; a++) { const q = a / 12 * Math.PI * 2; Bx(cx + Math.round(Math.cos(q) * 4), cy + Math.round(Math.sin(q) * 4), 1, 1, P.gold); }
+    }
+    /* Bookshelf: three shelves, two rows of colored spines. */
+    if (cfg.shelf != null) {
+      const x = cfg.shelf * T + 2;
+      Bx(x, 6, 30, 26, P.border); Bx(x + 2, 8, 26, 22, P.bg);
+      [14, 22].forEach(y => Bx(x + 2, y, 26, 2, P.steel));
+      const books = [P.blue, P.red, P.green, P.gold, P.purple, P.sec, P.sand];
+      for (let r = 0; r < 3; r++) for (let b = 0; b < 6; b++) {
+        const bh = 5 + (b + r) % 3, col = books[(b * 2 + r * 3) % books.length];
+        Bx(x + 3 + b * 4, (r === 0 ? 9 : r === 1 ? 17 : 25) + (6 - bh), 3, bh, col);
+      }
+    }
+    /* Rug with border pattern and corner tassels. */
+    if (cfg.rug) {
+      const r = cfg.rug, x = r.x * T + 6, y = r.y * T + 6, w = r.w * T - 12, h = r.h * T - 12;
+      Bx(x, y, w, h, P.sel); Bx(x + 3, y + 3, w - 6, h - 6, goMix(P.sel, P.border, 0.4));
+      Bx(x + 6, y + 6, w - 12, h - 12, P.sel);
+      for (let i = 0; i < w - 12; i += 6) Bx(x + 6 + i, y + 6, 3, 1, P.border);
+      for (let i = 0; i < h - 12; i += 6) Bx(x + 6, y + 6 + i, 1, 3, P.border);
+      [[x + 1, y + 1], [x + w - 4, y + 1], [x + 1, y + h - 4], [x + w - 4, y + h - 4]].forEach(([a, b]) => { Bx(a, b, 3, 3, P.gold); Bx(a + 1, b + 1, 1, 1, P.text); });
+      Bx(x + w / 2 - 2, y + h / 2 - 2, 4, 4, P.deepPink);
+    }
+    /* Door and mat at the bottom edge. */
+    if (cfg.door) {
+      const d = cfg.door, dx = d.x * T, dy = (ROWS - 1) * T;
+      Bx(dx + 2, dy + 2, d.w * T - 4, T - 2, P.border);
+      Bx(dx + 4, dy + 4, d.w * T - 8, T - 4, P.steel);
+      Bx(dx + 4, dy + 4, d.w * T - 8, 2, C.steelH);
+      Bx(dx + Math.floor(d.w * T / 2) - 1, dy + 4, 2, T - 4, P.border);
+      Bx(dx + d.w * T - 10, dy + 13, 2, 3, P.gold);
+      Bx(dx + 2, dy + T - 6, d.w * T - 4, 4, P.deep);
+      Bx(dx + 4, dy + T - 5, d.w * T - 8, 2, P.violet);
+    }
+    /* Coffee counter: marble top, cabinets, toe kick. */
+    if (cf) {
+      const x = cf.x * T, y = cf.y * T, w = cf.w * T;
+      Bx(x, y + 4, w, 4, C.marble); Bx(x, y + 4, w, 1, '#FFFFFF'); Bx(x + 4, y + 6, 10, 1, goMix(P.text, P.sec, 0.5));
+      Bx(x, y + 8, w, 16, P.border); Bx(x, y + 8, w, 1, C.steelH);
+      for (let i = 1; i < cf.w; i++) Bx(x + i * T, y + 9, 1, 14, P.sel);
+      for (let i = 0; i < cf.w; i++) { Bx(x + i * T + 9, y + 15, 6, 1, P.muted); Bx(x + i * T + 9, y + 14, 6, 1, P.steel); }
+      Bx(x, y + 22, w, 2, P.panel);
+      /* Sugar jar and cups on the marble (static). */
+      Bx(x + w - 14, y + 0, 9, 4, P.sec); Bx(x + w - 14, y + 0, 9, 1, P.text); Bx(x + w - 13, y - 2, 7, 2, P.border);
+      for (let i = 0; i < 3; i++) { Bx(x + w - 22 + i * 3, y + 1, 3, 3, P.text); Bx(x + w - 22 + i * 3, y + 1, 3, 1, P.violet); }
+    }
+    /* Wall-side coffee machine body (LED and drip are live). */
+    if (cf) {
+      const x = cf.x * T + 3, y = cf.y * T - 16;
+      Bx(x, y, 15, 14, P.steel); Bx(x, y, 15, 2, C.steelH); Bx(x, y + 12, 15, 2, C.steelS);
+      Bx(x + 2, y + 3, 11, 5, P.bg); Bx(x + 2, y + 3, 11, 1, P.border);
+      Bx(x + 5, y + 10, 5, 2, P.border);
+    }
+  }
+
+  /* ---------- live room parts (drawn each frame) ---------- */
+  function drawWindowLights() {
+    if (!cfg.window) return;
+    const wx = cfg.window.x * T + 3, ww = cfg.window.w * T - 6;
+    for (let s = 0; s < 4; s++) {
+      const sx = wx + 2 + Math.floor(hash(s + 2) * (ww - 6)), sy = 12 + Math.floor(hash(s + 9) * 10);
+      if (Math.floor(time * 1.3 + s * 2.7) % 5) R(sx, sy, 1, 1, P.sand);
+    }
+  }
+  function drawClockHands() {
+    if (cfg.clock == null) return;
+    const cx = cfg.clock * T + 12, cy = 18, a = time * 0.6;
+    R(cx + Math.round(Math.cos(a) * 3), cy + Math.round(Math.sin(a) * 3), 1, 1, P.gold);
+    R(cx, cy - 3, 1, 3, P.text); R(cx, cy, 1, 1, P.gold);
+  }
+  function drawWhiteboard() {
+    const x = wb.x * T + 5, w = wb.w * T - 10;
+    for (let i = 0; i < wbLines; i++) {
+      const y = 10 + i * 4;
+      if (y > 26) break;
+      const full = 12 + Math.floor(hash(i + 3) * (w - 26));
+      const len = (i === wbLines - 1 && wbWriting) ? Math.max(1, Math.floor(full * wbPartial)) : full;
+      R(x + 3, y, 3, 3, i < wbChecks ? P.green : P.steel);
+      if (i < wbChecks) R(x + 4, y + 1, 1, 1, P.bg);
+      R(x + 9, y + 1, len, 2, [P.blue, P.red, P.violet, P.blue, P.green][i % 5]);
+    }
+    R(x + 4, 27, 5, 2, P.red); R(x + 12, 27, 5, 2, P.blue); R(x + 20, 27, 3, 2, P.gold);
+  }
+
+  function drawDesk(d) {
+    const owner = workers.find(a => a.desk === cfg.desks.indexOf(d));
+    const x = d.x * T, y = d.y * T, here = owner && owner.sit && owner.mode === 'work';
+    /* Desk top and drawer front. */
+    R(x + 1, y + 6, 46, 14, C.woodH); R(x + 1, y + 6, 46, 1, '#FFD9A6');
+    R(x + 1, y + 19, 46, 3, C.woodS);
+    R(x + 2, y + 22, 4, 2, P.border); R(x + 40, y + 22, 4, 2, P.border);
+    R(x + 36, y + 9, 8, 3, C.woodS); R(x + 37, y + 10, 6, 1, P.gold);
+    /* Monitor: bezel, screen with scrolling code, stand. */
+    const mx = x + 14, my = y - 14;
+    R(mx, my, 20, 16, P.border); R(mx, my, 20, 1, P.steel);
+    R(mx + 1, my + 1, 18, 13, P.bg);
+    if (here) {
+      const off = Math.floor(time * 6);
+      for (let i = 0; i < 9; i++) {
+        const n = i + off, w = 3 + Math.floor(hash(n + owner.i * 31) * 10);
+        R(mx + 3 + (n % 3 === 0 ? 0 : 2), my + 2 + i * 1.5 | 0, Math.min(w, 13), 1, [owner.color, P.text, P.steel][n % 3]);
+      }
+      R(mx + 3, my + 12, 12, 1, owner.color);
+    } else {
+      R(mx + 6, my + 6, 8, 2, P.dim);
+      if (Math.floor(time * 2) % 2) R(mx + 8, my + 10, 4, 1, P.gold);
+    }
+    R(mx + 8, my + 16, 4, 3, P.steel); R(mx + 5, my + 19, 10, 2, P.border);
+    /* Keyboard with key rows, mouse, folder, mug with steam. */
+    R(x + 9, y + 9, 14, 4, P.steel); R(x + 9, y + 9, 14, 1, P.sec);
+    for (let k = 0; k < 4; k++) R(x + 10 + k * 3, y + 10, 2, 1, P.border);
+    R(x + 27, y + 9, 4, 5, P.sec); R(x + 27, y + 9, 4, 1, P.text);
+    R(x + 3, y + 8, 5, 6, owner ? owner.color : P.muted); R(x + 3, y + 8, 5, 1, C.woodH);
+    if (owner && owner.mug > 0 && owner.sit) {
+      R(x + 36, y + 7, 6, 7, P.text); R(x + 36, y + 7, 6, 1, P.sec); R(x + 42, y + 9, 2, 3, P.text);
+      R(x + 37, y + 9, 4, 4, C.coffee);
+      if (Math.floor(time * 3) % 2) { R(x + 38, y + 3, 1, 2, P.steel); R(x + 40, y + 2, 1, 2, P.steel); }
+      else { R(x + 39, y + 2, 1, 2, P.steel); R(x + 37, y + 3, 1, 2, P.steel); }
+    } else {
+      R(x + 36, y + 9, 6, 6, P.text); R(x + 36, y + 9, 6, 1, P.sec); R(x + 42, y + 11, 2, 2, P.text);
+    }
+    if (!here) R(x + 27, y + 2, 1, 1, Math.floor(time * 2) % 2 ? P.gold : P.border);
+  }
+
+  function drawChair(px, py, front) {
+    const x = px - 8, y = py - 14;
+    if (!front) { /* seat cushion under the agent */
+      R(x + 2, y + 16, 12, 3, P.muted); R(x + 2, y + 16, 12, 1, P.steel);
+      return;
+    }
+    /* Backrest drawn over the seated agent, with a chair post and wheels. */
+    R(x + 3, y + 8, 10, 7, P.muted); R(x + 3, y + 8, 10, 1, P.steel); R(x + 3, y + 14, 10, 1, shade(P.muted));
+    R(x + 4, y + 10, 8, 4, P.border); R(x + 5, y + 11, 6, 2, P.sel);
+    R(x + 7, y + 15, 4, 3, P.border); R(x + 4, y + 18, 2, 1, P.bg); R(x + 10, y + 18, 2, 1, P.bg);
+  }
+
+  function drawTable() {
+    const x = tb.x * T, y = tb.y * T, w = tb.w * T, h = tb.h * T;
+    /* Table top with edge and legs; the top height follows the tile height, so h=1 works too. */
+    const topH = h - 12, edge = y + 4 + topH;
+    R(x + 2, y + 4, w - 4, topH, C.woodH); R(x + 2, y + 4, w - 4, 1, '#FFD9A6');
+    R(x + 2, edge, w - 4, 4, C.woodS); R(x + 2, edge + 4, w - 4, 2, P.border);
+    R(x + 4, y + h - 2, 3, 2, P.bg); R(x + w - 7, y + h - 2, 3, 2, P.bg);
+    /* Laptop (screen glows during meetings), papers, vase with flowers. */
+    const lx = x + 6, ly = y + 5, lh = Math.max(5, topH - 5);
+    R(lx, ly, 14, lh, P.steel); R(lx + 1, ly + 1, 12, lh - 2, meeting ? P.blue : P.bg);
+    if (meeting) for (let i = 0; i < 2; i++) R(lx + 2, ly + 2 + i * 2, 5 + i * 3, 1, P.text);
+    R(lx - 2, ly + lh - 1, 18, 2, P.sec);
+    R(x + 26, y + 6, 8, 5, P.text); R(x + 26, y + 6, 8, 1, P.sec);
+    R(x + 28, y + 8, 4, 1, P.steel);
+    const vx = x + w - 16, vy = y + 4;
+    R(vx, vy + 8, 8, 8, P.pinkS); R(vx + 1, vy + 8, 6, 1, P.pink); R(vx - 1, vy + 14, 10, 2, P.deepPink);
+    R(vx + 3, vy + 2, 1, 6, P.leafS); R(vx + 1, vy - 1, 3, 3, P.pink); R(vx + 5, vy + 1, 3, 2, P.violet);
+    R(vx - 3, vy + 3, 3, 3, P.leaf); R(vx + 7, vy + 4, 3, 3, P.leaf);
+  }
+
+  function drawCoffee() {
+    const x = cf.x * T, y = cf.y * T, level = 1 - used / budget;
+    /* Espresso machine LED and drip. */
+    const mx = x + 3, my = y - 16;
+    R(mx + 2, my + 4, 3, 2, brewing > 0 ? P.red : P.green);
+    if (brewing > 0) { const dy = Math.floor(time * 12) % 5; R(mx + 7, my + 14 + dy, 1, 1, C.coffeeH); }
+    /* Glass coffee pot: the fill level is the remaining context budget. */
+    const px = x + 32, py = y - 12;
+    R(px + 1, py - 2, 8, 2, P.border); R(px + 3, py - 3, 4, 1, P.steel);
+    R(px, py, 10, 16, P.steel); R(px, py, 10, 1, P.sec);
+    R(px + 1, py + 1, 8, 14, P.bg);
+    const fh = Math.round(13 * Math.max(0, Math.min(1, level)));
+    if (fh > 0) {
+      R(px + 1, py + 15 - fh, 8, fh, C.coffee);
+      R(px + 1, py + 15 - fh, 8, 1, C.coffeeH);
+      if (fh > 4) R(px + 2, py + 15 - fh + 2, 1, fh - 3, goMix(C.coffee, '#F6EFF3', 0.3));
+    }
+    R(px + 10, py + 4, 3, 7, P.steel); R(px + 11, py + 6, 1, 3, P.bg);
+    R(px + 4, py + 16, 2, 1, P.border);
+    if (level > 0.08 && Math.floor(time * 2) % 2) R(px + 4, py - 6, 1, 2, P.steel); else if (level > 0.08) R(px + 5, py - 7, 1, 2, P.steel);
+  }
+
+  function drawPlant(p) {
+    const x = p.x * T, y = p.y * T;
+    /* Big leafy plant in a pink pot. */
+    R(x + 5, y + 14, 14, 9, P.pinkS); R(x + 5, y + 14, 14, 1, P.pink); R(x + 4, y + 13, 16, 2, P.pink);
+    R(x + 6, y + 21, 12, 1, P.border); R(x + 8, y + 13, 8, 1, P.border);
+    const leaves = [[1, 4, 6, 7], [16, 5, 6, 7], [4, -1, 6, 8], [13, -1, 6, 8], [8, -4, 8, 9], [9, 0, 6, 6]];
+    leaves.forEach(([lx, ly, lw, lh], i) => {
+      R(x + lx, y + ly, lw, lh, i % 2 ? C.leaf : C.leafS);
+      R(x + lx + 1, y + ly + 1, lw - 3, 1, C.leafH);
+      R(x + lx + Math.floor(lw / 2), y + ly + 2, 1, lh - 3, C.leafS);
+    });
+  }
+
+  function drawRack() {
+    const x = cfg.rack.x * T, y = cfg.rack.y * T;
+    R(x + 2, y - 6, 20, 46, P.border); R(x + 2, y - 6, 20, 1, P.steel);
+    for (let i = 0; i < 7; i++) {
+      const yy = y - 3 + i * 6;
+      R(x + 4, yy, 16, 4, P.sel); R(x + 4, yy, 16, 1, P.border);
+      const on = hash(i + Math.floor(time * 4) * 7) > 0.35;
+      R(x + 6, yy + 2, 1, 1, on ? P.green : P.bg); R(x + 9, yy + 2, 1, 1, i % 2 ? P.blue : P.gold);
+      R(x + 12, yy + 1, 6, 2, P.bg);
+    }
+  }
+
+  /* ---------- character pixel maps (16x24) ----------
+     Head maps are 16x10 letter grids. K ink, H hair, h hair shade, l hair light,
+     S skin, s skin shade, E eye, W glint, C cheek, M mouth. Torso and legs are drawn per role. */
+  const HEAD_DOWN = [
+    '....KKKKKKKK....',
+    '...KHHHHHHHHK...',
+    '..KHHlHHHHHHHK..',
+    '..KHHHHHHHHHHK..',
+    '..KHHSSSSSSHHK..',
+    '..KSSSSSSSSSSK..',
+    '..KSSESSSSESSK..',
+    '..KCSSSSSSSSCK..',
+    '...KSSSMMSSSK...',
+    '....KSSSSSSK....'
+  ];
+  const HEAD_UP = [
+    '....KKKKKKKK....',
+    '...KHHHHHHHHK...',
+    '..KHHlHHHHHHHK..',
+    '..KHHHHHHHHHHK..',
+    '..KHHHHHHHHHHK..',
+    '..KHHHHHHHHHHK..',
+    '..KHHHHHHHHHHK..',
+    '..KHHhHHHHhHHK..',
+    '...KHHHHHHHHK...',
+    '....KSSSSSSK....'
+  ];
+  const HEAD_SIDE = [
+    '....KKKKKKK.....',
+    '...KHHHHHHHK....',
+    '..KHHlHHHHHHK...',
+    '..KHHHHHHHHHK...',
+    '..KSSSSSSSHHK...',
+    '..KSSSSSSSHHK...',
+    '..KSSESSSSHHK...',
+    '..KSSSSSSSHHK...',
+    '..KSSSSSSSHK....',
+    '...KKKKKKKK.....'
+  ];
+
+  const charMap = c => ({
+    K: GO_INK, H: c.hair, h: shade(c.hair), l: hi(c.hair), S: GO_SKIN, s: GO_SKIN_SH,
+    E: GO_INK, W: P.text, C: P.softRose, M: P.deep
+  });
+
+  /* Per-role palette: shirt base, shade, highlight, pants. */
+  function outfit(c) {
+    const base = c.color;
+    return { s: base, sh: shade(base), hl: hi(base), pants: c.visitor ? P.bg : P.border, pantsS: P.sel, pantsH: P.steel };
+  }
+
+  /* Torso and legs: 3-tone shirt, arms, belt, and legs with a walk cycle. */
+  function drawBody(c, ox, oy, walk, sw, sitting) {
+    const o = outfit(c);
+    /* Arms and torso */
+    R(ox + 4, oy + 10, 8, 7, o.s); R(ox + 4, oy + 10, 1, 7, o.sh); R(ox + 11, oy + 10, 1, 7, o.sh);
+    R(ox + 6, oy + 10, 2, 3, o.hl);
+    R(ox + 3, oy + 10, 1, 6, GO_INK); R(ox + 12, oy + 10, 1, 6, GO_INK);
+    R(ox + 2, oy + 11, 1, 5, o.s); R(ox + 13, oy + 11, 1, 5, o.s);
+    R(ox + 2, oy + 15, 1, 1, o.sh); R(ox + 13, oy + 15, 1, 1, o.sh);
+    R(ox + 4, oy + 17, 8, 1, GO_INK);
+    if (!sitting) {
+      R(ox + 2, oy + 16 + sw, 2, 2, GO_SKIN); R(ox + 12, oy + 16 - sw, 2, 2, GO_SKIN);
+    }
+    /* Legs (hidden while seated: the chair cushion covers the hips). */
+    if (!sitting) {
+      const lOff = walk === 1 ? 1 : 0, rOff = walk === 3 ? 1 : 0;
+      R(ox + 5, oy + 17, 2, 5 - lOff, o.pants); R(ox + 9, oy + 17, 2, 5 - rOff, o.pants);
+      R(ox + 5, oy + 17, 1, 5 - lOff, o.pantsS); R(ox + 9, oy + 17, 1, 5 - rOff, o.pantsS);
+      R(ox + 4, oy + 22 - lOff, 3, 2, GO_INK); R(ox + 9, oy + 22 - rOff, 3, 2, GO_INK);
+    }
+  }
+
+  /* Facing-specific head and face details; returns the head rows and flip flag. */
+  function headFor(c) {
+    if (c.face === 'up') return { rows: HEAD_UP, flip: false, fam: 'up' };
+    if (c.face === 'left') return { rows: HEAD_SIDE, flip: false, fam: 'side' };
+    if (c.face === 'right') return { rows: HEAD_SIDE, flip: true, fam: 'side' };
+    return { rows: HEAD_DOWN, flip: false, fam: 'down' };
+  }
+
+  /* Role props. Each kit adds headwear, gear, and accents over the base sprite. */
+  function drawKit(c, ox, oy, fam, flip) {
+    const fx = (x, w) => (flip ? ox + 15 - x - (w || 1) + 1 : ox + x);
+    const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
+    if (c.kit === 'explore') {
+      /* Safari explorer hat, brim and band, binoculars on the chest. */
+      hX(4, 8, -4, 3, P.sand); hX(4, 8, -4, 1, hi(P.sand)); hX(4, 8, -2, 1, P.gold);
+      hX(1, 14, -1, 1, P.sand); hX(1, 14, -1, 1, shade(P.sand)); hX(2, 12, -2, 1, shade(P.sand));
+      if (fam !== 'side') { hX(5, 2, 13, 2, P.steel); hX(9, 2, 13, 2, P.steel); hX(6, 4, 13, 1, P.sec); }
+    }
+    if (c.kit === 'worker') {
+      /* Construction hard hat with brim, tool belt with a wrench. */
+      hX(3, 10, -2, 3, P.gold); hX(3, 10, -2, 1, hi(P.gold)); hX(2, 12, -1, 1, shade(P.gold));
+      hX(1, 14, -1, 1, P.gold); hX(1, 14, -1, 1, shade(P.gold));
+      hX(4, 8, 0, 1, shade(P.gold));
+      hX(4, 9, 15, 1, P.border); hX(11, 3, 15, 2, P.steel); hX(12, 1, 14, 1, P.sec);
+    }
+    if (c.kit === 'verify') {
+      /* Lab coat over the shirt, glasses, clipboard with a checklist. */
+      hX(4, 8, 10, 7, P.text); hX(4, 1, 10, 7, P.sec); hX(11, 1, 10, 7, P.sec); hX(7, 2, 10, 7, P.sec);
+      hX(4, 1, 16, 1, P.steel); hX(11, 1, 16, 1, P.steel);
+      if (fam !== 'side') {
+        hX(4, 3, 5, 3, P.border); hX(9, 3, 5, 3, P.border);
+        hX(5, 1, 6, 1, P.sky); hX(10, 1, 6, 1, P.sky); hX(6, 1, 6, 1, P.sky); hX(11, 1, 6, 1, P.sky);
+        hX(7, 2, 6, 1, P.border);
+      }
+      hX(12, 3, 13, 5, P.sand); hX(13, 1, 14, 3, P.text);
+      hX(13, 1, 14, 1, P.green); hX(13, 1, 16, 1, P.steel);
+    }
+  }
+
+  /* Orchestrator: top hat with champagne band and pink flower, big pink handlebar
+     mustache, gold monocle with chain, silver hair, champagne suit and bow tie. */
+  function drawOrch(ox, oy, fam, flip, blink) {
+    const fx = (x, w) => (flip ? ox + 15 - x - (w || 1) + 1 : ox + x);
+    const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
+    /* Top hat */
+    hX(4, 8, -8, 6, P.bg); hX(4, 8, -8, 1, P.border); hX(5, 6, -7, 1, P.sel);
+    hX(3, 10, -2, 2, P.bg); hX(3, 10, -2, 1, P.border);
+    hX(4, 8, -4, 1, P.gold); hX(4, 8, -3, 1, shade(P.gold));
+    /* Pink flower on the band */
+    hX(10, 3, -6, 3, P.purple); hX(11, 1, -5, 1, P.gold); hX(10, 1, -6, 1, P.violet); hX(12, 1, -4, 1, P.violet);
+    if (fam === 'up') {
+      /* Mustache tips peek out at the sides from behind */
+      hX(0, 2, 7, 2, P.purple); hX(14, 2, 7, 2, P.purple); hX(0, 1, 6, 1, P.deep); hX(15, 1, 6, 1, P.deep);
+      return;
+    }
+    /* Handlebar mustache: wider than the face, curled tips */
+    if (fam === 'side') {
+      hX(1, 4, 8, 2, P.purple); hX(0, 2, 7, 2, P.purple); hX(0, 1, 6, 1, P.deep); hX(1, 3, 9, 1, P.deep);
+      /* Monocle on the visible eye */
+      hX(3, 4, 5, 1, P.gold); hX(3, 4, 7, 1, P.gold); hX(3, 1, 5, 3, P.gold); hX(6, 1, 5, 3, P.gold);
+      hX(4, 2, 6, 1, P.sky);
+      hX(6, 1, 8, 4, P.gold); hX(5, 1, 12, 1, P.gold); hX(6, 1, 13, 1, P.sec);
+    } else {
+      hX(0, 16, 8, 2, P.purple); hX(1, 14, 10, 1, P.deep);
+      hX(0, 2, 6, 2, P.purple); hX(14, 2, 6, 2, P.purple); hX(0, 1, 5, 1, P.deep); hX(15, 1, 5, 1, P.deep);
+      /* Monocle ring with light lens over the right eye, chain hanging to the vest */
+      hX(9, 4, 5, 1, P.gold); hX(9, 4, 7, 1, P.gold); hX(9, 1, 5, 3, P.gold); hX(12, 1, 5, 3, P.gold);
+      hX(10, 2, 6, 1, P.sky);
+      hX(12, 1, 8, 1, P.gold); hX(12, 1, 9, 1, P.sec); hX(13, 1, 10, 1, P.gold); hX(13, 1, 11, 1, P.sec);
+      hX(13, 1, 12, 1, P.gold); hX(13, 1, 13, 1, P.sec);
+    }
+    /* Bow tie and champagne vest */
+    hX(6, 4, 10, 1, P.purple); hX(7, 2, 11, 1, P.deep);
+    hX(7, 2, 12, 5, P.text); hX(7, 1, 12, 5, P.sec);
+  }
+
+  /* Visitor props: inspector hat, coat, briefcase, magnifier; judge wig and robe. */
+  function drawVisitor(c, ox, oy, fam, flip) {
+    const fx = (x, w) => (flip ? ox + 15 - x - (w || 1) + 1 : ox + x);
+    const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
+    if (c.visitor === 'inspector') {
+      /* Trench coat with belt and collar, fedora with band */
+      hX(4, 8, 10, 7, P.border); hX(4, 1, 10, 7, P.user); hX(11, 1, 10, 7, P.user);
+      hX(4, 8, 16, 1, P.gold); hX(3, 10, 10, 1, P.user);
+      hX(2, 12, -1, 1, P.bg); hX(3, 10, -3, 2, P.bg); hX(4, 8, -5, 2, P.sel);
+      hX(3, 10, -2, 1, P.deep);
+      hX(4, 8, -6, 1, P.bg);
+      /* Briefcase in one hand, magnifier in the other */
+      hX(12, 4, 16, 4, P.sand); hX(12, 4, 16, 1, shade(P.sand)); hX(13, 2, 15, 1, P.bg);
+      if (c.mode === 'inspect' || (c.bubble && c.bubble.icon === 'lens')) {
+        hX(-1, 1, 9, 3, P.sand); hX(-3, 4, 4, 1, P.steel); hX(-3, 1, 5, 4, P.steel); hX(0, 1, 5, 4, P.steel);
+        hX(-2, 2, 5, 3, P.sky);
+        hX(-1, 1, 12, 2, P.sand);
+      }
+    }
+    if (c.visitor === 'judge') {
+      /* Judge wig: white curls around the head, black robe */
+      hX(1, 2, 1, 7, P.text); hX(13, 2, 1, 7, P.text); hX(3, 10, -1, 2, P.text);
+      hX(2, 1, 2, 1, P.sec); hX(13, 1, 2, 1, P.sec); hX(5, 1, -2, 1, P.sec); hX(9, 1, -2, 1, P.sec);
+      hX(4, 8, 10, 7, P.sel); hX(4, 1, 10, 7, P.user); hX(11, 1, 10, 7, P.user);
+      hX(6, 4, 10, 6, P.text); hX(7, 2, 10, 1, P.sec);
+    }
+  }
+
+  function drawChar(c) {
+    if (c.visitorOnly && !c.present) return;
+    const fx = Math.round(c.x), fy = Math.round(c.y);
+    const walk = c.moving ? Math.floor(c.step) % 4 : 0, bob = c.moving && walk % 2 ? 1 : 0;
+    const sitting = c.sit && c.mode === 'work';
+    const ox = fx - 8, oy = fy - 23 + (sitting ? 4 : 0) - bob;
+    const sw = c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
+    if (!c.sit) { g.globalAlpha = 0.35; R(fx - 6, fy - 1, 12, 2, GO_INK); g.globalAlpha = 1; }
+    const { rows, flip, fam } = headFor(c);
+    /* Torso/legs first, then head over them, then per-role props */
+    drawBody(c, ox, oy, walk, sw, sitting);
+    if (sitting) {
+      const k = Math.floor(time * 8 + c.i) % 2;
+      R(ox + 2, oy + 12 - k, 2, 2, GO_SKIN); R(ox + 12, oy + 12 + k, 2, 2, GO_SKIN);
+    }
+    sprite(rows, charMap(c), ox, oy, flip);
+    /* Blink: close the eyes for a frame in front-facing views */
+    const blink = Math.floor(time * 10 + c.i * 13) % 37 === 0;
+    if (blink && fam === 'down') { R(ox + 5, oy + 6, 1, 1, GO_SKIN); R(ox + 10, oy + 6, 1, 1, GO_SKIN); }
+    if (c.orch) drawOrch(ox, oy, fam, flip, blink);
+    else if (c.visitor) drawVisitor(c, ox, oy, fam, flip);
+    else drawKit(c, ox, oy, fam, flip);
+    /* Coffee cup in hand while walking */
+    if (c.mug > 0 && !c.sit) {
+      const mx = c.face === 'left' ? ox - 1 : ox + 13;
+      R(mx, oy + 15, 3, 3, P.text); R(mx, oy + 17, 3, 1, P.sec);
+      if (Math.floor(time * 3) % 2) R(mx + 1, oy + 12, 1, 2, P.steel);
+    }
+  }
+
+  /* Speech bubble, 18x14, with a 10x8 icon. Drawn in the final pass. */
+  function drawBubble(x, y, icon) {
+    R(x, y, 18, 14, GO_INK); R(x + 1, y + 1, 16, 11, P.text); R(x + 1, y + 1, 16, 1, P.sec);
+    R(x + 7, y + 12, 3, 2, GO_INK); R(x + 8, y + 14, 1, 1, GO_INK); R(x + 8, y + 12, 1, 1, P.text);
+    const ix = x + 4, iy = y + 3;
+    if (icon === 'dots') { const n = 1 + Math.floor(time * 3) % 3; for (let i = 0; i < n; i++) R(ix + 1 + i * 3, iy + 2, 2, 2, P.steel); }
+    else if (icon === 'cup') { R(ix, iy + 2, 6, 4, P.sand); R(ix, iy + 2, 6, 1, P.gold); R(ix + 6, iy + 3, 2, 2, P.sand); R(ix + 1, iy, 1, 2, P.steel); R(ix + 3, iy, 1, 2, P.steel); }
+    else if (icon === 'bang') { R(ix + 3, iy, 2, 5, P.red); R(ix + 3, iy + 6, 2, 2, P.red); }
+    else if (icon === 'check') { [[0, 3], [1, 4], [2, 5], [3, 4], [4, 3], [5, 2], [6, 1]].forEach(([a, b]) => R(ix + a, iy + b, 1, 1, P.green)); }
+    else if (icon === 'idea') { R(ix + 2, iy, 4, 4, P.gold); R(ix + 3, iy + 4, 2, 2, P.steel); }
+    else if (icon === 'talk') { R(ix, iy + 1, 8, 1, P.muted); R(ix, iy + 3, 6, 1, P.muted); R(ix, iy + 5, 7, 1, P.blue); }
+    else if (icon === 'lens') { R(ix, iy, 4, 4, P.steel); R(ix + 1, iy + 1, 2, 2, P.sky); R(ix + 3, iy + 4, 3, 1, P.sand); R(ix + 4, iy + 5, 2, 1, P.sand); }
+    else if (icon === 'question') { R(ix + 1, iy, 4, 1, P.purple); R(ix + 4, iy + 1, 1, 2, P.purple); R(ix + 2, iy + 3, 2, 1, P.purple); R(ix + 2, iy + 5, 1, 1, P.purple); }
+    else if (icon === 'excl') { R(ix + 3, iy, 2, 5, P.purple); R(ix + 3, iy + 6, 2, 2, P.purple); }
+    else if (icon === 'gavel') { R(ix, iy, 5, 3, P.sand); R(ix + 4, iy + 2, 3, 2, P.border); R(ix + 3, iy + 5, 1, 3, P.sand); R(ix, iy + 6, 6, 1, P.border); }
+  }
+
+  /* ---------- frame update ---------- */
+  function update(dt) {
+    for (let i = timers.length - 1; i >= 0; i--) { timers[i].t -= dt; if (timers[i].t <= 0) { const cb = timers[i].cb; timers.splice(i, 1); cb(); } }
+    everyone.forEach(a => {
+      if (a.visitorOnly && !a.present) return;
+      moveChar(a, dt);
+      if (a.bubble) { a.bubble.t -= dt; if (a.bubble.t <= 0) a.bubble = null; }
+      if (a.mug > 0) a.mug -= dt;
+    });
+    workers.forEach(a => updateWorker(a, dt));
+    updateOrch(dt);
+    updateMeeting(dt);
+    if (brewing > 0) {
+      brewing -= dt;
+      used += (brewTarget - used) * Math.min(1, dt * 1.4);
+      if (brewing <= 0) {
+        used = brewTarget; brewing = 0; coffeeBusy = null; orch.mode = 'idle'; orch.wait = 1;
+        emit('Fresh pot brewed: context compacted to ' + fmtK(used), 'brew', 'orch');
+      }
+    }
+    if (!meeting && !scene && brewing === 0 && !coffeeBusy && used >= budget * 0.94) refill();
+  }
+
+  /* ---------- draw ---------- */
+  let camX = 0, camY = 0, camInit = false;
+  function draw() {
+    g.drawImage(bgLayer, 0, 0);
+    drawWindowLights();
+    drawClockHands();
+    drawWhiteboard();
+    const list = [];
+    cfg.desks.forEach(d => {
+      const s = deskSpot(d);
+      list.push({ k: (d.y + 1) * T - 1, f: () => drawDesk(d) });
+      list.push({ k: s.py - 0.5, f: () => drawChair(s.px, s.py, false) });
+      list.push({ k: s.py + 0.5, f: () => drawChair(s.px, s.py, true) });
+    });
+    list.push({ k: (tb.y + tb.h) * T - 1, f: drawTable });
+    list.push({ k: (cf.y + 1) * T - 1, f: drawCoffee });
+    (cfg.plants || []).forEach(p => list.push({ k: (p.y + 1) * T - 1, f: () => drawPlant(p) }));
+    if (cfg.rack) list.push({ k: (cfg.rack.y + 2) * T - 1, f: drawRack });
+    everyone.forEach(a => { if (!a.visitorOnly || a.present) list.push({ k: a.y, f: () => drawChar(a) }); });
+    list.sort((p, q) => p.k - q.k).forEach(o => o.f());
+    /* Speech bubbles and the magnifier hint go last, above every sprite. */
+    everyone.forEach(a => { if (a.bubble && (!a.visitorOnly || a.present)) drawBubble(Math.round(a.x) - 8 + 2, Math.round(a.y) - 23 - (a.orch ? 16 : 13) + (a.sit && a.mode === 'work' ? 4 : 0), a.bubble.icon); });
+    if (!cfg.view) { out.drawImage(world, 0, 0); return; }
+    const f = everyone.find(a => a.id === focusId) || orch;
+    const tx = Math.max(0, Math.min(W - VW, f.x - VW / 2)), ty = Math.max(0, Math.min(H - VH, f.y - 12 - VH * 0.42));
+    if (!camInit) { camX = tx; camY = ty; camInit = true; }
+    camX += (tx - camX) * 0.06; camY += (ty - camY) * 0.06;
+    out.drawImage(world, Math.round(camX), Math.round(camY), VW, VH, 0, 0, VW, VH);
+  }
+
+  function status(a) {
+    if (a.visitor) return { inspect: 'Inspecting', talk: 'Reporting', debate: 'Debating', walk: 'Walking in' }[a.mode] || (a.present ? 'On site' : 'Off site');
+    if (a.orch) return { idle: 'Walking', walk: 'Walking', plan: 'Planning', meeting: 'In sync', brew: 'Brewing', scene: scene === 'judgment' ? 'Presiding' : 'Reviewing' }[a.mode] || 'Walking the floor';
+    return { work: a.sit ? 'Working' : 'Sitting', coffee: 'Coffee', return: 'Returning', meeting: 'In sync' }[a.mode] || 'Working';
+  }
+
+  paintStatic();
+
+  /* ---------- startup: #warp=N fast-forwards, #do=review|judgment starts a scene first (screenshots) ---------- */
+  const doScene = /do=(review|judgment)/.exec(location.hash);
+  if (doScene) (doScene[1] === 'review' ? runReview : runJudgment)();
+  const warp = /warp=(\d+)/.exec(location.hash);
+  if (warp) for (let s = 0; s < +warp[1] * 30; s++) { time += 1 / 30; update(1 / 30); }
+  let hudT = 0, last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000) * speed;
+    last = now;
+    if (!paused) { time += dt; update(dt); }
+    draw();
+    hudT -= dt;
+    if (hudT <= 0 || paused) {
+      hudT = 0.15;
+      hooks.onTokens && hooks.onTokens({ used, budget, level: 1 - used / budget, brewing: brewing !== 0, time });
+      hooks.onAgents && hooks.onAgents(agents.concat(visitors.filter(v => v.present)).map(a => ({
+        id: a.id, name: a.name, role: a.role, color: a.color, status: status(a), mode: a.mode,
+        progress: a.orch || a.visitor ? null : a.progress, task: a.orch || a.visitor ? null : a.task, mug: a.mug > 0
+      })));
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  return {
+    plan: startPlan, callMeeting, refill: () => refill('Manual compaction: brewing a fresh pot'),
+    review: runReview, judgment: runJudgment,
+    setPaused: v => { paused = v; }, isPaused: () => paused, setSpeed: v => { speed = v; },
+    focus: id => { focusId = id; }
+  };
+}
+
+GentleOffice.drawPot = function (ctx, level, t, brewing) {
+  const P = GO_PAL, R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+  ctx.clearRect(0, 0, 32, 38);
+  /* Glass carafe with a warm liquid level and a plum-tinted lid */
+  R(12, 1, 8, 2, P.border); R(8, 3, 16, 3, P.border); R(9, 3, 14, 1, P.steel);
+  R(3, 8, 3, 2, P.sec);
+  R(5, 6, 22, 27, P.sec); R(6, 7, 20, 25, P.bg);
+  const lv = Math.max(0, Math.min(1, level)), h = Math.round(24 * lv);
+  if (h > 0) {
+    const liquid = goMix(P.sand, P.plum, 0.3);
+    R(7, 32 - h, 18, h, liquid); R(7, 32 - h, 18, 1, goMix(liquid, P.text, 0.3));
+    if (h > 4) for (let i = 0; i < 3; i++) { const by = 31 - ((t * 5 + i * 7) % (h - 2)); R(9 + i * 5, Math.floor(by), 1, 1, P.text); }
+  }
+  R(8, 9, 1, 17, P.text); R(9, 9, 1, 5, P.lav);
+  R(26, 9, 2, 2, P.border); R(27, 10, 3, 15, P.border); R(26, 24, 2, 2, P.border);
+  R(2, 33, 28, 4, P.border); R(2, 33, 28, 1, P.muted);
+  R(5, 35, 2, 1, brewing ? P.red : P.green);
+  if (brewing) { const dy = Math.floor(t * 10) % 4; R(15, dy, 1, 1, P.sand); }
+};
+
+const cfg = {
+  cols: 20, rows: 13, budget: 200000, startUsed: 52000, burn: 320, view: { w: 360, h: 202 },
+  desks: [{ x: 1, y: 4 }, { x: 5, y: 4 }, { x: 1, y: 8 }, { x: 5, y: 8 }],
+  whiteboard: { x: 8, w: 4 }, coffee: { x: 16, y: 2, w: 3 }, table: { x: 11, y: 7, w: 4, h: 2 },
+  rug: { x: 10, y: 5, w: 7, h: 6 }, window: { x: 1, w: 3 }, shelf: 13, clock: 6, door: { x: 9, w: 2 },
+  plants: [{ x: 0, y: 2 }, { x: 19, y: 2 }, { x: 0, y: 12 }, { x: 19, y: 12 }], rack: { x: 19, y: 6 },
+  orchStart: { x: 9, y: 5 }
+};
+const $ = id => document.getElementById(id);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const names = {
+  orch: 'Orchestrator', explore: 'Explore', worker: 'Worker A', worker2: 'Worker B', verify: 'Verify',
+  insp1: 'Inspector Risk', insp2: 'Inspector Reliability', judgeA: 'Judge A', judgeB: 'Judge B'
+};
+const queue = [];
+let busy = false, following = 'orch';
+function pump() {
+  if (busy || !queue.length) return;
+  busy = true;
+  const { who, text } = queue.shift();
+  const el = $('say');
+  el.innerHTML = '<span class="who"></span> <span class="t"></span>';
+  el.firstChild.textContent = who.toUpperCase() + ':';
+  const t = el.lastChild;
+  if (reduced) { t.textContent = text; setTimeout(() => { busy = false; pump(); }, 1200); return; }
+  let i = 0;
+  const iv = setInterval(() => {
+    t.textContent = text.slice(0, ++i);
+    if (i >= text.length) { clearInterval(iv); setTimeout(() => { busy = false; pump(); }, 900); }
+  }, 24);
+}
+function phrase(text, who) {
+  let s = text.startsWith(who) ? text.slice(who.length).trim() : text;
+  s = s.replace(/^:\s*/, '');
+  if (s.startsWith('<-')) return 'Got it! I will ' + s.slice(2).trim().replace(/^\w/, c => c.toLowerCase()) + '.';
+  if (s.startsWith('gets up')) return 'I need a coffee. Be right back!';
+  if (s.startsWith('poured')) return 'Ahh. ' + s.replace('poured a cup:', 'That cup cost') + '.';
+  if (s.startsWith('finished')) return 'Done! ' + s.replace('finished:', 'Finished') + '.';
+  return s.replace(/^\w/, c => c.toUpperCase()) + (/[.!]$/.test(s) ? '' : '!');
+}
+const office = GentleOffice($('office'), cfg, {
+  onTokens({ used, budget, level }) {
+    $('fill').style.width = Math.round(level * 100) + '%';
+    $('fill').classList.toggle('low', level < 0.2);
+    $('left').textContent = Math.round((budget - used) / 1000);
+    $('lv').textContent = 'Lv.' + Math.round(used / budget * 100);
+  },
+  onAgents(list) {
+    $('party').innerHTML = list.map(a => `<li data-id="${a.id}" aria-current="${a.id === following}" role="button" tabindex="0">
+      <i style="background:${a.color}"></i><span><b>${a.name}</b><span class="st">${a.status}</span></span>
+      ${a.progress != null ? `<span class="mini"><span style="width:${Math.round(a.progress * 100)}%;background:${a.color}"></span></span>` : ''}</li>`).join('');
+  },
+  onEvent({ text, subject }) {
+    following = subject;
+    const who = names[subject] || 'Office';
+    if (queue.length > 3) queue.shift();
+    queue.push({ who, text: phrase(text, who) });
+    pump();
+  }
+});
+function follow(e) {
+  const li = e.target.closest('li[data-id]');
+  if (!li) return;
+  following = li.dataset.id; office.focus(following);
+}
+$('party').addEventListener('click', follow);
+$('party').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); follow(e); } });
+const pb = $('bPause');
+function setPaused(v) { office.setPaused(v); pb.setAttribute('aria-pressed', String(v)); pb.lastChild.textContent = v ? 'Play' : 'Pause'; }
+$('bPlan').onclick = () => office.plan();
+$('bMeet').onclick = () => office.callMeeting();
+$('bBrew').onclick = () => office.refill();
+$('bReview').onclick = () => office.review();
+$('bJudge').onclick = () => office.judgment();
+pb.onclick = () => setPaused(!office.isPaused());
+addEventListener('keydown', e => {
+  if (e.target.closest('button, li[data-id]')) return;
+  const k = e.key.toLowerCase();
+  if (k === 'p') office.plan(); else if (k === 'm') office.callMeeting(); else if (k === 'c') office.refill();
+  else if (k === 'r') office.review(); else if (k === 'j') office.judgment();
+  else if (e.key === ' ') { e.preventDefault(); setPaused(!office.isPaused()); }
+});
+if (reduced) setPaused(true);
+</script>
+</body>
+</html>
