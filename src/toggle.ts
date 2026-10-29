@@ -1,5 +1,6 @@
 import { piEventToOffice, type PiEvent, type UsageReading } from "./adapter/pi-events.ts";
 import { GENTLE_NOTIFICATION_SOURCE_EVENT, subagentFromNotification } from "./adapter/task-status.ts";
+import { SubagentIdentityBridge } from "./adapter/subagent-identity.ts";
 import { OfficeHub, type HubStats } from "./adapter/hub.ts";
 import type { OfficeEvent } from "./contract/office-event.ts";
 import type { OfficeServer } from "./server/office-server.ts";
@@ -64,6 +65,7 @@ function usageOf(ctx: PiContext | undefined): UsageReading | undefined {
  */
 export function registerOffice(host: OfficeHost, options: { agentDir: string; hub: OfficeHub; server?: OfficeWindow }): OfficeController {
 	const { agentDir, hub, server } = options;
+	const identity = new SubagentIdentityBridge();
 	let enabled = false;
 	let detachers: Array<() => void> = [];
 	const stopWindow = (): void => {
@@ -82,10 +84,16 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 		if (enabled) return;
 		enabled = true;
 		detachers = [
-			...OFFICE_PI_EVENTS.map(name => host.on(name, (event: PiEvent, ctx?: PiContext) => publish(piEventToOffice(event, usageOf(ctx))))),
+			...OFFICE_PI_EVENTS.map(name =>
+				host.on(name, (event: PiEvent, ctx?: PiContext) => {
+					publish(piEventToOffice(event, usageOf(ctx)));
+					// Launch input (agent, label) and launch result (task id) name the subagent notifications that follow.
+					publish(identity.piEvent(event));
+				}),
+			),
 			host.events.on(GENTLE_NOTIFICATION_SOURCE_EVENT, data => {
 				const event = subagentFromNotification(data);
-				if (event) publish([event]);
+				if (event) publish([identity.observe(event)]);
 			}),
 			host.on(OFFICE_SHUTDOWN_EVENT, () => stopWindow()),
 		];
@@ -97,6 +105,7 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 		for (const off of detachers) off();
 		detachers = [];
 		stopWindow();
+		identity.reset();
 		hub.reset();
 	};
 

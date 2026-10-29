@@ -1,0 +1,200 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+// Plain ES module shared with the browser page (web/); no build step, so Node loads it directly.
+import { DESK_COUNT, initialScene, reduceScene, sceneView } from "../web/scene-reducer.js";
+
+type Scene = ReturnType<typeof initialScene>;
+
+const at = 1_000;
+const sub = (id: string, agent: string, status: string, label = "job") => ({
+	type: "event",
+	seq: 1,
+	at,
+	event: { v: 1, type: "subagent", id, agent, role: roleOf(agent), label, status },
+});
+const departed = (id: string) => ({ type: "departed", id });
+const snapshot = (agents: Array<Record<string, unknown>>) => ({
+	type: "snapshot",
+	at,
+	snapshot: { v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents },
+});
+
+function roleOf(agent: string): string {
+	if (agent === "gentle-ai-explore") return "explore";
+	if (agent === "gentle-ai-verify") return "verify";
+	if (agent.startsWith("review-")) return "inspector";
+	if (agent.startsWith("jd-judge-")) return "judge";
+	return "worker";
+}
+
+function run(...actions: unknown[]): Scene {
+	return actions.reduce<Scene>((state, action) => reduceScene(state, action as never), initialScene());
+}
+
+const seatOf = (state: Scene, id: string) => sceneView(state).agents.find((agent: { id: string }) => agent.id === id)?.seat;
+
+describe("desk assignment", () => {
+	it("has as many desks as the zone draws", () => {
+		assert.equal(DESK_COUNT, 4);
+		assert.equal(initialScene().seats.desks.length, 4);
+	});
+
+	it("gives each running resident the first free desk, in arrival order", () => {
+		const state = run(sub("t1", "gentle-ai-explore", "running"), sub("t2", "gentle-ai-worker", "running"), sub("t3", "gentle-ai-verify", "running"));
+		assert.deepEqual(seatOf(state, "t1"), { zone: "desk", index: 0 });
+		assert.deepEqual(seatOf(state, "t2"), { zone: "desk", index: 1 });
+		assert.deepEqual(seatOf(state, "t3"), { zone: "desk", index: 2 });
+	});
+
+	it("keeps the same desk when the status changes", () => {
+		const state = run(sub("t1", "gentle-ai-worker", "running"), sub("t2", "gentle-ai-worker", "running"), sub("t2", "gentle-ai-worker", "waiting"));
+		assert.deepEqual(seatOf(state, "t2"), { zone: "desk", index: 1 });
+	});
+
+	it("queues the fifth agent on the bench and seats it when a desk is released", () => {
+		let state = run(
+			sub("t1", "gentle-ai-explore", "running"),
+			sub("t2", "gentle-ai-worker", "running"),
+			sub("t3", "gentle-ai-worker", "running"),
+			sub("t4", "gentle-ai-verify", "running"),
+			sub("t5", "gentle-ai-worker", "running"),
+		);
+		assert.deepEqual(seatOf(state, "t5"), { zone: "bench", index: 0 });
+		state = run(
+			sub("t1", "gentle-ai-explore", "running"),
+			sub("t2", "gentle-ai-worker", "running"),
+			sub("t3", "gentle-ai-worker", "running"),
+			sub("t4", "gentle-ai-verify", "running"),
+			sub("t5", "gentle-ai-worker", "running"),
+			sub("t1", "gentle-ai-explore", "completed"),
+			departed("t1"),
+		);
+		assert.deepEqual(seatOf(state, "t5"), { zone: "desk", index: 0 });
+		assert.equal(seatOf(state, "t1"), undefined, "the departed agent no longer has a seat");
+	});
+
+	it("a completed agent keeps its desk until it has left, so two sprites never share a chair", () => {
+		const state = run(sub("t1", "gentle-ai-worker", "running"), sub("t1", "gentle-ai-worker", "completed"), sub("t2", "gentle-ai-worker", "running"));
+		assert.deepEqual(seatOf(state, "t1"), { zone: "desk", index: 0 });
+		assert.deepEqual(seatOf(state, "t2"), { zone: "desk", index: 1 });
+		assert.equal(sceneView(state).agents.find((agent: { id: string }) => agent.id === "t1").leaving, true);
+	});
+
+	it("a queued agent waits on the bench even when a desk is free", () => {
+		const state = run(sub("t1", "gentle-ai-worker", "queued"));
+		assert.deepEqual(seatOf(state, "t1"), { zone: "bench", index: 0 });
+	});
+
+	it("a bench agent that starts running takes a free desk", () => {
+		const state = run(sub("t1", "gentle-ai-worker", "running"), sub("t2", "gentle-ai-worker", "queued"), sub("t2", "gentle-ai-worker", "running"));
+		assert.deepEqual(seatOf(state, "t2"), { zone: "desk", index: 1 });
+	});
+
+	it("promotion skips queued and finished bench entries", () => {
+		const state = run(
+			sub("t1", "gentle-ai-worker", "running"),
+			sub("t2", "gentle-ai-worker", "running"),
+			sub("t3", "gentle-ai-worker", "running"),
+			sub("t4", "gentle-ai-worker", "running"),
+			sub("t5", "gentle-ai-worker", "queued"),
+			sub("t6", "gentle-ai-worker", "running"),
+			sub("t6", "gentle-ai-worker", "cancelled"),
+			sub("t7", "gentle-ai-worker", "running"),
+			sub("t1", "gentle-ai-worker", "failed"),
+			departed("t1"),
+		);
+		assert.deepEqual(seatOf(state, "t7"), { zone: "desk", index: 0 });
+		assert.deepEqual(seatOf(state, "t5"), { zone: "bench", index: 0 });
+	});
+
+	it("inspectors and judges never get a desk; they are logged only", () => {
+		const state = run(sub("r1", "review-risk", "running"), sub("j1", "jd-judge-a", "running"));
+		const view = sceneView(state);
+		assert.deepEqual(view.agents, [], "non-resident agents are not drawn as residents");
+		assert.deepEqual(state.seats.desks, [null, null, null, null]);
+		assert.deepEqual(state.seats.bench, []);
+		assert.equal(view.activeAgents, 2, "they still count as running subagents");
+		assert.match(state.log[0].text, /running/);
+	});
+
+	it("an unknown agent is a generic worker and takes a desk", () => {
+		const state = run(sub("t1", "unknown", "running", ""));
+		assert.deepEqual(seatOf(state, "t1"), { zone: "desk", index: 0 });
+	});
+
+	it("departing an unknown id changes nothing", () => {
+		const start = run(sub("t1", "gentle-ai-worker", "running"));
+		assert.deepEqual(reduceScene(start, departed("nope")).seats, start.seats);
+	});
+});
+
+describe("reducer transitions per status", () => {
+	it("queued, running, waiting are active and keep the seat until they finish", () => {
+		for (const status of ["running", "waiting"]) {
+			const view = sceneView(run(sub("t1", "gentle-ai-explore", status)));
+			assert.equal(view.activeAgents, 1, status);
+			assert.equal(view.agents[0].status, status);
+			assert.equal(view.agents[0].leaving, false);
+		}
+	});
+
+	it("completed, failed, cancelled and timed_out start leaving and keep the seat for the exit", () => {
+		for (const status of ["completed", "failed", "cancelled", "timed_out"]) {
+			const state = run(sub("t1", "gentle-ai-worker", "running"), sub("t1", "gentle-ai-worker", status));
+			const agent = sceneView(state).agents[0];
+			assert.equal(agent.status, status, status);
+			assert.equal(agent.leaving, true, status);
+			assert.deepEqual(agent.seat, { zone: "desk", index: 0 }, status);
+			assert.equal(sceneView(state).activeAgents, 0, status);
+		}
+	});
+
+	it("a terminal event for an agent that never had a seat is dropped at once", () => {
+		assert.deepEqual(sceneView(run(sub("t9", "gentle-ai-worker", "completed"))).agents, []);
+	});
+
+	it("logs a line when the status changes, not on a repeated status", () => {
+		const state = run(sub("t1", "gentle-ai-worker", "running"), sub("t1", "gentle-ai-worker", "running"));
+		assert.equal(state.log.length, 1);
+	});
+});
+
+describe("snapshot restores the room", () => {
+	it("seats the agents of a snapshot at their desks, marked as already there", () => {
+		const state = reduceScene(initialScene(), snapshot([
+			{ id: "t1", agent: "gentle-ai-explore", role: "explore", label: "map", status: "running" },
+			{ id: "t2", agent: "gentle-ai-worker", role: "worker", label: "job", status: "waiting" },
+		]));
+		const agents = sceneView(state).agents;
+		assert.deepEqual(agents.map((agent: { seat: unknown }) => agent.seat), [
+			{ zone: "desk", index: 0 },
+			{ zone: "desk", index: 1 },
+		]);
+		assert.ok(agents.every((agent: { instant: boolean }) => agent.instant === true), "no walk-in for restored agents");
+	});
+
+	it("a reconnect keeps seated agents where they are and seats only the new ones", () => {
+		const live = run(sub("t1", "gentle-ai-explore", "running"));
+		const state = reduceScene(live, snapshot([
+			{ id: "t2", agent: "gentle-ai-worker", role: "worker", label: "job", status: "running" },
+			{ id: "t1", agent: "gentle-ai-explore", role: "explore", label: "map", status: "running" },
+		]));
+		const byId = Object.fromEntries(sceneView(state).agents.map((agent: { id: string }) => [agent.id, agent]));
+		assert.deepEqual(byId.t1.seat, { zone: "desk", index: 0 });
+		assert.equal(byId.t1.instant, false, "an agent already on screen is not re-admitted");
+		assert.deepEqual(byId.t2.seat, { zone: "desk", index: 1 });
+		assert.equal(byId.t2.instant, true);
+	});
+
+	it("drops a seated agent the snapshot no longer lists", () => {
+		const live = run(sub("t1", "gentle-ai-explore", "running"), sub("t2", "gentle-ai-worker", "running"));
+		const state = reduceScene(live, snapshot([{ id: "t2", agent: "gentle-ai-worker", role: "worker", label: "job", status: "running" }]));
+		assert.equal(seatOf(state, "t1"), undefined);
+		assert.deepEqual(state.seats.desks, [null, "t2", null, null]);
+	});
+
+	it("does not seat a finished snapshot agent that has no seat", () => {
+		const state = reduceScene(initialScene(), snapshot([{ id: "t1", agent: "gentle-ai-worker", role: "worker", label: "job", status: "completed" }]));
+		assert.deepEqual(sceneView(state).agents, []);
+	});
+});

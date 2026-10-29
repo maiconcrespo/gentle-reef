@@ -7,8 +7,8 @@ export type PiEvent =
 	| { readonly type: "turn_start" }
 	| { readonly type: "turn_end" }
 	| { readonly type: "agent_settled" }
-	| { readonly type: "tool_execution_start"; readonly toolName: string }
-	| { readonly type: "tool_execution_end"; readonly toolName: string; readonly isError: boolean }
+	| { readonly type: "tool_execution_start"; readonly toolName: string; readonly toolCallId?: string; readonly args?: unknown }
+	| { readonly type: "tool_execution_end"; readonly toolName: string; readonly isError: boolean; readonly toolCallId?: string; readonly result?: unknown }
 	| { readonly type: "session_before_compact" }
 	| { readonly type: "session_compact" }
 	| { readonly type: "session_compact_failed" };

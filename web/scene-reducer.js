@@ -4,12 +4,18 @@
 // Plain ES module on purpose: the browser loads it as-is and node tests import it.
 
 export const SCENE_LOG_LIMIT = 40;
+export const DESK_COUNT = 4;
 const CONTRACT_VERSION = 1;
 
 const ORCHESTRATOR_STATES = new Set(["thinking", "tool", "idle", "waiting-user"]);
 const COMPACTION_PHASES = new Set(["start", "end", "failed"]);
 const AGENT_STATUSES = new Set(["queued", "running", "waiting", "completed", "failed", "cancelled", "timed_out"]);
 const ACTIVE_AGENT_STATUSES = new Set(["queued", "running", "waiting"]);
+// Only a started (running or waiting) agent can sit at a desk. A queued one waits on the bench.
+const SEATED_AGENT_STATUSES = new Set(["running", "waiting"]);
+// Residents get a desk and a sprite. Inspectors and judges are logged only until T4/T5.
+const RESIDENT_ROLES = new Set(["explore", "worker", "verify"]);
+const ROLES = new Set(["explore", "worker", "verify", "inspector", "judge"]);
 
 // Where the orchestrator stands for each state (S6): whiteboard while working, floor while idle, front when it needs you.
 const INTENT_BY_STATE = { thinking: "whiteboard", tool: "whiteboard", idle: "floor", "waiting-user": "front" };
@@ -17,13 +23,17 @@ const BUBBLE_BY_STATE = { thinking: "idea", tool: "wrench", idle: null, "waiting
 
 const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const isPercent = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
+const isActive = (agent) => ACTIVE_AGENT_STATUSES.has(agent.status);
+const isResident = (agent) => RESIDENT_ROLES.has(agent.role);
 
-export function initialScene() {
+export function initialScene(deskCount = DESK_COUNT) {
   return {
     orchestrator: { state: "idle" },
     context: { percent: null },
     compaction: null,
     agents: [],
+    // desks[i] is the agent id at desk i (or null). bench keeps queued agents in arrival order.
+    seats: { desks: Array(deskCount).fill(null), bench: [] },
     log: [],
     logSeq: 0,
   };
@@ -36,6 +46,8 @@ export function reduceScene(state, action) {
       return applySnapshot(state, action);
     case "event":
       return applyEvent(state, action);
+    case "departed":
+      return applyDeparture(state, String(action.id));
     case "note":
       return pushLog(state, { kind: typeof action.kind === "string" ? action.kind : "info", text: String(action.text), at: action.at ?? 0 });
     default:
@@ -48,13 +60,27 @@ function applySnapshot(state, { snapshot }) {
   const orchestratorState = snapshot.orchestrator.state;
   if (!ORCHESTRATOR_STATES.has(orchestratorState)) return state;
   const percent = isRecord(snapshot.context) && isPercent(snapshot.context.percent) ? snapshot.context.percent : null;
-  const agents = Array.isArray(snapshot.agents) ? snapshot.agents.filter(isAgent).map(pickAgent) : [];
+  const listed = Array.isArray(snapshot.agents) ? snapshot.agents.filter(isAgent).map(pickAgent) : [];
+  const listedIds = new Set(listed.map((agent) => agent.id));
+  // Agents the snapshot no longer lists leave their seats. Listed ones keep theirs, so a reconnect does not reseat them.
+  let seats = pruneSeats(state.seats, listedIds);
+  const agents = [];
+  for (const agent of listed) {
+    const previous = state.agents.find((item) => item.id === agent.id);
+    // A snapshot agent that is finished and has no seat is not on screen; it does not need to appear.
+    if (!isActive(agent) && seatOf(seats, agent.id) === null) continue;
+    // Restored agents are placed at once: no walk-in animation for the ones the page already showed or the ones it missed.
+    agents.push({ ...agent, instant: previous ? previous.instant : true });
+    if (isResident(agent) && isActive(agent) && seatOf(seats, agent.id) === null) seats = { ...seats, bench: [...seats.bench, agent.id] };
+  }
+  seats = settle(seats, agents);
   return {
     ...state,
     orchestrator: orchestratorOf(snapshot.orchestrator),
     context: { percent },
     compaction: COMPACTION_PHASES.has(snapshot.compaction) ? snapshot.compaction : null,
-    agents,
+    agents: agents.filter((agent) => isActive(agent) || seatOf(seats, agent.id) !== null),
+    seats,
   };
 }
 
@@ -87,10 +113,7 @@ function applyEvent(state, { event, at = 0 }) {
     }
     case "subagent": {
       if (!isAgent(event)) return state;
-      const agent = pickAgent(event);
-      const agents = [...state.agents.filter((item) => item.id !== agent.id), agent];
-      const name = agent.label || (agent.agent === "unknown" ? agent.id : agent.agent);
-      return pushLog({ ...state, agents }, { kind: "agent", text: `${name}: ${agent.status}`, at });
+      return applySubagent(state, event, at);
     }
     case "feature": {
       if (typeof event.feature !== "string" || typeof event.detail !== "string") return state;
@@ -99,6 +122,35 @@ function applyEvent(state, { event, at = 0 }) {
     default:
       return state;
   }
+}
+
+function applySubagent(state, value, at) {
+  const incoming = pickAgent(value);
+  const previous = state.agents.find((item) => item.id === incoming.id);
+  const agent = { ...incoming, instant: previous ? previous.instant : false };
+  const others = state.agents.filter((item) => item.id !== agent.id);
+  const agents = [...others, agent];
+  let seats = state.seats;
+  if (isResident(agent)) {
+    // A resident the page has not seated yet joins the bench; settle moves it to a free desk when it may sit.
+    if (seatOf(seats, agent.id) === null && isActive(agent)) seats = { ...seats, bench: [...seats.bench, agent.id] };
+  } else if (seatOf(seats, agent.id) !== null) {
+    // The identity turned out to be a non-resident (inspector or judge): it gives its seat back.
+    seats = removeSeat(seats, agent.id);
+  }
+  seats = settle(seats, agents);
+  // Finished agents stay only while they still hold a seat (they are leaving); the rest are dropped.
+  const kept = agents.filter((item) => isActive(item) || seatOf(seats, item.id) !== null);
+  const next = { ...state, agents: kept, seats };
+  if (previous && previous.status === agent.status) return next;
+  return pushLog(next, { kind: "agent", text: `${nameOf(agent)}: ${agent.status}`, at });
+}
+
+// The page reports `departed` once the agent has walked out. Only then does its seat free up for the next in line.
+function applyDeparture(state, id) {
+  if (seatOf(state.seats, id) === null) return state;
+  const agents = state.agents.filter((agent) => agent.id !== id);
+  return { ...state, agents, seats: settle(removeSeat(state.seats, id), agents) };
 }
 
 function applyCompaction(state, phase, at) {
@@ -113,6 +165,39 @@ function applyCompaction(state, phase, at) {
   return pushLog({ ...state, compaction: "failed" }, { kind: "fail", text: "Compaction failed", at });
 }
 
+/** Where an agent stands: a desk index, a bench index, or null when it has no place in the room. */
+export function seatOf(seats, id) {
+  const desk = seats.desks.indexOf(id);
+  if (desk >= 0) return { zone: "desk", index: desk };
+  const bench = seats.bench.indexOf(id);
+  return bench >= 0 ? { zone: "bench", index: bench } : null;
+}
+
+function removeSeat(seats, id) {
+  return { desks: seats.desks.map((item) => (item === id ? null : item)), bench: seats.bench.filter((item) => item !== id) };
+}
+
+function pruneSeats(seats, keep) {
+  return {
+    desks: seats.desks.map((item) => (item !== null && keep.has(item) ? item : null)),
+    bench: seats.bench.filter((item) => keep.has(item)),
+  };
+}
+
+/** Moves the first sittable bench agent into each free desk, in bench order. Seated agents never move. */
+function settle(seats, agents) {
+  const desks = seats.desks.slice();
+  let bench = seats.bench.slice();
+  for (let index = 0; index < desks.length; index++) {
+    if (desks[index] !== null) continue;
+    const next = bench.find((id) => agents.some((agent) => agent.id === id && SEATED_AGENT_STATUSES.has(agent.status)));
+    if (next === undefined) break;
+    desks[index] = next;
+    bench = bench.filter((id) => id !== next);
+  }
+  return { desks, bench };
+}
+
 function orchestratorOf(source) {
   return typeof source.toolName === "string" ? { state: source.state, toolName: source.toolName } : { state: source.state };
 }
@@ -125,9 +210,14 @@ function pickAgent(value) {
   return {
     id: value.id,
     agent: typeof value.agent === "string" ? value.agent : "unknown",
+    role: ROLES.has(value.role) ? value.role : "worker",
     label: typeof value.label === "string" ? value.label : "",
     status: value.status,
   };
+}
+
+function nameOf(agent) {
+  return agent.label || (agent.agent === "unknown" ? agent.id : agent.agent);
 }
 
 function pushLog(state, entry) {
@@ -135,11 +225,28 @@ function pushLog(state, entry) {
   return { ...state, logSeq, log: [{ id: logSeq, ...entry }, ...state.log].slice(0, SCENE_LOG_LIMIT) };
 }
 
-/** What the canvas draws. The pot level is 1 - percent/100; unknown usage shows a full pot labelled "—" by the page. */
+/**
+ * What the canvas draws. The pot level is 1 - percent/100; unknown usage shows a full pot labelled "—" by the page.
+ * `agents` lists the residents on a desk or the bench. Each has `seat`, `leaving` (finished, walking out) and
+ * `instant` (placed at once, no walk-in).
+ */
 export function sceneView(state) {
   const orchestratorState = state.orchestrator.state;
   const brewing = state.compaction === "start";
   const percent = state.context.percent;
+  const agents = state.agents
+    .filter(isResident)
+    .map((agent) => ({
+      id: agent.id,
+      agent: agent.agent,
+      role: agent.role,
+      label: agent.label,
+      status: agent.status,
+      seat: seatOf(state.seats, agent.id),
+      leaving: !isActive(agent),
+      instant: agent.instant,
+    }))
+    .filter((agent) => agent.seat !== null);
   return {
     intent: brewing ? "coffee" : INTENT_BY_STATE[orchestratorState],
     writing: !brewing && (orchestratorState === "thinking" || orchestratorState === "tool"),
@@ -148,6 +255,7 @@ export function sceneView(state) {
     orchestrator: orchestratorState,
     percent,
     potLevel: percent === null ? 1 : Math.round((1 - percent / 100) * 10000) / 10000,
-    activeAgents: state.agents.filter((agent) => ACTIVE_AGENT_STATUSES.has(agent.status)).length,
+    activeAgents: state.agents.filter(isActive).length,
+    agents,
   };
 }

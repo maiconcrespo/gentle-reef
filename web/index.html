@@ -20,7 +20,7 @@
       <canvas class="office" id="office" width="480" height="312" role="img" aria-label="Pixel-art office: connecting to gentle-shell."></canvas>
     </div>
     <dl class="map" aria-label="How the office maps to the shell">
-      <div><dt>Desk + monitor</dt><dd>one subagent session (arrives with T3)</dd></div>
+      <div><dt>Desk + monitor</dt><dd>resident subagent, typing while it runs</dd></div>
       <div><dt>Whiteboard</dt><dd>orchestrator thinking or running a tool</dd></div>
       <div><dt>Front</dt><dd>orchestrator waiting for your answer</dd></div>
       <div><dt>Coffee pot</dt><dd>context left; compaction brews a fresh pot</dd></div>
@@ -43,9 +43,9 @@
       <h2 id="hTeam">Team</h2>
       <ul class="team" id="team">
         <li><span class="dot" id="orchDot"></span><span class="who"><b>Orchestrator</b><small id="orchState">connecting</small></span></li>
-        <li class="plain"><span class="who"><b>Desks</b><small>4 desks, empty until resident agents arrive</small></span></li>
         <li class="plain"><span class="who"><b>Subagents</b><small id="agentCount">none running</small></span></li>
       </ul>
+      <ul class="team crew" id="crew" aria-label="Resident agents"></ul>
     </section>
     <section class="card log" aria-labelledby="hLog">
       <h2 id="hLog">Activity</h2>

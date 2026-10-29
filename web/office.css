@@ -40,8 +40,14 @@ ul.team { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
 ul.team li { display: grid; grid-template-columns: 12px 1fr; gap: 10px; align-items: center; }
 ul.team li.plain { grid-template-columns: 1fr; }
 .dot { width: 12px; height: 12px; background: var(--gold); }
+.dot.role-explore { background: var(--blue); }
+.dot.role-worker { background: var(--green); }
+.dot.role-verify { background: var(--pink); }
+ul.crew { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--sel); }
+.who { min-width: 0; }
 .who b { font-weight: 600; }
-.who small { display: block; color: var(--muted); font-size: 11px; }
+.who b, .who small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who small { color: var(--muted); font-size: 11px; }
 .log { flex: 1; min-height: 0; overflow: hidden; }
 .log ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .log li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; color: var(--text); }

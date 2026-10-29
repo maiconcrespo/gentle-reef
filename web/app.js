@@ -12,10 +12,22 @@ const el = (tag, className) => {
 
 const liveEl = $("live");
 const logEl = $("log");
+const crewEl = $("crew");
 const canvas = $("office");
 const potCtx = $("pot").getContext("2d");
 
-let scene = initialScene();
+const ROLE_LABEL = { explore: "Explore", worker: "Worker", verify: "Verify" };
+const STATUS_LABEL = {
+	queued: "queued, waiting for a desk",
+	running: "typing",
+	waiting: "waiting for a reply",
+	completed: "done, heading out",
+	failed: "failed, heading out",
+	cancelled: "cancelled, heading out",
+	timed_out: "timed out, heading out",
+};
+
+let scene = initialScene(OFFICE_CONFIG.desks.length);
 let view = sceneView(scene);
 let seenLogId = 0;
 let lastLabel = "";
@@ -23,6 +35,8 @@ let hasDropped = false;
 
 const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {
 	onPot: ({ level, brewing, time }) => drawPot(potCtx, level, time, brewing),
+	// An agent has walked out of the door: its seat frees up for the next one in the bench.
+	onDeparted: (id) => dispatch({ type: "departed", id }),
 });
 
 const stamp = (at) => (at > 0 ? new Date(at).toTimeString().slice(0, 8) : "--:--:--");
@@ -74,6 +88,34 @@ function renderBrew() {
 	$("footAgents").textContent = `${view.activeAgents} subagent${view.activeAgents === 1 ? "" : "s"}`;
 }
 
+// Team sidebar: one row per resident agent. Labels and statuses go in through textContent only.
+function renderCrew() {
+	const rows = view.agents.map((agent) => {
+		const li = el("li");
+		const dot = el("span", `dot role-${agent.role}`);
+		const who = el("span", "who");
+		const name = el("b");
+		name.textContent = agent.label || ROLE_LABEL[agent.role];
+		const status = el("small");
+		status.textContent = `${ROLE_LABEL[agent.role]} · ${STATUS_LABEL[agent.status] ?? agent.status}`;
+		who.append(name, status);
+		li.append(dot, who);
+		return li;
+	});
+	if (rows.length === 0) {
+		const li = el("li", "plain");
+		const who = el("span", "who");
+		const name = el("b");
+		name.textContent = "No resident agents";
+		const hint = el("small");
+		hint.textContent = "Explore, worker and verify agents take a desk while they run.";
+		who.append(name, hint);
+		li.append(who);
+		rows.push(li);
+	}
+	crewEl.replaceChildren(...rows);
+}
+
 function renderLog() {
 	// Prepend only the new lines so a polite live region announces what changed, not the whole list.
 	const fresh = scene.log.filter((entry) => entry.id > seenLogId);
@@ -99,6 +141,7 @@ function dispatch(action) {
 	engine.setScene(view);
 	renderStage();
 	renderBrew();
+	renderCrew();
 	renderLog();
 }
 
@@ -137,3 +180,4 @@ source.addEventListener("error", () => {
 
 renderStage();
 renderBrew();
+renderCrew();

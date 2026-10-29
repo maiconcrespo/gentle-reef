@@ -2,7 +2,7 @@
 
 A pixel-art office that shows real gentle-shell activity: the orchestrator, subagents, and tokens as a coffee pot. It ships as a standalone Pi package from this repo.
 
-**Status (T2):** event contract, adapter, hub, toggle, `/office` command, and the browser window. The window shows the orchestrator and the coffee pot. Desks stay empty until resident agents arrive (T3).
+**Status (T3):** event contract, adapter, hub, toggle, `/office` command, and the browser window. The window shows the orchestrator, the coffee pot, and resident subagents (explore, worker, verify) at the four desks; extra agents wait on a bench by the door.
 
 ## Install
 
@@ -30,11 +30,12 @@ The module is off by default. When it is off, the only thing registered is the `
 `/office open` starts a loopback server on `127.0.0.1` with a random port and prints the URL. The URL carries a random token in its path, so only the page you were given can read it. The page shows:
 
 - the orchestrator at the whiteboard while it thinks or runs a tool, walking the floor while idle, and at the front with a `?` bubble when it waits for you;
+- resident subagents (explore, worker, verify, and unknown agents as generic workers) at the desks: they walk in, type while running, show `?` while waiting, and leave through the door with `✓` or `!` when they finish. Inspectors and judges are only logged until T4 and T5;
 - the coffee pot: it drains as context fills (level = 1 - percent/100), and compaction walks the orchestrator to the coffee machine to brew a fresh one;
 - an activity log with tool and compaction lines;
 - a connection indicator (`live`, `reconnecting…`, or `offline`). The page reconnects by itself and resyncs from a fresh snapshot.
 
-With `prefers-reduced-motion` set, the orchestrator does not wander. State changes still show: it moves instantly to its new spot.
+With `prefers-reduced-motion` set, the orchestrator does not wander and residents snap to their seats and to the door. State changes still show.
 
 ### Local-only guards
 

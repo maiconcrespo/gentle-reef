@@ -1,6 +1,6 @@
 /* Gentle Office engine: the 32-bit pixel-art office from design/agent-office/01-overworld-hq.html.
-   Driven by a scene view (see scene-reducer.js sceneView). Until T3 only the orchestrator walks the
-   floor; desks stay empty with screensaver monitors. Browser module: no imports, no network. */
+   Driven by a scene view (see scene-reducer.js sceneView). Resident subagents (T3) take the four desks and
+   a waiting bench by the door; each desk monitor shows its agent's work while it runs. Browser module: no imports, no network. */
 
 export const OFFICE_CONFIG = {
 	cols: 20, rows: 13, tile: 24,
@@ -8,7 +8,8 @@ export const OFFICE_CONFIG = {
 	whiteboard: { x: 8, w: 4 }, coffee: { x: 16, y: 2, w: 3 }, table: { x: 11, y: 7, w: 4, h: 2 },
 	rug: { x: 10, y: 5, w: 7, h: 6 }, window: { x: 1, w: 3 }, shelf: 13, clock: 6, door: { x: 9, w: 2 },
 	plants: [{ x: 0, y: 2 }, { x: 19, y: 2 }, { x: 0, y: 12 }, { x: 19, y: 12 }], rack: { x: 19, y: 6 },
-	orchStart: { x: 9, y: 5 }, front: { x: 8, y: 10 }
+	orchStart: { x: 9, y: 5 }, front: { x: 8, y: 10 },
+	bench: { x: 2, w: 6 }
 };
 
 const P = {
@@ -79,6 +80,8 @@ const HEAD_SIDE = [
 ];
 
 const triangle = v => { const f = v - Math.floor(v); return f < 0.5 ? f * 2 : 2 - f * 2; };
+/* Stable hash of a task id: the same agent always gets the same look. */
+const strHash = s => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
 
 /** Draws the coffee pot in the sidebar. The fill is the remaining context (level 0..1). */
 export function drawPot(ctx, level, t, brewing) {
@@ -143,6 +146,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	mark(cf.x, cf.y, cf.w, 1);
 	cfg.plants.forEach(p => mark(p.x, p.y, 1, 1));
 	mark(cfg.rack.x, cfg.rack.y, 1, 2);
+	mark(cfg.bench.x, ROWS - 1, cfg.bench.w, 1);
 
 	function path(fx, fy, tx, ty) {
 		const key = (x, y) => y * COLS + x, prev = new Map([[key(fx, fy), null]]), q = [[fx, fy]];
@@ -174,6 +178,10 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		front: { tx: cfg.front.x, ty: cfg.front.y, face: 'down' },
 		rest: { tx: cfg.orchStart.x, ty: cfg.orchStart.y, face: 'down' }
 	};
+	/* Waiting bench: the first six queued residents stand on the row above the bench, the rest on the row above that. */
+	const benchSpot = i => (i < cfg.bench.w
+		? { tx: cfg.bench.x + i, ty: ROWS - 2, face: 'down' }
+		: { tx: cfg.bench.x + ((i - cfg.bench.w) % cfg.bench.w), ty: ROWS - 3, face: 'down' });
 	function randomSpot() {
 		for (let n = 0; n < 200; n++) {
 			const x = Math.floor(rnd(0, COLS)), y = Math.floor(rnd(3, ROWS - 1));
@@ -218,7 +226,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	}
 	/* Reduced motion: a state change still shows, it just does not walk. */
 	function placeAt(c, s) {
-		c.x = s.px ?? FX(s.tx); c.y = s.py ?? FY(s.ty); c.face = s.face;
+		c.x = s.px ?? FX(s.tx); c.y = s.py ?? FY(s.ty); c.face = s.face; c.sit = !!s.sit;
 		c.path = []; c.onArrive = null; c.moving = false; c.target = s;
 	}
 
@@ -356,6 +364,13 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 			B(dx + 2, dy + T - 6, d.w * T - 4, 4, P.deep);
 			B(dx + 4, dy + T - 5, d.w * T - 8, 2, P.violet);
 		}
+		/* Waiting bench under the door row: queued residents sit or stand here until a desk frees. */
+		{
+			const x = cfg.bench.x * T, y = (ROWS - 1) * T, w = cfg.bench.w * T;
+			B(x + 1, y + 10, w - 2, 4, C.woodH); B(x + 1, y + 10, w - 2, 1, '#FFD9A6');
+			B(x + 1, y + 14, w - 2, 2, C.woodS);
+			B(x + 2, y + 16, 2, 6, P.border); B(x + w - 4, y + 16, 2, 6, P.border);
+		}
 		/* Coffee counter: marble top, cabinets, toe kick. */
 		{
 			const x = cf.x * T, y = cf.y * T, w = cf.w * T;
@@ -421,11 +436,12 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		R(x + 1, y + 19, 46, 3, C.woodS);
 		R(x + 2, y + 22, 4, 2, P.border); R(x + 40, y + 22, 4, 2, P.border);
 		R(x + 36, y + 9, 8, 3, C.woodS); R(x + 37, y + 10, 6, 1, P.gold);
-		/* Monitor: bezel, screensaver, stand. No resident agent until T3. */
+		/* Monitor: bezel, screen (screensaver when empty, the agent's work while it runs), stand. */
 		const mx = x + 14, my = y - 14;
 		R(mx, my, 20, 16, P.border); R(mx, my, 20, 1, P.steel);
 		R(mx + 1, my + 1, 18, 13, P.bg);
-		drawScreensaver(mx + 1, my + 1, 18, 13, i);
+		if (deskWorking[i]) drawWorkingScreen(mx + 1, my + 1, deskWorking[i], i);
+		else drawScreensaver(mx + 1, my + 1, 18, 13, i);
 		R(mx + 8, my + 16, 4, 3, P.steel); R(mx + 5, my + 19, 10, 2, P.border);
 		/* Keyboard, mouse, folder, empty mug. */
 		R(x + 9, y + 9, 14, 4, P.steel); R(x + 9, y + 9, 14, 1, P.sec);
@@ -589,11 +605,151 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		else if (icon === 'idea') { R(ix + 2, iy, 4, 4, P.gold); R(ix + 3, iy + 4, 2, 2, P.steel); }
 		else if (icon === 'wrench') { R(ix + 4, iy, 3, 2, P.steel); R(ix + 5, iy, 1, 1, P.bg); R(ix + 3, iy + 2, 2, 2, P.steel); R(ix + 2, iy + 4, 2, 2, P.steel); R(ix + 1, iy + 5, 2, 1, P.sand); }
 		else if (icon === 'question') { R(ix + 1, iy, 4, 1, P.purple); R(ix + 4, iy + 1, 1, 2, P.purple); R(ix + 2, iy + 3, 2, 1, P.purple); R(ix + 2, iy + 5, 1, 1, P.purple); }
+		else if (icon === 'check') { R(ix + 1, iy + 4, 2, 2, P.green); R(ix + 3, iy + 6, 2, 2, P.green); R(ix + 5, iy + 4, 2, 2, P.green); R(ix + 7, iy + 2, 2, 2, P.green); }
+		else if (icon === 'bang') { R(ix + 4, iy, 2, 5, P.red); R(ix + 4, iy + 7, 2, 2, P.red); }
 	}
 
 	function drawOrchBubble() {
 		if (!orch.bubble) return;
 		drawBubble(Math.round(orch.x) - 8 + 2, Math.round(orch.y) - 23 - 16, orch.bubble.icon);
+	}
+
+	/* ---------- residents: one sprite per resident subagent (S7, T3) ---------- */
+	/* Sprites are the approved design (design/agent-office/01-overworld-hq.html: drawBody, drawKit). */
+	const LEAVE_DELAY = 1.6;
+	const residents = new Map();
+	let deskWorking = cfg.desks.map(() => null);
+	/* Explore: powder blue, safari hat, binoculars. Worker: mint or sky, hard hat, tool belt. Verify: pink, lab coat, glasses, clipboard. */
+	const lookFor = a => {
+		if (a.role === 'explore') return { color: P.blue, hair: P.gold, kit: 'explore' };
+		if (a.role === 'verify') return { color: P.purple, hair: P.border, kit: 'verify' };
+		return strHash(a.id) % 2 === 0 ? { color: P.green, hair: P.purple, kit: 'worker' } : { color: P.sky, hair: P.steel, kit: 'worker' };
+	};
+	const seatSpot = seat => (seat.zone === 'desk' ? deskSpot(cfg.desks[seat.index]) : benchSpot(seat.index));
+	const sameSeat = (a, b) => !!a && !!b && a.zone === b.zone && a.index === b.index;
+	/* Reduced motion: an agent snaps to its seat. Otherwise it walks there. */
+	function walkTo(c, s) {
+		if (reduced) return placeAt(c, s);
+		goTo(c, s, () => { c.sit = !!s.sit; });
+	}
+	function bubbleFor(a) {
+		if (a.status === 'waiting') return { icon: 'question', t: Infinity };
+		if (a.seat.zone === 'bench' && a.status === 'queued') return { icon: 'dots', t: Infinity };
+		return null;
+	}
+	function startLeaving(c, status) {
+		c.leaving = true; c.exiting = false; c.typing = false;
+		c.leaveAt = time + LEAVE_DELAY;
+		c.bubble = { icon: status === 'completed' ? 'check' : 'bang', t: Infinity };
+	}
+	function startExit(c) {
+		c.exiting = true; c.bubble = null; c.sit = false;
+		const exit = { tx: cfg.door.x, ty: ROWS - 1, face: 'down' };
+		if (reduced) { placeAt(c, exit); depart(c); return; }
+		goTo(c, exit, () => depart(c));
+	}
+	function depart(c) {
+		residents.delete(c.id);
+		hooks.onDeparted && hooks.onDeparted(c.id);
+	}
+	/* Mirrors the scene: new agents walk in (restored ones appear at once), seat changes walk, finished agents leave. */
+	function syncResidents(agents) {
+		const seen = new Set();
+		for (const a of agents) {
+			seen.add(a.id);
+			let c = residents.get(a.id);
+			if (!c) {
+				c = { id: a.id, seat: null, x: 0, y: 0, path: [], face: 'down', sit: false, moving: false, step: 0, target: null, onArrive: null, bubble: null, typing: false, leaving: false, exiting: false, leaveAt: 0, ...lookFor(a) };
+				residents.set(a.id, c);
+				if (a.instant || reduced) placeAt(c, seatSpot(a.seat));
+				else { c.x = FX(cfg.door.x); c.y = FY(ROWS - 1); walkTo(c, seatSpot(a.seat)); }
+			} else if (!c.leaving && !sameSeat(c.seat, a.seat)) {
+				walkTo(c, seatSpot(a.seat));
+			}
+			c.seat = a.seat;
+			Object.assign(c, lookFor(a));
+			if (a.leaving && !c.leaving) startLeaving(c, a.status);
+			if (!c.leaving) c.bubble = bubbleFor(a);
+			c.typing = !c.leaving && a.seat.zone === 'desk' && a.status === 'running';
+		}
+		// A finished agent walks out on its own and reports `departed`; anything else the scene dropped leaves at once.
+		for (const [id, c] of residents) if (!seen.has(id) && !c.leaving) residents.delete(id);
+	}
+	function updateResidents(dt) {
+		for (const c of [...residents.values()]) {
+			moveChar(c, dt);
+			if (c.leaving && !c.exiting && time >= c.leaveAt) startExit(c);
+		}
+	}
+	/* Resident body: torso, arms and legs. Hands go to the keyboard while typing; legs are hidden while seated. */
+	function drawResidentBody(c, ox, oy, walk, sw) {
+		const s = c.color, sh = shade(s), hl = hi(s);
+		R(ox + 4, oy + 10, 8, 7, s); R(ox + 4, oy + 10, 1, 7, sh); R(ox + 11, oy + 10, 1, 7, sh);
+		R(ox + 6, oy + 10, 2, 3, hl);
+		R(ox + 3, oy + 10, 1, 6, INK); R(ox + 12, oy + 10, 1, 6, INK);
+		R(ox + 2, oy + 11, 1, 5, s); R(ox + 13, oy + 11, 1, 5, s);
+		R(ox + 2, oy + 15, 1, 1, sh); R(ox + 13, oy + 15, 1, 1, sh);
+		R(ox + 4, oy + 17, 8, 1, INK);
+		if (!c.sit || c.typing) { R(ox + 2, oy + 16 + sw, 2, 2, SKIN); R(ox + 12, oy + 16 - sw, 2, 2, SKIN); }
+		if (!c.sit) {
+			const lOff = walk === 1 ? 1 : 0, rOff = walk === 3 ? 1 : 0;
+			R(ox + 5, oy + 17, 2, 5 - lOff, P.border); R(ox + 9, oy + 17, 2, 5 - rOff, P.border);
+			R(ox + 5, oy + 17, 1, 5 - lOff, P.sel); R(ox + 9, oy + 17, 1, 5 - rOff, P.sel);
+			R(ox + 4, oy + 22 - lOff, 3, 2, INK); R(ox + 9, oy + 22 - rOff, 3, 2, INK);
+		}
+	}
+	/* Role props over the head and body: hat, gear, glasses, coat. */
+	function drawKit(c, ox, oy, fam, flip) {
+		const fx = (x, w) => (flip ? ox + 15 - x - (w || 1) + 1 : ox + x);
+		const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
+		/* Headwear gets a 1 px ink edge (added to the design): a sand hat on the sand desk top is unreadable without it. */
+		const edge = (x, w, y, h) => R(fx(x, w) - 1, oy + y - 1, w + 2, h + 1, INK);
+		if (c.kit === 'explore') { edge(4, 8, -4, 3); edge(1, 14, -1, 1); }
+		if (c.kit === 'worker') { edge(3, 10, -2, 3); edge(1, 14, -1, 1); }
+		if (c.kit === 'explore') {
+			/* Safari explorer hat, brim and band, binoculars on the chest. */
+			hX(4, 8, -4, 3, P.sand); hX(4, 8, -4, 1, hi(P.sand)); hX(4, 8, -2, 1, P.gold);
+			hX(1, 14, -1, 1, P.sand); hX(1, 14, -1, 1, shade(P.sand)); hX(2, 12, -2, 1, shade(P.sand));
+			if (fam !== 'side') { hX(5, 2, 13, 2, P.steel); hX(9, 2, 13, 2, P.steel); hX(6, 4, 13, 1, P.sec); }
+		}
+		if (c.kit === 'worker') {
+			/* Construction hard hat with brim, tool belt with a wrench. */
+			hX(3, 10, -2, 3, P.gold); hX(3, 10, -2, 1, hi(P.gold)); hX(2, 12, -1, 1, shade(P.gold));
+			hX(1, 14, -1, 1, P.gold); hX(1, 14, -1, 1, shade(P.gold));
+			hX(4, 8, 0, 1, shade(P.gold));
+			hX(4, 9, 15, 1, P.border); hX(11, 3, 15, 2, P.steel); hX(12, 1, 14, 1, P.sec);
+		}
+		if (c.kit === 'verify') {
+			/* Lab coat over the shirt, glasses, clipboard with a checklist. */
+			hX(4, 8, 10, 7, P.text); hX(4, 1, 10, 7, P.sec); hX(11, 1, 10, 7, P.sec); hX(7, 2, 10, 7, P.sec);
+			hX(4, 1, 16, 1, P.steel); hX(11, 1, 16, 1, P.steel);
+			if (fam !== 'side') {
+				hX(4, 3, 5, 3, P.border); hX(9, 3, 5, 3, P.border);
+				hX(5, 1, 6, 1, P.sky); hX(10, 1, 6, 1, P.sky); hX(6, 1, 6, 1, P.sky); hX(11, 1, 6, 1, P.sky);
+				hX(7, 2, 6, 1, P.border);
+			}
+			hX(12, 3, 13, 5, P.sand); hX(13, 1, 14, 3, P.text);
+			hX(13, 1, 14, 1, P.green); hX(13, 1, 16, 1, P.steel);
+		}
+	}
+	function drawResident(c) {
+		const fx = Math.round(c.x), fy = Math.round(c.y);
+		const walk = c.moving ? Math.floor(c.step) % 4 : 0, bob = c.moving && walk % 2 ? 1 : 0;
+		const ox = fx - 8, oy = fy - 23 - bob;
+		const typingSwing = reduced ? 0 : (Math.floor(time * 6) % 2 ? 1 : -1);
+		const sw = c.typing && c.sit ? typingSwing : c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
+		g.globalAlpha = 0.35; R(fx - 6, fy - 1, 12, 2, INK); g.globalAlpha = 1;
+		const { rows, flip, fam } = headFor(c);
+		drawResidentBody(c, ox, oy, walk, sw);
+		sprite(rows, { K: INK, H: c.hair, h: shade(c.hair), l: hi(c.hair), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep }, ox, oy, flip);
+		drawKit(c, ox, oy, fam, flip);
+	}
+	/* Desk monitor while its agent runs: a small code screen in the agent's colour, flickering like typing. */
+	function drawWorkingScreen(x, y, color, i) {
+		R(x, y, 18, 13, P.bg);
+		const tick = reduced ? 0 : Math.floor(time * 3);
+		for (let k = 0; k < 5; k++) R(x + 2, y + 2 + k * 2, 4 + Math.floor(hash(i * 13 + k * 7 + tick + k) * 10), 1, k === 0 ? color : P.steel);
+		if (tick % 2 === 0) R(x + 2, y + 12, 3, 1, color);
 	}
 
 	/* ---------- scene input and frame update ---------- */
@@ -602,12 +758,18 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		if (next.intent !== intent) applyIntent(next.intent);
 		orch.bubble = next.bubble ? { icon: next.bubble, t: Infinity } : null;
 		potTarget = next.potLevel;
+		syncResidents(next.agents || []);
+		deskWorking = cfg.desks.map((_, i) => {
+			const owner = (next.agents || []).find(a => a.seat && a.seat.zone === 'desk' && a.seat.index === i && a.status === 'running' && !a.leaving);
+			return owner ? lookFor(owner).color : null;
+		});
 	}
 
 	function update(dt) {
 		moveChar(orch, dt);
 		if (orch.bubble) { orch.bubble.t -= dt; if (orch.bubble.t <= 0) orch.bubble = null; }
 		updateOrch(dt);
+		updateResidents(dt);
 		potShown += (potTarget - potShown) * Math.min(1, dt * 1.2);
 		brewingNow = !!(view && view.brewing) && orch.mode === 'brew';
 	}
@@ -629,8 +791,10 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		cfg.plants.forEach(p => list.push({ k: (p.y + 1) * T - 1, f: () => drawPlant(p) }));
 		list.push({ k: (cfg.rack.y + 2) * T - 1, f: drawRack });
 		list.push({ k: orch.y, f: () => drawOrchestrator(orch) });
+		residents.forEach(c => list.push({ k: c.y, f: () => drawResident(c) }));
 		list.sort((p, q) => p.k - q.k).forEach(o => o.f());
 		drawOrchBubble();
+		residents.forEach(c => { if (c.bubble) drawBubble(Math.round(c.x) - 8 + 2, Math.round(c.y) - 23 - 16, c.bubble.icon); });
 	}
 
 	let last = performance.now();
