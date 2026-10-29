@@ -7,7 +7,9 @@ import type { OfficeServer } from "./server/office-server.ts";
 import { officeSettingsPath, readOfficeSettings, writeOfficeSettings } from "./settings.ts";
 
 export const OFFICE_COMMAND_NAME = "office";
-const OFFICE_COMMAND_DESCRIPTION = "Open the Gentle Office menu, or run /office on | off | status | open";
+const OFFICE_COMMAND_DESCRIPTION = "Open the Gentle Office menu, or run /office on | off | status | open | dock";
+/** Query the window page reads to pick the compact (dock) layout. The token path is unchanged. */
+const COMPACT_LAYOUT_QUERY = "layout=dock";
 /** Pi shuts the session down: the window server stops with it. Attached only while enabled. */
 export const OFFICE_SHUTDOWN_EVENT = "session_shutdown";
 
@@ -141,9 +143,10 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 	return controller;
 }
 
-/** `open` is async (the server may need to start); everything else answers synchronously. */
+/** `open` and `dock` are async (the server may need to start); everything else answers synchronously. */
 function runSubcommand(subcommand: string, controller: OfficeController, ctx: OfficeCommandContext): Promise<void> | void {
 	if (subcommand === "open") return openOffice(controller).then(result => ctx.ui.notify(result.message, result.level));
+	if (subcommand === "dock") return openOffice(controller, COMPACT_LAYOUT_QUERY).then(result => ctx.ui.notify(result.message, result.level));
 	const result = runOfficeCommand(subcommand, controller);
 	ctx.ui.notify(result.message, result.level);
 }
@@ -152,11 +155,13 @@ function runSubcommand(subcommand: string, controller: OfficeController, ctx: Of
 const MENU_WHEN_OFF: ReadonlyArray<readonly [string, readonly string[]]> = [
 	["Turn on", ["on"]],
 	["Turn on and open the window", ["on", "open"]],
+	["Turn on and open the compact window", ["on", "dock"]],
 	["Status", ["status"]],
 ];
 const MENU_WHEN_ON: ReadonlyArray<readonly [string, readonly string[]]> = [
 	["Open the window", ["open"]],
 	["Turn off", ["off"]],
+	["Open the compact window", ["dock"]],
 	["Status", ["status"]],
 ];
 
@@ -187,12 +192,12 @@ const windowLine = (server: OfficeWindow | undefined): string => {
 	return status.running && status.url !== undefined ? ` · window ${status.url} (${status.clients} connected)` : " · window closed";
 };
 
-/** `/office open`: only while enabled. Starts the single window server if needed, then opens its URL. */
-export async function openOffice(controller: OfficeController): Promise<OfficeCommandResult> {
+/** `/office open` (and `/office dock` with the compact query): only while enabled. Starts the single window server if needed, then opens its URL. */
+export async function openOffice(controller: OfficeController, query?: string): Promise<OfficeCommandResult> {
 	if (!controller.isEnabled()) return { level: "warning", message: "Gentle Office is off. Run /office on first." };
 	if (controller.server === undefined) return { level: "error", message: "Gentle Office window is not available in this host." };
 	try {
-		const result = await controller.server.open();
+		const result = await controller.server.open(query);
 		if (!result.opened) return { level: "warning", message: `Gentle Office window: ${result.url} (no browser opened: ${result.error ?? "unknown error"}; open the URL by hand)` };
 		return { level: "info", message: `Gentle Office window opened: ${result.url}` };
 	} catch (error) {
@@ -212,5 +217,5 @@ export function runOfficeCommand(args: string, controller: OfficeController): Of
 		const state = controller.isEnabled() ? "enabled" : "disabled";
 		return { level: "info", message: `Gentle Office ${state} · ${statsLine(controller.hub.stats())}${windowLine(controller.server)}` };
 	}
-	return { level: "warning", message: "Usage: /office on | off | status | open" };
+	return { level: "warning", message: "Usage: /office on | off | status | open | dock" };
 }

@@ -275,7 +275,7 @@ describe("/office with no arguments opens a selector", () => {
 		registerOffice(fake.host, { agentDir, hub: new OfficeHub() });
 		const { prompts, ctx: selCtx } = selectCtx("Turn on");
 		await fake.commands.get("office")!.handler("", selCtx);
-		assert.deepEqual(prompts, [{ title: "Gentle Office (off)", options: ["Turn on", "Turn on and open the window", "Status"] }]);
+		assert.deepEqual(prompts, [{ title: "Gentle Office (off)", options: ["Turn on", "Turn on and open the window", "Turn on and open the compact window", "Status"] }]);
 		assert.equal(readOfficeSettings(agentDir).enabled, true);
 		assert.ok(fake.listeners() > 0);
 		assert.deepEqual(notes.at(-1), { message: "Gentle Office on: listeners attached.", level: "info" });
@@ -287,7 +287,7 @@ describe("/office with no arguments opens a selector", () => {
 		run(fake, "on");
 		const { prompts, ctx: selCtx } = selectCtx("Turn off");
 		await fake.commands.get("office")!.handler("  ", selCtx);
-		assert.deepEqual(prompts, [{ title: "Gentle Office (on)", options: ["Open the window", "Turn off", "Status"] }]);
+		assert.deepEqual(prompts, [{ title: "Gentle Office (on)", options: ["Open the window", "Turn off", "Open the compact window", "Status"] }]);
 		assert.equal(readOfficeSettings(agentDir).enabled, false);
 		assert.equal(fake.listeners(), 0);
 		assert.deepEqual(notes.at(-1), { message: "Gentle Office off: listeners detached.", level: "info" });
@@ -344,5 +344,84 @@ describe("/office with no arguments opens a selector", () => {
 		await fake.commands.get("office")!.handler("on", selCtx);
 		assert.deepEqual(prompts, []);
 		assert.equal(readOfficeSettings(agentDir).enabled, true);
+	});
+});
+
+describe("/office dock and the compact window", () => {
+	const openServers: Array<{ stop(): Promise<void> }> = [];
+	afterEach(async () => {
+		for (const server of openServers.splice(0)) await server.stop();
+	});
+	// Real window server with a recording opener; the compact entries must open the same tokened URL plus ?layout=dock.
+	function dockFixture(fake: ReturnType<typeof fakeHost>) {
+		const hub = new OfficeHub();
+		const opened: string[] = [];
+		const server = createOfficeServer({ hub, openUrl: async (url: string) => { opened.push(url); return { opened: true }; } });
+		openServers.push(server);
+		registerOffice(fake.host, { agentDir, hub, server });
+		return { server, opened };
+	}
+	const pick = (answer: string | undefined) => {
+		const prompts: { title: string; options: string[] }[] = [];
+		const selectCtx = {
+			prompts,
+			ctx: {
+				ui: {
+					notify: (message: string, level: string) => { notes.push({ message, level }); },
+					select: async (title: string, options: string[]) => { prompts.push({ title, options }); return answer; },
+				},
+			},
+		};
+		return selectCtx;
+	};
+
+	it("/office dock while off refuses like open and starts nothing", async () => {
+		const fake = fakeHost();
+		const { server, opened } = dockFixture(fake);
+		await fake.commands.get("office")!.handler("open", ctx);
+		const fromOpen = notes.splice(0);
+		await fake.commands.get("office")!.handler("dock", ctx);
+		assert.deepEqual(notes, fromOpen);
+		assert.equal(notes.at(-1)?.level, "warning");
+		assert.equal(server.status().running, false);
+		assert.deepEqual(opened, []);
+	});
+
+	it("/office dock while on opens one window at the tokened URL with ?layout=dock", async () => {
+		const fake = fakeHost();
+		const { server, opened } = dockFixture(fake);
+		run(fake, "on");
+		await fake.commands.get("office")!.handler("dock", ctx);
+		const url = server.status().url!;
+		assert.deepEqual(opened, [`${url}?layout=dock`]);
+		assert.deepEqual(notes.at(-1), { message: `Gentle Office window opened: ${url}?layout=dock`, level: "info" });
+	});
+
+	it("Open the compact window opens one ?layout=dock URL while on", async () => {
+		const fake = fakeHost();
+		const { server, opened } = dockFixture(fake);
+		run(fake, "on");
+		const { prompts, ctx: selCtx } = pick("Open the compact window");
+		await fake.commands.get("office")!.handler("", selCtx);
+		assert.deepEqual(prompts, [{ title: "Gentle Office (on)", options: ["Open the window", "Turn off", "Open the compact window", "Status"] }]);
+		assert.deepEqual(opened, [`${server.status().url}?layout=dock`]);
+	});
+
+	it("Turn on and open the compact window enables the module and opens one ?layout=dock URL", async () => {
+		const fake = fakeHost();
+		const { server, opened } = dockFixture(fake);
+		const { prompts, ctx: selCtx } = pick("Turn on and open the compact window");
+		await fake.commands.get("office")!.handler("", selCtx);
+		assert.deepEqual(prompts, [{ title: "Gentle Office (off)", options: ["Turn on", "Turn on and open the window", "Turn on and open the compact window", "Status"] }]);
+		assert.equal(readOfficeSettings(agentDir).enabled, true);
+		assert.deepEqual(opened, [`${server.status().url}?layout=dock`]);
+		assert.deepEqual(notes.map(n => n.level), ["info", "info"]);
+	});
+
+	it("the usage line lists dock next to open", () => {
+		const fake = fakeHost();
+		registerOffice(fake.host, { agentDir, hub: new OfficeHub() });
+		run(fake, "maybe");
+		assert.match(notes.at(-1)!.message, /Usage: \/office on \| off \| status \| open \| dock/);
 	});
 });

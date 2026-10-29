@@ -340,3 +340,24 @@ describe("open and status", () => {
 		stream.req.destroy();
 	});
 });
+
+describe("open with a query", () => {
+	it("appends the query to the tokened URL and hands that URL to the opener; status keeps the plain URL", async () => {
+		const { server, opened } = makeServer();
+		const result = await server.open("layout=dock");
+		const base = server.status().url!;
+		assert.equal(result.url, `${base}?layout=dock`);
+		assert.deepEqual(opened, [`${base}?layout=dock`]);
+		assert.equal(server.status().url, base);
+	});
+
+	it("the tokened page still serves with a query, and a wrong token with a query gets 404", async () => {
+		const { server } = makeServer();
+		const url = await server.start();
+		const page = await send(portOf(url), `${tokenPath(url)}?layout=dock`);
+		assert.equal(page.status, 200);
+		assert.match(page.body, /id="layoutToggle"/);
+		const wrong = await send(portOf(url), "/wrong-token/?layout=dock");
+		assert.equal(wrong.status, 404);
+	});
+});

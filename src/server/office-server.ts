@@ -57,8 +57,11 @@ export interface OfficeServerOptions {
 export interface OfficeServer {
 	/** Starts the loopback server once per instance and resolves with the window URL (ends with `/`). */
 	start(): Promise<string>;
-	/** Starts if needed, then asks the opener to show the URL. */
-	open(): Promise<OfficeOpenResult>;
+	/**
+	 * Starts if needed, then asks the opener to show the URL. An optional query (e.g. `layout=dock`) is appended to
+	 * the tokened URL; the token, path and checks stay the same. Internal callers only pass fixed query strings.
+	 */
+	open(query?: string): Promise<OfficeOpenResult>;
 	/** Closes every live client and the listener. Idempotent. */
 	stop(): Promise<void>;
 	status(): OfficeServerStatus;
@@ -202,8 +205,9 @@ export function createOfficeServer(options: OfficeServerOptions): OfficeServer {
 
 	return {
 		start,
-		async open() {
-			const address = await start();
+		async open(query) {
+			const base = await start();
+			const address = query ? `${base}?${query}` : base;
 			try {
 				return { url: address, ...(await openUrl(address)) };
 			} catch (error) {

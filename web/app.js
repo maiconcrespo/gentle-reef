@@ -40,6 +40,51 @@ const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {
 	onDeparted: (id) => dispatch({ type: "departed", id }),
 });
 
+// Layout: "full" is the desk window; "dock" is the narrow pane from design/agent-office/02-dock-pane.html. ?layout= wins for
+// this load (the /office dock entry uses it); otherwise the saved toggle choice; otherwise full. The toggle saves its choice
+// and rewrites ?layout= so a reload keeps it.
+const LAYOUTS = ["full", "dock"];
+const LAYOUT_LABEL = { full: "Full", dock: "Compact" };
+const LAYOUT_KEY = "gentle-office.layout";
+const layoutToggle = $("layoutToggle");
+
+function storedLayout() {
+	try {
+		return localStorage.getItem(LAYOUT_KEY);
+	} catch {
+		return null;
+	}
+}
+
+function initialLayout() {
+	const fromUrl = new URLSearchParams(location.search).get("layout");
+	if (LAYOUTS.includes(fromUrl)) return fromUrl;
+	const saved = storedLayout();
+	return LAYOUTS.includes(saved) ? saved : "full";
+}
+
+// The toggle shows the layout it switches to. CSS keys off <html data-layout>, so the grid refits on its own.
+function applyLayout(layout, { remember }) {
+	document.documentElement.dataset.layout = layout;
+	const next = layout === "dock" ? "full" : "dock";
+	layoutToggle.textContent = LAYOUT_LABEL[next];
+	layoutToggle.setAttribute("aria-label", `Switch to the ${LAYOUT_LABEL[next].toLowerCase()} layout`);
+	if (!remember) return;
+	try {
+		localStorage.setItem(LAYOUT_KEY, layout);
+	} catch {
+		// Storage can be blocked; the choice then lasts for this page only.
+	}
+	const url = new URL(location.href);
+	url.searchParams.set("layout", layout);
+	history.replaceState(null, "", url);
+}
+
+applyLayout(initialLayout(), { remember: false });
+layoutToggle.addEventListener("click", () => {
+	applyLayout(document.documentElement.dataset.layout === "dock" ? "full" : "dock", { remember: true });
+});
+
 // Integer-scale fit: the room is shown at the largest whole multiple (1x, 2x, 3x...) that fits the stage column and keeps the
 // whole room on screen. Whole multiples keep the pixel art crisp; the scale never drops below 1x.
 const mainEl = document.querySelector("main");

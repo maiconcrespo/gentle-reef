@@ -17,14 +17,17 @@ Or add the path to the `packages` list in your Pi `settings.json`.
 ## Use
 
 ```text
-/office          # open a menu: turn on/off, open the window, or show status
+/office          # open a menu: turn on/off, open the window (full or compact), or show status
 /office on       # attach listeners
 /office open     # start the window (once per session) and open it in the browser
+/office dock     # same as open, in the compact layout (?layout=dock)
 /office off      # detach listeners, close the window, clear the hub
 /office status   # enabled state, hub stats, and the window URL while it runs
 ```
 
-The module is off by default. When it is off, the only thing registered is the `/office` command, and `/office open` refuses until you run `/office on`.
+The module is off by default. When it is off, the only thing registered is the `/office` command, and `/office open` and `/office dock` refuse until you run `/office on`.
+
+The menu lists the same actions as the subcommands. While the module is off: Turn on, Turn on and open the window, Turn on and open the compact window, Status. While it is on: Open the window, Turn off, Open the compact window, Status.
 
 ## The window
 
@@ -38,6 +41,15 @@ The module is off by default. When it is off, the only thing registered is the `
 - a connection indicator (`live`, `reconnecting…`, or `offline`). The page reconnects by itself and resyncs from a fresh snapshot.
 
 With `prefers-reduced-motion` set, the orchestrator does not wander and residents snap to their seats and to the door. State changes still show.
+
+### Compact layout
+
+The window has two layouts that share one page and one state:
+
+- **Full** (default): the desk window described above.
+- **Compact** (`design/agent-office/02-dock-pane.html`): one narrow column, 520 px at most. The room is on top at 1x, then the context brew, the team and the activity. The legend is left out, and the ask dialog overlays the bottom of the room and runs a little past it, so its top stays below the orchestrator's front spot.
+
+Open the compact layout with `/office dock`, or with "Open the compact window" / "Turn on and open the compact window" in the menu. The URL gets `?layout=dock` after the token; the token, path and checks are unchanged. The header button ("Compact" / "Full") switches without reloading. Its choice is saved in the browser's localStorage and written into the URL, so a reload keeps it. A `?layout=` already in the URL wins over the saved choice for that load, so `/office dock` always shows the compact layout. The room stays at 1x, so below about 490 px of window width the page scrolls sideways.
 
 ### Local-only guards
 

@@ -79,3 +79,33 @@ footer b { color: var(--gold); font-weight: 600; }
 .dialog .caret { position: absolute; right: 14px; bottom: 8px; color: var(--gold); animation: bob .8s steps(2) infinite; }
 @keyframes bob { 50% { transform: translateY(3px); } }
 @media (prefers-reduced-motion: reduce) { .dialog .caret { animation: none; } }
+
+/* Layout toggle in the header: shows the layout it switches to (see app.js applyLayout). */
+.layout-toggle { font: inherit; font-size: 12px; color: var(--muted); background: var(--user); border: 1px solid var(--border); padding: 2px 10px; cursor: pointer; }
+.layout-toggle:hover { border-color: var(--blue); color: var(--blue); }
+.layout-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+/* Dock layout (design/agent-office/02-dock-pane.html): one narrow column, the room at 1x on top, then brew, team and activity.
+   Room is 480 px wide, so the column is 520 px and the frame keeps 4 px of padding; the scale stays 1x at this width.
+   The legend is left out (the design has none; the canvas label carries the state). The ask dialog overlays the bottom of the
+   room and runs a little past it into the freed space, so two questions fit, while its top stays below the front spot
+   (row 6 ends near y 170 of the 312 px room). */
+[data-layout="dock"] body { grid-template-rows: 34px 1fr 28px; }
+[data-layout="dock"] header { padding: 0 12px; gap: 10px; }
+[data-layout="dock"] .crumb, [data-layout="dock"] .footer-end { display: none; }
+[data-layout="dock"] main { grid-template-columns: minmax(0, 1fr); align-content: start; justify-content: stretch; justify-self: center; width: 100%; max-width: 520px; gap: 10px; padding: 10px; }
+[data-layout="dock"] .stage { width: 100%; max-width: 100%; gap: 8px; }
+[data-layout="dock"] .frame { padding: 4px; }
+[data-layout="dock"] .map { display: none; }
+[data-layout="dock"] .card { padding: 10px 12px; }
+[data-layout="dock"] .card h2 { margin-bottom: 8px; }
+[data-layout="dock"] .brew { grid-template-columns: 64px 1fr; gap: 12px; }
+[data-layout="dock"] canvas.pot { width: 64px; height: 76px; }
+[data-layout="dock"] .brew-num { font-size: 20px; }
+[data-layout="dock"] .cups i { height: 10px; }
+[data-layout="dock"] .brew-note { margin-top: 6px; }
+[data-layout="dock"] ul.crew { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; padding-top: 10px; }
+[data-layout="dock"] ul.crew li { border: 1px solid var(--border); padding: 4px 6px; }
+[data-layout="dock"] .log { flex: none; max-height: 150px; overflow: auto; }
+[data-layout="dock"] .dialog { left: 10px; right: 10px; bottom: -64px; max-height: 204px; padding: 10px 14px 12px; font-size: 13px; line-height: 1.4; }
+[data-layout="dock"] .dialog .hint { margin-top: 6px; }
+[data-layout="dock"] footer { padding: 0 12px; gap: 12px; font-size: 11px; }
