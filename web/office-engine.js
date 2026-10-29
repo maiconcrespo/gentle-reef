@@ -41,44 +41,62 @@ const C = {
 	coffee: goMix(P.sand, '#2A1523', 0.3), coffeeH: goMix(P.sand, '#2A1523', 0.1)
 };
 
-/* Head maps are 16x10 letter grids. K ink, H hair, h hair shade, l hair light,
-   S skin, s skin shade, E eye, W glint, C cheek, M mouth. */
-const HEAD_DOWN = [
-	'....KKKKKKKK....',
-	'...KHHHHHHHHK...',
-	'..KHHlHHHHHHHK..',
-	'..KHHHHHHHHHHK..',
-	'..KHHSSSSSSHHK..',
-	'..KSSSSSSSSSSK..',
-	'..KSSESSSSESSK..',
-	'..KCSSSSSSSSCK..',
-	'...KSSSMMSSSK...',
-	'....KSSSSSSK....'
-];
-const HEAD_UP = [
-	'....KKKKKKKK....',
-	'...KHHHHHHHHK...',
-	'..KHHlHHHHHHHK..',
-	'..KHHHHHHHHHHK..',
-	'..KHHHHHHHHHHK..',
-	'..KHHHHHHHHHHK..',
-	'..KHHHHHHHHHHK..',
-	'..KHHhHHHHhHHK..',
-	'...KHHHHHHHHK...',
-	'....KSSSSSSK....'
-];
+/* Sprite box: SPRITE.w x SPRITE.h px, feet on the anchor row, hats extend above it. Head maps are 24x14 letter grids.
+   K ink, H hair, h hair shade, l hair light, S skin, s skin shade, E eye, W glint, C cheek, M mouth.
+   Front and back heads are drawn half-width and mirrored so both sides always match. */
+export const SPRITE = { w: 24, h: 36, head: 14 };
+const mirror = rows => rows.map(r => r + [...r].reverse().join(''));
+const HEAD_DOWN = mirror([
+	'......KKKKKK',
+	'...KKHHHHHHH',
+	'..KHHlHHHHHH',
+	'.KHHHHHHHHHH',
+	'.KHHHHHHSSSS',
+	'.KHSSSSSSSSS',
+	'..KSShhSSSSS',
+	'..KSSWESSSSS',
+	'..KSSEESSSSS',
+	'..KCSSSSSSSs',
+	'..KCSSSSSSSS',
+	'...KSSSSSSMM',
+	'...KSSSSSSSs',
+	'....KKKKKKKK'
+]);
+const HEAD_UP = mirror([
+	'......KKKKKK',
+	'...KKHHHHHHH',
+	'..KHHlHHHHHH',
+	'.KHHlHHHHHHH',
+	'.KHHHHHHHHHH',
+	'.KHHHHHHHHHH',
+	'.KHHHHHHHHHH',
+	'.KHHHHHHHHHH',
+	'..KHHHHHHHHH',
+	'..KHHHHHHHHH',
+	'...KhhhhhhhH',
+	'....KHHHHHHH',
+	'....KHHHHHHh',
+	'....KKKKKKKK'
+]);
+/* Side view faces left; flipped at draw time for the right. */
 const HEAD_SIDE = [
-	'....KKKKKKK.....',
-	'...KHHHHHHHK....',
-	'..KHHlHHHHHHK...',
-	'..KHHHHHHHHHK...',
-	'..KSSSSSSSHHK...',
-	'..KSSSSSSSHHK...',
-	'..KSSESSSSHHK...',
-	'..KSSSSSSSHHK...',
-	'..KSSSSSSSHK....',
-	'...KKKKKKKK.....'
+	'........KKKKKKKK........',
+	'.......KHHHHHHHHK.......',
+	'......KHHlHHHHHHHHK.....',
+	'.....KHHHHHHHHHHHHK.....',
+	'....KHHHHHHHHHHHHHHK....',
+	'...KHHSSSSSSHHHHHHHK....',
+	'...KSSSSSSSSSHHHHHHK....',
+	'...KSSEWSSSSSHHHHHHK....',
+	'...KSSESSSSSSHHHHHHK....',
+	'...KsSSSSSSSSHHHHHHK....',
+	'...KSSSSSSSSSHHHHHHK....',
+	'....KSMSSSSSSHHHHHHK....',
+	'....KSSSSSSSSSSK........',
+	'......KKKKKKKKKK........'
 ];
+export const HEAD_MAPS = { down: HEAD_DOWN, up: HEAD_UP, side: HEAD_SIDE };
+const LEG = P.border, LEG_H = P.sel;
 
 const triangle = v => { const f = v - Math.floor(v); return f < 0.5 ? f * 2 : 2 - f * 2; };
 /* Stable hash of a task id: the same agent always gets the same look. */
@@ -174,15 +192,14 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	/* ---------- spots ---------- */
 	const deskSpot = d => ({ tx: d.x, ty: d.y + 1, px: FX(d.x + 1) - 4, py: FY(d.y + 1) - 2, face: 'up', sit: true });
 	const spots = {
-		whiteboard: { tx: wb.x + 1, ty: 2, px: FX(wb.x + 2), py: FY(2), face: 'up' },
-		coffee: { tx: cf.x + 1, ty: cf.y + 1, face: 'up' },
+		/* One row below the wall props so a 48 px tall orchestrator does not cover the board or the pot. */
+		whiteboard: { tx: wb.x + 1, ty: 3, px: FX(wb.x + 2), py: FY(3), face: 'up' },
+		coffee: { tx: cf.x + 1, ty: cf.y + 2, face: 'up' },
 		front: { tx: cfg.front.x, ty: cfg.front.y, face: 'down' },
 		rest: { tx: cfg.orchStart.x, ty: cfg.orchStart.y, face: 'down' }
 	};
-	/* Waiting bench: the first six queued residents stand on the row above the bench, the rest on the row above that. */
-	const benchSpot = i => (i < cfg.bench.w
-		? { tx: cfg.bench.x + i, ty: ROWS - 2, face: 'down' }
-		: { tx: cfg.bench.x + ((i - cfg.bench.w) % cfg.bench.w), ty: ROWS - 3, face: 'down' });
+	/* Waiting bench: queued residents stand on the row above the bench. Past the bench width they continue along that row, beside it, so they never stand on a desk seat. */
+	const benchSpot = i => ({ tx: cfg.bench.x + (i % (2 * cfg.bench.w)), ty: ROWS - 2, face: 'down' });
 	function randomSpot() {
 		for (let n = 0; n < 200; n++) {
 			const x = Math.floor(rnd(0, COLS)), y = Math.floor(rnd(3, ROWS - 1));
@@ -452,13 +469,12 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		R(x + 36, y + 9, 6, 6, P.text); R(x + 36, y + 9, 6, 1, P.sec); R(x + 42, y + 11, 2, 2, P.text);
 	}
 
-	/* Empty chair: the cushion under the seat spot and the backrest in front. */
+	/* Empty chair, sized for the 24 px sitter: the seat cushion under the seat spot and the backrest in front. */
 	function drawChair(px, py, front) {
-		const x = px - 8, y = py - 14;
-		if (!front) { R(x + 2, y + 16, 12, 3, P.muted); R(x + 2, y + 16, 12, 1, P.steel); return; }
-		R(x + 3, y + 8, 10, 7, P.muted); R(x + 3, y + 8, 10, 1, P.steel); R(x + 3, y + 14, 10, 1, shade(P.muted));
-		R(x + 4, y + 10, 8, 4, P.border); R(x + 5, y + 11, 6, 2, P.sel);
-		R(x + 7, y + 15, 4, 3, P.border); R(x + 4, y + 18, 2, 1, P.bg); R(x + 10, y + 18, 2, 1, P.bg);
+		if (!front) { R(px - 8, py + 2, 16, 4, P.muted); R(px - 8, py + 2, 16, 1, P.steel); return; }
+		R(px - 7, py - 4, 14, 8, P.muted); R(px - 7, py - 4, 14, 1, P.steel); R(px - 7, py + 3, 14, 1, shade(P.muted));
+		R(px - 5, py - 2, 10, 5, P.border); R(px - 4, py - 1, 8, 3, P.sel);
+		R(px - 2, py + 4, 4, 3, P.border); R(px - 5, py + 7, 2, 1, P.bg); R(px + 3, py + 7, 2, 1, P.bg);
 	}
 
 	function drawTable() {
@@ -524,54 +540,72 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		}
 	}
 
-	/* ---------- orchestrator sprite: top hat, pink handlebar mustache, gold monocle, champagne suit ---------- */
-	function drawBody(ox, oy, walk, sw) {
-		const s = ORCH_COLOR, sh = shade(s), hl = hi(s);
-		R(ox + 4, oy + 10, 8, 7, s); R(ox + 4, oy + 10, 1, 7, sh); R(ox + 11, oy + 10, 1, 7, sh);
-		R(ox + 6, oy + 10, 2, 3, hl);
-		R(ox + 3, oy + 10, 1, 6, INK); R(ox + 12, oy + 10, 1, 6, INK);
-		R(ox + 2, oy + 11, 1, 5, s); R(ox + 13, oy + 11, 1, 5, s);
-		R(ox + 2, oy + 15, 1, 1, sh); R(ox + 13, oy + 15, 1, 1, sh);
-		R(ox + 4, oy + 17, 8, 1, INK);
-		R(ox + 2, oy + 16 + sw, 2, 2, SKIN); R(ox + 12, oy + 16 - sw, 2, 2, SKIN);
-		const lOff = walk === 1 ? 1 : 0, rOff = walk === 3 ? 1 : 0;
-		R(ox + 5, oy + 17, 2, 5 - lOff, P.border); R(ox + 9, oy + 17, 2, 5 - rOff, P.border);
-		R(ox + 5, oy + 17, 1, 5 - lOff, P.sel); R(ox + 9, oy + 17, 1, 5 - rOff, P.sel);
-		R(ox + 4, oy + 22 - lOff, 3, 2, INK); R(ox + 9, oy + 22 - rOff, 3, 2, INK);
+	/* ---------- figures: one body template for the orchestrator and every resident ---------- */
+	/* Sprite box is 24x36 with the feet on the last row (oy + 35). Rows: head 0-13, neck 14, torso 15-25, legs 26-33, shoes 34-35. */
+	/* `f` = { color, walk, sw, sit }. Seated figures show thighs instead of legs; `sw` moves the hands while typing or walking. */
+	function drawFigure(ox, oy, f) {
+		const s = f.color, sh = shade(s), hl = hi(s);
+		/* Neck: the head map covers its top row. */
+		R(ox + 9, oy + 14, 6, 1, SKIN_SH);
+		/* Torso with ink outline, shaded flank and a chest highlight. */
+		R(ox + 5, oy + 15, 1, 11, INK); R(ox + 18, oy + 15, 1, 11, INK);
+		R(ox + 6, oy + 15, 12, 11, s); R(ox + 6, oy + 15, 1, 11, sh); R(ox + 17, oy + 15, 1, 11, sh);
+		R(ox + 8, oy + 15, 2, 5, hl);
+		/* Arms: sleeves to row 23, hands below with a knuckle shadow. Seated hands rest higher, on the keyboard. */
+		R(ox + 2, oy + 15, 1, 9, INK); R(ox + 21, oy + 15, 1, 9, INK);
+		R(ox + 3, oy + 15, 2, 9, s); R(ox + 19, oy + 15, 2, 9, s);
+		R(ox + 3, oy + 15, 1, 9, sh); R(ox + 20, oy + 15, 1, 9, sh);
+		const base = f.sit ? 22 : 24, sw = f.sw || 0;
+		R(ox + 3, oy + base + sw, 2, 2, SKIN); R(ox + 19, oy + base - sw, 2, 2, SKIN);
+		R(ox + 3, oy + base + sw + 1, 2, 1, SKIN_SH); R(ox + 19, oy + base - sw + 1, 2, 1, SKIN_SH);
+		if (f.sit) { R(ox + 6, oy + 26, 12, 4, LEG); R(ox + 6, oy + 26, 12, 1, LEG_H); return; }
+		/* Legs and shoes; a stepping leg lifts one pixel. */
+		const lOff = f.walk === 1 ? 1 : 0, rOff = f.walk === 3 ? 1 : 0;
+		R(ox + 7, oy + 26, 4, 8 - lOff, LEG); R(ox + 13, oy + 26, 4, 8 - rOff, LEG);
+		R(ox + 7, oy + 26, 1, 8 - lOff, LEG_H); R(ox + 13, oy + 26, 1, 8 - rOff, LEG_H);
+		R(ox + 6, oy + 34 - lOff, 5, 2, INK); R(ox + 13, oy + 34 - rOff, 5, 2, INK);
+		R(ox + 7, oy + 34 - lOff, 2, 1, P.steel); R(ox + 14, oy + 34 - rOff, 2, 1, P.steel);
 	}
 
+	/* ---------- orchestrator sprite: top hat, pink handlebar mustache, gold monocle, champagne suit ---------- */
+
 	function drawOrchHead(ox, oy, fam, flip) {
-		const fx = (x, w) => (flip ? ox + 15 - x - (w || 1) + 1 : ox + x);
+		const fx = (x, w) => (flip ? ox + 23 - x - (w || 1) + 1 : ox + x);
 		const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
-		/* Top hat */
-		hX(4, 8, -8, 6, P.bg); hX(4, 8, -8, 1, P.border); hX(5, 6, -7, 1, P.sel);
-		hX(3, 10, -2, 2, P.bg); hX(3, 10, -2, 1, P.border);
-		hX(4, 8, -4, 1, P.gold); hX(4, 8, -3, 1, shade(P.gold));
-		/* Pink flower on the band */
-		hX(10, 3, -6, 3, P.purple); hX(11, 1, -5, 1, P.gold); hX(10, 1, -6, 1, P.violet); hX(12, 1, -4, 1, P.violet);
+		/* Top hat: dark crown with a gold band, a brim wider than the head, and a pink flower on the crown. */
+		hX(6, 12, -11, 7, P.bg); hX(7, 10, -11, 1, P.border); hX(15, 3, -9, 5, shade(P.bg));
+		hX(6, 12, -4, 1, P.gold); hX(6, 12, -3, 1, shade(P.gold));
+		hX(3, 18, -2, 1, P.border); hX(3, 18, -1, 1, P.bg);
+		hX(13, 3, -9, 3, P.purple); hX(14, 1, -8, 1, P.gold); hX(12, 1, -9, 1, P.violet); hX(14, 1, -10, 1, P.violet);
 		if (fam === 'up') {
-			hX(0, 2, 7, 2, STACHE); hX(14, 2, 7, 2, STACHE); hX(0, 1, 6, 1, STACHE_S); hX(15, 1, 6, 1, STACHE_S);
+			/* Back view: only the handlebar tips show past the head. */
+			hX(0, 2, 9, 2, STACHE); hX(22, 2, 9, 2, STACHE); hX(0, 1, 8, 1, STACHE_S); hX(23, 1, 8, 1, STACHE_S);
 			return;
 		}
 		if (fam === 'side') {
-			hX(1, 4, 8, 2, STACHE); hX(0, 2, 7, 2, STACHE); hX(0, 1, 6, 1, STACHE_S); hX(1, 3, 9, 1, STACHE_S);
-			/* Monocle on the visible eye */
-			hX(3, 4, 5, 1, P.gold); hX(3, 4, 7, 1, P.gold); hX(3, 1, 5, 3, P.gold); hX(6, 1, 5, 3, P.gold);
-			hX(4, 2, 6, 1, P.sky);
-			hX(6, 1, 8, 4, P.gold); hX(5, 1, 12, 1, P.gold); hX(6, 1, 13, 1, P.sec);
+			/* Chain first, so the mustache covers its top. Monocle ring with a glinting lens on the visible eye. */
+			hX(8, 1, 10, 1, P.gold); hX(8, 1, 11, 1, P.sec); hX(9, 1, 12, 1, P.gold);
+			hX(6, 2, 6, 1, P.gold); hX(5, 1, 7, 2, P.gold); hX(8, 1, 7, 2, P.gold); hX(6, 2, 9, 1, P.gold);
+			hX(6, 2, 7, 2, P.sky); hX(6, 1, 7, 1, P.text);
+			/* Handlebar tips poke out in front of the face. */
+			hX(3, 5, 10, 2, STACHE); hX(2, 2, 9, 1, STACHE); hX(2, 1, 8, 1, STACHE_S); hX(3, 5, 11, 1, STACHE_S);
 		} else {
-			/* Handlebar mustache: wider than the face, curled tips */
-			hX(0, 16, 8, 2, STACHE); hX(1, 14, 10, 1, STACHE_S);
-			hX(0, 2, 6, 2, STACHE); hX(14, 2, 6, 2, STACHE); hX(0, 1, 5, 1, STACHE_S); hX(15, 1, 5, 1, STACHE_S);
-			/* Monocle ring with light lens over the right eye, chain hanging to the vest */
-			hX(9, 4, 5, 1, P.gold); hX(9, 4, 7, 1, P.gold); hX(9, 1, 5, 3, P.gold); hX(12, 1, 5, 3, P.gold);
-			hX(10, 2, 6, 1, P.sky);
-			hX(12, 1, 8, 1, P.gold); hX(12, 1, 9, 1, P.sec); hX(13, 1, 10, 1, P.gold); hX(13, 1, 11, 1, P.sec);
-			hX(13, 1, 12, 1, P.gold); hX(13, 1, 13, 1, P.sec);
+			/* Chain hangs from the monocle; the mustache covers its upper links. */
+			hX(19, 1, 10, 2, P.gold); hX(19, 1, 12, 1, P.gold); hX(19, 1, 13, 1, P.sec);
+			/* Monocle ring with a glinting lens over the right eye. */
+			hX(17, 2, 6, 1, P.gold); hX(16, 1, 7, 2, P.gold); hX(19, 1, 7, 2, P.gold); hX(17, 2, 9, 1, P.gold);
+			hX(17, 2, 7, 2, P.sky); hX(17, 1, 7, 1, P.text);
+			/* Handlebar mustache: wider than the face, curled tips, shaded underside. */
+			hX(2, 20, 10, 2, STACHE); hX(3, 18, 11, 1, STACHE_S);
+			hX(0, 2, 9, 2, STACHE); hX(22, 2, 9, 2, STACHE); hX(0, 1, 9, 1, STACHE_S); hX(23, 1, 9, 1, STACHE_S);
 		}
-		/* Bow tie and champagne vest */
-		hX(6, 4, 10, 1, P.purple); hX(7, 2, 11, 1, P.deep);
-		hX(7, 2, 12, 5, P.text); hX(7, 1, 12, 5, P.sec);
+	}
+
+	/* Champagne vest with a white shirt front, gold buttons and a purple bow tie. */
+	function drawOrchTie(ox, oy) {
+		R(ox + 9, oy + 15, 6, 1, P.purple); R(ox + 10, oy + 16, 4, 1, P.deep);
+		R(ox + 10, oy + 17, 4, 8, P.text);
+		R(ox + 11, oy + 20, 2, 1, P.gold); R(ox + 11, oy + 23, 2, 1, P.gold);
 	}
 
 	function headFor(c) {
@@ -584,16 +618,17 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	function drawOrchestrator(c) {
 		const fx = Math.round(c.x), fy = Math.round(c.y);
 		const walk = c.moving ? Math.floor(c.step) % 4 : 0, bob = c.moving && walk % 2 ? 1 : 0;
-		const ox = fx - 8, oy = fy - 23 - bob;
+		const ox = fx - 12, oy = fy - 35 - bob;
 		const sw = c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
-		g.globalAlpha = 0.35; R(fx - 6, fy - 1, 12, 2, INK); g.globalAlpha = 1;
+		g.globalAlpha = 0.35; R(fx - 9, fy - 1, 18, 2, INK); g.globalAlpha = 1;
 		const { rows, flip, fam } = headFor(c);
-		drawBody(ox, oy, walk, sw);
+		drawFigure(ox, oy, { color: ORCH_COLOR, walk, sw, sit: false });
 		const map = { K: INK, H: ORCH_HAIR, h: shade(ORCH_HAIR), l: hi(ORCH_HAIR), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep };
 		sprite(rows, map, ox, oy, flip);
 		const blink = !reduced && Math.floor(time * 10) % 37 === 0;
-		if (blink && fam === 'down') { R(ox + 5, oy + 6, 1, 1, SKIN); R(ox + 10, oy + 6, 1, 1, SKIN); }
+		if (blink && fam === 'down') { R(ox + 5, oy + 7, 2, 2, SKIN); R(ox + 5, oy + 8, 2, 1, INK); }
 		drawOrchHead(ox, oy, fam, flip);
+		drawOrchTie(ox, oy);
 	}
 
 	/* Speech bubble, 18x14, with a 10x8 icon. Drawn in the final pass. */
@@ -612,11 +647,11 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 
 	function drawOrchBubble() {
 		if (!orch.bubble) return;
-		drawBubble(Math.round(orch.x) - 8 + 2, Math.round(orch.y) - 23 - 16, orch.bubble.icon);
+		drawBubble(Math.round(orch.x) - 9, Math.round(orch.y) - 35 - 27, orch.bubble.icon);
 	}
 
 	/* ---------- residents: one sprite per resident subagent (S7, T3) ---------- */
-	/* Sprites are the approved design (design/agent-office/01-overworld-hq.html: drawBody, drawKit). */
+	/* Sprites follow the approved design (design/agent-office/01-overworld-hq.html: drawBody, drawKit), redrawn at 24x36 (T9). */
 	const LEAVE_DELAY = 1.6;
 	const residents = new Map();
 	let deskWorking = cfg.desks.map(() => null);
@@ -682,66 +717,56 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 			if (c.leaving && !c.exiting && time >= c.leaveAt) startExit(c);
 		}
 	}
-	/* Resident body: torso, arms and legs. Hands go to the keyboard while typing; legs are hidden while seated. */
-	function drawResidentBody(c, ox, oy, walk, sw) {
-		const s = c.color, sh = shade(s), hl = hi(s);
-		R(ox + 4, oy + 10, 8, 7, s); R(ox + 4, oy + 10, 1, 7, sh); R(ox + 11, oy + 10, 1, 7, sh);
-		R(ox + 6, oy + 10, 2, 3, hl);
-		R(ox + 3, oy + 10, 1, 6, INK); R(ox + 12, oy + 10, 1, 6, INK);
-		R(ox + 2, oy + 11, 1, 5, s); R(ox + 13, oy + 11, 1, 5, s);
-		R(ox + 2, oy + 15, 1, 1, sh); R(ox + 13, oy + 15, 1, 1, sh);
-		R(ox + 4, oy + 17, 8, 1, INK);
-		if (!c.sit || c.typing) { R(ox + 2, oy + 16 + sw, 2, 2, SKIN); R(ox + 12, oy + 16 - sw, 2, 2, SKIN); }
-		if (!c.sit) {
-			const lOff = walk === 1 ? 1 : 0, rOff = walk === 3 ? 1 : 0;
-			R(ox + 5, oy + 17, 2, 5 - lOff, P.border); R(ox + 9, oy + 17, 2, 5 - rOff, P.border);
-			R(ox + 5, oy + 17, 1, 5 - lOff, P.sel); R(ox + 9, oy + 17, 1, 5 - rOff, P.sel);
-			R(ox + 4, oy + 22 - lOff, 3, 2, INK); R(ox + 9, oy + 22 - rOff, 3, 2, INK);
-		}
-	}
-	/* Role props over the head and body: hat, gear, glasses, coat. */
+	/* Role props over the head and body: hat, gear, glasses, coat. Headwear gets a 1 px ink edge so it reads on the desk tops. */
 	function drawKit(c, ox, oy, fam, flip) {
-		const fx = (x, w) => (flip ? ox + 15 - x - (w || 1) + 1 : ox + x);
+		const fx = (x, w) => (flip ? ox + 23 - x - (w || 1) + 1 : ox + x);
 		const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
-		/* Headwear gets a 1 px ink edge (added to the design): a sand hat on the sand desk top is unreadable without it. */
-		const edge = (x, w, y, h) => R(fx(x, w) - 1, oy + y - 1, w + 2, h + 1, INK);
-		if (c.kit === 'explore') { edge(4, 8, -4, 3); edge(1, 14, -1, 1); }
-		if (c.kit === 'worker') { edge(3, 10, -2, 3); edge(1, 14, -1, 1); }
+		const edge = (x, w, y, h) => R(fx(x, w) - 1, oy + y - 1, w + 2, h + 2, INK);
 		if (c.kit === 'explore') {
-			/* Safari explorer hat, brim and band, binoculars on the chest. */
-			hX(4, 8, -4, 3, P.sand); hX(4, 8, -4, 1, hi(P.sand)); hX(4, 8, -2, 1, P.gold);
-			hX(1, 14, -1, 1, P.sand); hX(1, 14, -1, 1, shade(P.sand)); hX(2, 12, -2, 1, shade(P.sand));
-			if (fam !== 'side') { hX(5, 2, 13, 2, P.steel); hX(9, 2, 13, 2, P.steel); hX(6, 4, 13, 1, P.sec); }
+			/* Safari hat: sand crown with a gold band and a wide brim. Binoculars hang from a strap on the chest. */
+			edge(6, 12, -8, 5); edge(2, 20, -3, 2);
+			hX(6, 12, -8, 4, P.sand); hX(6, 12, -8, 1, hi(P.sand)); hX(15, 3, -7, 3, shade(P.sand));
+			hX(6, 12, -4, 1, P.gold);
+			hX(2, 20, -3, 2, P.sand); hX(2, 20, -3, 1, hi(P.sand)); hX(2, 20, -2, 1, shade(P.sand));
+			if (fam !== 'side') {
+				hX(11, 2, 17, 1, P.sec);
+				hX(8, 3, 18, 3, P.steel); hX(13, 3, 18, 3, P.steel);
+				hX(9, 1, 19, 1, P.bg); hX(14, 1, 19, 1, P.bg);
+			}
 		}
 		if (c.kit === 'worker') {
-			/* Construction hard hat with brim, tool belt with a wrench. */
-			hX(3, 10, -2, 3, P.gold); hX(3, 10, -2, 1, hi(P.gold)); hX(2, 12, -1, 1, shade(P.gold));
-			hX(1, 14, -1, 1, P.gold); hX(1, 14, -1, 1, shade(P.gold));
-			hX(4, 8, 0, 1, shade(P.gold));
-			hX(4, 9, 15, 1, P.border); hX(11, 3, 15, 2, P.steel); hX(12, 1, 14, 1, P.sec);
+			/* Hard hat: gold dome with a shine and a brim. Tool belt with a buckle and a hanging wrench. */
+			edge(5, 14, -6, 4); edge(2, 20, -2, 2);
+			hX(5, 14, -6, 4, P.gold); hX(7, 4, -6, 1, hi(P.gold)); hX(15, 4, -5, 3, shade(P.gold));
+			hX(2, 20, -2, 2, P.gold); hX(2, 20, -2, 1, hi(P.gold)); hX(2, 20, -1, 1, shade(P.gold));
+			hX(6, 12, 25, 1, P.border); hX(11, 2, 25, 1, P.gold);
+			hX(15, 2, 25, 1, P.steel); hX(16, 1, 26, 2, P.steel);
 		}
 		if (c.kit === 'verify') {
-			/* Lab coat over the shirt, glasses, clipboard with a checklist. */
-			hX(4, 8, 10, 7, P.text); hX(4, 1, 10, 7, P.sec); hX(11, 1, 10, 7, P.sec); hX(7, 2, 10, 7, P.sec);
-			hX(4, 1, 16, 1, P.steel); hX(11, 1, 16, 1, P.steel);
+			/* Lab coat over the torso and sleeves, lapels, glasses with glinting lenses, clipboard in the right hand. */
+			hX(6, 12, 15, 11, P.text); hX(6, 1, 15, 11, P.sec); hX(17, 1, 15, 11, P.sec);
+			hX(9, 1, 15, 4, P.sec); hX(14, 1, 15, 4, P.sec);
+			hX(3, 2, 15, 9, P.text); hX(19, 2, 15, 9, P.text);
 			if (fam !== 'side') {
-				hX(4, 3, 5, 3, P.border); hX(9, 3, 5, 3, P.border);
-				hX(5, 1, 6, 1, P.sky); hX(10, 1, 6, 1, P.sky); hX(6, 1, 6, 1, P.sky); hX(11, 1, 6, 1, P.sky);
-				hX(7, 2, 6, 1, P.border);
+				hX(4, 4, 6, 4, P.border); hX(5, 2, 7, 2, P.sky);
+				hX(16, 4, 6, 4, P.border); hX(17, 2, 7, 2, P.sky);
+				hX(8, 8, 7, 1, P.border);
+			} else {
+				hX(5, 4, 6, 4, P.border); hX(6, 2, 7, 2, P.sky);
 			}
-			hX(12, 3, 13, 5, P.sand); hX(13, 1, 14, 3, P.text);
-			hX(13, 1, 14, 1, P.green); hX(13, 1, 16, 1, P.steel);
+			hX(20, 4, 19, 6, P.sand); hX(21, 2, 20, 4, P.text);
+			hX(21, 1, 21, 1, P.green); hX(21, 1, 23, 1, P.blue); hX(20, 4, 19, 1, P.steel);
 		}
 	}
 	function drawResident(c) {
 		const fx = Math.round(c.x), fy = Math.round(c.y);
 		const walk = c.moving ? Math.floor(c.step) % 4 : 0, bob = c.moving && walk % 2 ? 1 : 0;
-		const ox = fx - 8, oy = fy - 23 - bob;
+		const ox = fx - 12, oy = fy - 35 - bob;
 		const typingSwing = reduced ? 0 : (Math.floor(time * 6) % 2 ? 1 : -1);
 		const sw = c.typing && c.sit ? typingSwing : c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
-		g.globalAlpha = 0.35; R(fx - 6, fy - 1, 12, 2, INK); g.globalAlpha = 1;
+		g.globalAlpha = 0.35; R(fx - 9, fy - 1, 18, 2, INK); g.globalAlpha = 1;
 		const { rows, flip, fam } = headFor(c);
-		drawResidentBody(c, ox, oy, walk, sw);
+		drawFigure(ox, oy, { color: c.color, walk, sw, sit: c.sit });
 		sprite(rows, { K: INK, H: c.hair, h: shade(c.hair), l: hi(c.hair), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep }, ox, oy, flip);
 		drawKit(c, ox, oy, fam, flip);
 	}
@@ -795,14 +820,16 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		residents.forEach(c => list.push({ k: c.y, f: () => drawResident(c) }));
 		list.sort((p, q) => p.k - q.k).forEach(o => o.f());
 		drawOrchBubble();
-		residents.forEach(c => { if (c.bubble) drawBubble(Math.round(c.x) - 8 + 2, Math.round(c.y) - 23 - 16, c.bubble.icon); });
+		/* A seated resident's bubble rises above its desk monitor instead of covering the screen. */
+		residents.forEach(c => { if (c.bubble) drawBubble(Math.round(c.x) - 9, Math.round(c.y) - 35 - (c.sit ? 36 : 27), c.bubble.icon); });
 	}
 
 	let last = performance.now();
 	let stopped = false;
 	function frame(now) {
 		if (stopped) return;
-		const dt = Math.min(0.05, (now - last) / 1000);
+		/* The first rAF stamp can precede `last` (taken at construction); a negative dt made a zero-length walk divide 0/0 into NaN. */
+		const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
 		last = now;
 		time += dt;
 		update(dt);

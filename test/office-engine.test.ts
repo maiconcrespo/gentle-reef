@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 // Browser module, loaded as-is. The canvas and frame loop are stubbed below; the engine is driven frame by frame.
-import { OFFICE_CONFIG, createOfficeEngine } from "../web/office-engine.js";
+import { HEAD_MAPS, OFFICE_CONFIG, SPRITE, createOfficeEngine } from "../web/office-engine.js";
 
 // A 2D context that accepts any call and any property write.
 const fakeContext = (): Record<string, unknown> =>
@@ -10,6 +10,16 @@ const fakeContext = (): Record<string, unknown> =>
 		set: (target, key, value) => { target[key as string] = value; return true; },
 	});
 const fakeCanvas = () => ({ width: 0, height: 0, getContext: () => fakeContext() });
+
+// A 2D context that records every fillRect call on the on-screen canvas.
+const recordingContext = (rects: number[][]): Record<string, unknown> =>
+	new Proxy({} as Record<string, unknown>, {
+		get: (target, key) => {
+			if (key === "fillRect") return (...args: number[]) => { rects.push(args); };
+			return key in target ? target[key as string] : () => undefined;
+		},
+		set: (target, key, value) => { target[key as string] = value; return true; },
+	});
 
 const g = globalThis as Record<string, unknown>;
 let frames: Array<(now: number) => void> = [];
@@ -111,5 +121,30 @@ describe("resident sprites in the engine", () => {
 		engine.destroy();
 		run(10);
 		assert.deepEqual(departed, []);
+	});
+});
+
+describe("sprite size", () => {
+	it("draws 24x36 figures whose head maps are 24 columns by 14 rows", () => {
+		assert.deepEqual(SPRITE, { w: 24, h: 36, head: 14 });
+		for (const [name, rows] of Object.entries(HEAD_MAPS)) {
+			assert.equal(rows.length, SPRITE.head, `${name} head rows`);
+			for (const row of rows) assert.equal(row.length, SPRITE.w, `${name} head row width`);
+		}
+	});
+
+	it("a resident walking in from the door draws only finite rectangles", () => {
+		// The first animation frame can arrive before the engine's start time; a negative step once turned walkers into NaN.
+		const rects: number[][] = [];
+		const engine = createOfficeEngine({ width: 0, height: 0, getContext: () => recordingContext(rects) }, OFFICE_CONFIG);
+		engine.setScene(view([resident("t1", seat("desk", 0), "running"), resident("t2", seat("bench", 0), "queued")]));
+		// Deliver the first frame stamped before the engine started, as a browser can.
+		const first = frames;
+		frames = [];
+		for (const frame of first) frame(performance.now() - 1000);
+		run(3);
+		engine.destroy();
+		assert.ok(rects.length > 0);
+		assert.ok(rects.every(args => args.every(Number.isFinite)), "no drawn rectangle has a NaN coordinate");
 	});
 });
