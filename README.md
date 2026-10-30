@@ -1,5 +1,7 @@
 # Gentle Office (gentle-reef)
 
+[![test](https://github.com/maiconcrespo/gentle-reef/actions/workflows/test.yml/badge.svg)](https://github.com/maiconcrespo/gentle-reef/actions/workflows/test.yml)
+
 **Watch your coding agent work.** Gentle Office is a pixel-art office that shows what [gentle-shell](https://github.com/Gentleman-Programming/gentle-shell) is doing in real time: the orchestrator thinks at its whiteboard, subagents walk in and type at their desks, the context window drains like a coffee pot, and questions for you pop up as game dialogs.
 
 It is a [Pi](https://github.com/earendil-works/pi) package. It reads the session's real events, so there is no fake data.
@@ -67,11 +69,11 @@ This is the target design for the terminal stage (`design/terminal-office/02-sta
 - [x] Event contract, adapter, hub and the local window server
 - [x] Web office: full, compact and story layouts, narration, idle crew, props, ask dialog
 - [x] `gentle-reef` launcher and per-session modes
-- [ ] **Terminal stage** built from the design (T7). This is the next milestone.
-- [ ] Review inspectors that visit during native review (T4)
-- [ ] Judgment-day judges debating at their table (T5)
-- [ ] A boss character you move with the keyboard, which sends prompts over an authenticated channel (T8, security-sensitive)
-- [ ] Music radio tied to gentle-shell music
+- [ ] **Terminal stage** built from the design (T7). This is the next milestone. [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
+- [ ] Review inspectors that visit during native review (T4) [#2](https://github.com/maiconcrespo/gentle-reef/issues/2)
+- [ ] Judgment-day judges debating at their table (T5) [#3](https://github.com/maiconcrespo/gentle-reef/issues/3)
+- [ ] A boss character you move with the keyboard, which sends prompts over an authenticated channel (T8, security-sensitive) [#4](https://github.com/maiconcrespo/gentle-reef/issues/4)
+- [ ] Music radio tied to gentle-shell music [#5](https://github.com/maiconcrespo/gentle-reef/issues/5)
 
 ## Contributing
 
