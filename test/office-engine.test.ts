@@ -569,6 +569,52 @@ describe("idle staff: an extra of a busy role walks in from the door", () => {
 	});
 });
 
+describe("review inspectors: where they stand (T1, S1-S3)", () => {
+	// Each inspector has a check spot by the door and a tour of two desks. The tour stops stand beside a desk, never on a resident's seat.
+	const routes = () => {
+		const found = (engineModule as unknown as { INSPECTOR?: { check: Array<{ tx: number; ty: number }>; tours: Array<Array<{ tx: number; ty: number; desk: number }>> } }).INSPECTOR;
+		assert.ok(found, "INSPECTOR routes are exported");
+		return found;
+	};
+	const cfg = OFFICE_CONFIG as unknown as { rows: number; cols: number; door: { x: number }; desks: Array<{ x: number; y: number; face: string }>; verifyDesks: Array<{ x: number; y: number; face: string }> };
+	const blocked = walkableGrid(OFFICE_CONFIG as never);
+	/* A desk's seat is the tile in front of it: north of a face-down desk, south of a face-up one. */
+	const seatTiles = () => [...cfg.desks, ...cfg.verifyDesks].map(d => ({ tx: d.x, ty: d.face === "down" ? d.y - 1 : d.y + 1 }));
+
+	it("every stop stands on walkable floor, and no stop is a resident's seat", () => {
+		const r = routes();
+		const stops = [...r.check, ...r.tours.flat()];
+		for (const s of stops) {
+			assert.equal(blocked[s.ty][s.tx], false, `(${s.tx},${s.ty}) is floor`);
+			assert.ok(!seatTiles().some(t => t.tx === s.tx && t.ty === s.ty), `(${s.tx},${s.ty}) is not a seat`);
+		}
+		assert.equal(new Set(stops.map(s => `${s.tx},${s.ty}`)).size, stops.length, "no two inspectors share a stop");
+	});
+
+	it("every stop is reachable from the door", () => {
+		const seen = new Set([`${cfg.door.x},${cfg.rows - 1}`]);
+		const queue = [[cfg.door.x, cfg.rows - 1]];
+		while (queue.length) {
+			const [x, y] = queue.shift()!;
+			for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+				const nx = x + dx, ny = y + dy, key = `${nx},${ny}`;
+				if (nx < 0 || ny < 0 || nx >= cfg.cols || ny >= cfg.rows || blocked[ny][nx] || seen.has(key)) continue;
+				seen.add(key);
+				queue.push([nx, ny]);
+			}
+		}
+		const r = routes();
+		for (const s of [...r.check, ...r.tours.flat()]) assert.ok(seen.has(`${s.tx},${s.ty}`), `(${s.tx},${s.ty}) is reachable`);
+	});
+
+	it("the two tours together check each of the four pod desks once", () => {
+		const r = routes();
+		assert.equal(r.tours.length, 2);
+		for (const tour of r.tours) assert.equal(tour.length, 2, "two desks per inspector");
+		assert.deepEqual(r.tours.flat().map(s => s.desk).sort(), [0, 1, 2, 3]);
+	});
+});
+
 describe("office floor plan (S17): rooms, lounge crew and short walks", () => {
 	type Cfg = { cols: number; rows: number; tile: number; desks: Array<{ x: number; y: number; face: string }>; verifyDesks: Array<{ x: number; y: number; face: string }>; lounge: Record<string, { x: number; y: number; face: string }>; rooms: Array<{ name: string; x: number; y: number; w: number; h: number }>; plants: Array<{ x: number; y: number }>; front: { x: number; y: number }; whiteboard: { x: number; w: number }; coffee: { x: number; y: number; w: number }; door: { x: number; w: number }; bench: { x: number; w: number } };
 	const CFG = OFFICE_CONFIG as unknown as Cfg;

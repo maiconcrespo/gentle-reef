@@ -66,6 +66,8 @@ export function reduceScene(state, action) {
       return applyEvent(state, action);
     case "departed":
       return applyDeparture(state, String(action.id));
+    case "review-gone":
+      return applyReviewGone(state);
     case "note":
       return pushLog(state, { kind: typeof action.kind === "string" ? action.kind : "info", text: String(action.text), at: action.at ?? 0 });
     default:
@@ -249,6 +251,11 @@ function applyReview(state, event, at) {
     default:
       return state;
   }
+}
+
+/** The page reports the inspectors gone once they have walked out. Only a leaving review ends, and its lens names go with it. */
+function applyReviewGone(state) {
+  return state.review.phase === "leaving" ? { ...state, review: initialReview() } : state;
 }
 
 /** The session went idle (agent_settled): inspectors on site leave, so they never stay forever (S4). */

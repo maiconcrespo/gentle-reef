@@ -93,6 +93,16 @@ export function walkableGrid(cfg, props = FEATURE_PROPS) {
 	return block;
 }
 
+/* Review inspectors (T1, S1-S3): each waits at its check spot by the door, then tours two desks. A tour stop names the desk it checks, and stands
+   beside that desk, never on a resident's seat. The two tours together cover the four pod desks. */
+export const INSPECTOR = {
+	check: [{ tx: 9, ty: 12, face: 'up' }, { tx: 13, ty: 12, face: 'up' }],
+	tours: [
+		[{ tx: 8, ty: 5, face: 'right', desk: 2 }, { tx: 14, ty: 6, face: 'left', desk: 0 }],
+		[{ tx: 14, ty: 9, face: 'left', desk: 1 }, { tx: 8, ty: 9, face: 'right', desk: 3 }]
+	]
+};
+
 const P = {
 	bg: '#060407', panel: '#100A0F', user: '#2A1523', sel: '#28121E', border: '#563040',
 	text: '#F6EFF3', muted: '#A78E9B', dim: '#76616B', gold: '#E0C27A', blue: '#A9C7EE', sky: '#C4DAF6',

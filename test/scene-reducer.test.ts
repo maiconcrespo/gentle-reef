@@ -356,6 +356,18 @@ describe("review inspectors: the native review lifecycle (T1, S2-S4)", () => {
 		assert.deepEqual(top(run(arrive(), verdict("correction"))), { kind: "fail", text: "review correction required !", at });
 	});
 
+	it("the page reports the inspectors gone once they walk out, and only then is the review idle again (S4)", () => {
+		const gone = { type: "review-gone" };
+		assert.equal(phaseOf(run(arrive(), verdict("correction"), gone)), "idle");
+		assert.equal(phaseOf(run(arrive(), gone)), "arriving", "a report while they are still on site changes nothing");
+		assert.equal(phaseOf(run(arrive(), verdict("correction"), arrive(), gone)), "arriving", "a new review after the leave report keeps them");
+	});
+
+	it("the gone report clears the lens names, so the next review starts unnamed", () => {
+		const state = run(arrive({ names: ["risk"] }), verdict("correction"), { type: "review-gone" });
+		assert.deepEqual(sceneView(state).review.labels, ["Inspector A", "Inspector B"]);
+	});
+
 	it("review events leave the orchestrator, the desks and the residents alone", () => {
 		const view = sceneView(run(arrive(), inspect(), verdict("approved")));
 		assert.equal(view.orchestrator, "idle");
