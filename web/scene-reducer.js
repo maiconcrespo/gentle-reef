@@ -19,6 +19,11 @@ const SEATED_AGENT_STATUSES = new Set(["running", "waiting"]);
 // Residents get a desk and a sprite. Inspectors and judges are logged only until T4/T5.
 const RESIDENT_ROLES = new Set(["explore", "worker", "verify"]);
 const ROLES = new Set(["explore", "worker", "verify", "inspector", "judge"]);
+// Idle staff (S16): one per resident role waits in the lounge by the coffee counter until an agent of its role takes a desk.
+export const STAFF_ROLES = ["explore", "worker", "verify"];
+const FINISHED_AGENT_STATUSES = new Set(["completed", "failed", "cancelled", "timed_out"]);
+const BREAK_STATUS = "on break";
+const emptyLounge = () => Object.fromEntries(STAFF_ROLES.map((role) => [role, null]));
 
 // Where the orchestrator stands for each state (S6): whiteboard while working, floor while idle, front when it needs you.
 const INTENT_BY_STATE = { thinking: "whiteboard", tool: "whiteboard", idle: "floor", "waiting-user": "front" };
@@ -36,7 +41,8 @@ export function initialScene(deskCount = DESK_COUNT) {
     compaction: null,
     agents: [],
     // desks[i] is the agent id at desk i (or null). bench keeps queued agents in arrival order.
-    seats: { desks: Array(deskCount).fill(null), bench: [] },
+    // lounge[role] is the agent holding that role's staff member (its claim), or null while the staff member idles in the lounge.
+    seats: { desks: Array(deskCount).fill(null), bench: [], lounge: emptyLounge() },
     // toolStarts[name] is when that tool last started, so its end can log one line with the duration.
     toolStarts: {},
     // features[feature].until is when its prop goes idle again; running[toolName] is the feature of a tool still in flight.
@@ -81,7 +87,7 @@ function applySnapshot(state, { snapshot }) {
     agents.push({ ...agent, instant: previous ? previous.instant : true });
     if (isResident(agent) && isActive(agent) && seatOf(seats, agent.id) === null) seats = { ...seats, bench: [...seats.bench, agent.id] };
   }
-  seats = settle(seats, agents);
+  seats = withClaims(state.seats, settle(seats, agents), agents);
   return {
     ...state,
     orchestrator: orchestratorOf(snapshot.orchestrator),
@@ -154,7 +160,7 @@ function applySubagent(state, value, at) {
     // The identity turned out to be a non-resident (inspector or judge): it gives its seat back.
     seats = removeSeat(seats, agent.id);
   }
-  seats = settle(seats, agents);
+  seats = withClaims(state.seats, settle(seats, agents), agents);
   // Finished agents stay only while they still hold a seat (they are leaving); the rest are dropped.
   const kept = agents.filter((item) => isActive(item) || seatOf(seats, item.id) !== null);
   const next = { ...state, agents: kept, seats };
@@ -166,7 +172,7 @@ function applySubagent(state, value, at) {
 function applyDeparture(state, id) {
   if (seatOf(state.seats, id) === null) return state;
   const agents = state.agents.filter((agent) => agent.id !== id);
-  return { ...state, agents, seats: settle(removeSeat(state.seats, id), agents) };
+  return { ...state, agents, seats: withClaims(state.seats, settle(removeSeat(state.seats, id), agents), agents) };
 }
 
 /** A feature event is sent when its tool starts: the prop lights and stays lit while that tool runs. */
@@ -216,14 +222,34 @@ export function seatOf(seats, id) {
 }
 
 function removeSeat(seats, id) {
-  return { desks: seats.desks.map((item) => (item === id ? null : item)), bench: seats.bench.filter((item) => item !== id) };
+  return { ...seats, desks: seats.desks.map((item) => (item === id ? null : item)), bench: seats.bench.filter((item) => item !== id) };
 }
 
 function pruneSeats(seats, keep) {
   return {
+    ...seats,
     desks: seats.desks.map((item) => (item !== null && keep.has(item) ? item : null)),
     bench: seats.bench.filter((item) => keep.has(item)),
   };
+}
+
+/**
+ * Staff claims (S16). A claim is held by an agent sitting at a desk, so it ends when that seat is freed (the agent has walked back to the lounge).
+ * A resident of a staff role claims its staff member the first time it is seated, from the door, the bench or a snapshot.
+ * Extras of a role whose staff member is busy take a desk or the bench as before.
+ */
+function withClaims(before, seats, agents) {
+  const lounge = {};
+  for (const role of STAFF_ROLES) {
+    const holder = before.lounge[role];
+    lounge[role] = holder !== null && seats.desks.includes(holder) ? holder : null;
+  }
+  for (const id of seats.desks) {
+    if (id === null || before.desks.includes(id)) continue;
+    const agent = agents.find((item) => item.id === id);
+    if (agent && agent.claims && lounge[agent.role] === null) lounge[agent.role] = id;
+  }
+  return { ...seats, lounge };
 }
 
 /** Moves the first sittable bench agent into each free desk, in bench order. Seated agents never move. */
@@ -237,7 +263,7 @@ function settle(seats, agents) {
     desks[index] = next;
     bench = bench.filter((id) => id !== next);
   }
-  return { desks, bench };
+  return { ...seats, desks, bench };
 }
 
 function orchestratorOf(source) {
@@ -255,6 +281,8 @@ function pickAgent(value) {
     role: ROLES.has(value.role) ? value.role : "worker",
     label: typeof value.label === "string" ? value.label : "",
     status: value.status,
+    // Only an explicit resident role claims a staff member; an unrecognised role takes a desk as before but never claims.
+    claims: RESIDENT_ROLES.has(value.role),
   };
 }
 
@@ -296,6 +324,8 @@ export function sceneView(state) {
       seat: seatOf(state.seats, agent.id),
       leaving: !isActive(agent),
       instant: agent.instant,
+      // The staff member of this role is this agent: it walks from the lounge and walks back to it.
+      claimed: state.seats.lounge[agent.role] === agent.id,
     }))
     .filter((agent) => agent.seat !== null);
   return {
@@ -308,12 +338,24 @@ export function sceneView(state) {
     potLevel: percent === null ? 1 : Math.round((1 - percent / 100) * 10000) / 10000,
     activeAgents: state.agents.filter(isActive).length,
     agents,
+    // Idle staff: present in the lounge, or claimed by the agent named here.
+    staff: STAFF_ROLES.map((role) => ({ role, present: state.seats.lounge[role] === null, claimedBy: state.seats.lounge[role] })),
     // Per prop: `running` while one of its tools is in flight, and `until` for the linger. Use featureActive(entry, now).
     features: Object.fromEntries(FEATURE_NAMES.map((name) => [name, {
       running: Object.values(state.running ?? {}).includes(name),
       until: state.features?.[name]?.until ?? 0,
     }])),
   };
+}
+
+/**
+ * The team list: residents first (as drawn), then each idle staff member on break. Pure over sceneView, so the page and tests read the same rows.
+ */
+export function teamRows(view) {
+  return [
+    ...view.agents.map((agent) => ({ kind: "resident", id: agent.id, role: agent.role, label: agent.label, status: agent.status })),
+    ...view.staff.filter((item) => item.present).map((item) => ({ kind: "staff", role: item.role, status: BREAK_STATUS })),
+  ];
 }
 
 /* ---------- Narrator (T14): contract events to dialog lines, and the dialog queue. ---------- */
@@ -364,9 +406,10 @@ const say = (speaker, text, tone = "info") => ({ speaker, text, tone });
 
 /**
  * One contract event in, the lines it produces out. `state` is the narrator's own memory (last orchestrator state,
- * last status per subagent, tool start times). Returns { state, lines }.
+ * last status per subagent, tool start times). `context.claimant` says the agent holds its role's staff member, so a finish
+ * narrates the walk back to the coffee. Returns { state, lines }.
  */
-export function narrate(state, event, at = 0) {
+export function narrate(state, event, at = 0, context = {}) {
   if (!isRecord(event) || event.v !== CONTRACT_VERSION) return { state, lines: [] };
   switch (event.type) {
     case "orchestrator":
@@ -380,7 +423,7 @@ export function narrate(state, event, at = 0) {
     case "compaction":
       return narrateCompaction(state, event.phase);
     case "subagent":
-      return narrateSubagent(state, event);
+      return narrateSubagent(state, event, context);
     default:
       return { state, lines: [] };
   }
@@ -424,7 +467,7 @@ function narrateCompaction(state, phase) {
   return { state, lines: [] };
 }
 
-function narrateSubagent(state, event) {
+function narrateSubagent(state, event, context) {
   if (typeof event.id !== "string" || !Object.hasOwn(AGENT_SENTENCE, event.status)) return { state, lines: [] };
   const previous = Object.hasOwn(state.statuses, event.id) ? state.statuses[event.id] : undefined;
   const next = { ...state, statuses: { ...state.statuses, [event.id]: event.status } };
@@ -432,7 +475,12 @@ function narrateSubagent(state, event) {
   const sentence = AGENT_SENTENCE[event.status];
   const text = previous === undefined ? `arrived, ${sentence}` : sentence;
   const tone = event.status === "completed" ? "ok" : AGENT_BAD.has(event.status) ? "fail" : "info";
-  return { state: next, lines: [say(speakerOf(event), text, tone)] };
+  const lines = [say(speakerOf(event), text, tone)];
+  // A claimant walks back to the lounge: its staff member narrates the break (S16).
+  if (context.claimant === true && FINISHED_AGENT_STATUSES.has(event.status)) {
+    lines.push(say(String(event.role).toUpperCase(), "back to the coffee.", "info"));
+  }
+  return { state: next, lines };
 }
 
 /** The label the player knows the agent by; the role stands in when the label is empty. */

@@ -1,6 +1,6 @@
 /* Gentle Office engine: the 32-bit pixel-art office from design/agent-office/01-overworld-hq.html.
    Driven by a scene view (see scene-reducer.js sceneView). Resident subagents (T3) take the four desks and
-   a waiting bench by the door; each desk monitor shows its agent's work while it runs. Browser module: no imports, no network. */
+   a waiting bench by the door; each desk monitor shows its agent's work while it runs. Idle staff (S16) chat by the coffee counter until an agent of their role takes a desk. Browser module: no imports, no network. */
 
 export const OFFICE_CONFIG = {
 	cols: 20, rows: 13, tile: 24,
@@ -9,7 +9,9 @@ export const OFFICE_CONFIG = {
 	rug: { x: 10, y: 5, w: 7, h: 6 }, window: { x: 1, w: 3 }, shelf: 13, clock: 6, door: { x: 9, w: 2 },
 	plants: [{ x: 0, y: 2 }, { x: 19, y: 2 }, { x: 0, y: 12 }, { x: 19, y: 12 }], rack: { x: 19, y: 6 },
 	orchStart: { x: 9, y: 5 }, front: { x: 8, y: 6 },
-	bench: { x: 2, w: 6 }
+	bench: { x: 2, w: 6 },
+	// Idle staff (S16): one lounge spot per role by the coffee counter. They block walkers, and a claimant walks back to its own spot.
+	lounge: { explore: { x: 14, y: 6, face: 'right' }, worker: { x: 15, y: 6, face: 'down' }, verify: { x: 16, y: 6, face: 'left' } }
 };
 
 /* Story layout (T14): the room is shown zoomed by a whole number, so pixels stay square. Taller windows zoom in further, never past 4x. */
@@ -31,7 +33,7 @@ export const FEATURE_PROPS = [
 	{ feature: 'codegraph', x: 15, y: 11, w: 2, h: 2 }
 ];
 
-/* The grid a figure walks on: true where it cannot stand. Walls, furniture and feature props block; the rug, floor and door do not. */
+/* The grid a figure walks on: true where it cannot stand. Walls, furniture, feature props and the lounge spots block; the rug, floor and door do not. */
 export function walkableGrid(cfg, props = FEATURE_PROPS) {
 	const block = Array.from({ length: cfg.rows }, (_, y) => Array(cfg.cols).fill(y < 2));
 	const mark = (x, y, w, h) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (block[j] && i < cfg.cols) block[j][i] = true; };
@@ -41,6 +43,7 @@ export function walkableGrid(cfg, props = FEATURE_PROPS) {
 	cfg.plants.forEach(p => mark(p.x, p.y, 1, 1));
 	mark(cfg.rack.x, cfg.rack.y, 1, 2);
 	mark(cfg.bench.x, cfg.rows - 1, cfg.bench.w, 1);
+	Object.values(cfg.lounge).forEach(s => mark(s.x, s.y, 1, 1));
 	props.forEach(p => mark(p.x, p.y, p.w, p.h));
 	return block;
 }
@@ -201,7 +204,8 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 			if (x === tx && y === ty) break;
 			for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
 				const nx = x + dx, ny = y + dy;
-				if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || block[ny][nx]) continue;
+				// A blocked lounge spot can be the target (a walker ends on it) but never a tile to pass through.
+				if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || (block[ny][nx] && !(nx === tx && ny === ty))) continue;
 				const k = key(nx, ny);
 				if (prev.has(k)) continue;
 				prev.set(k, [x, y]); q.push([nx, ny]);
@@ -822,9 +826,11 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	const lookFor = a => {
 		if (a.role === 'explore') return { color: P.blue, hair: P.gold, kit: 'explore' };
 		if (a.role === 'verify') return { color: P.purple, hair: P.border, kit: 'verify' };
-		return strHash(a.id) % 2 === 0 ? { color: P.green, hair: P.purple, kit: 'worker' } : { color: P.sky, hair: P.steel, kit: 'worker' };
+		// A worker that takes the lounge's staff member keeps the staff look, so it reads as the same person (S16).
+		return a.claimed || strHash(a.id) % 2 === 0 ? { color: P.green, hair: P.purple, kit: 'worker' } : { color: P.sky, hair: P.steel, kit: 'worker' };
 	};
 	const seatSpot = seat => (seat.zone === 'desk' ? deskSpot(cfg.desks[seat.index]) : benchSpot(seat.index));
+	const loungeSpot = role => ({ tx: cfg.lounge[role].x, ty: cfg.lounge[role].y, face: cfg.lounge[role].face });
 	const sameSeat = (a, b) => !!a && !!b && a.zone === b.zone && a.index === b.index;
 	/* Reduced motion: an agent snaps to its seat. Otherwise it walks there. */
 	function walkTo(c, s) {
@@ -843,7 +849,8 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	}
 	function startExit(c) {
 		c.exiting = true; c.bubble = null; c.sit = false;
-		const exit = { tx: cfg.door.x, ty: ROWS - 1, face: 'down' };
+		/* A claimant walks back to its lounge spot (S16); anyone else leaves by the door. */
+		const exit = c.claimed && cfg.lounge[c.role] ? loungeSpot(c.role) : { tx: cfg.door.x, ty: ROWS - 1, face: 'down' };
 		if (reduced) { placeAt(c, exit); depart(c); return; }
 		goTo(c, exit, () => depart(c));
 	}
@@ -857,15 +864,21 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		for (const a of agents) {
 			seen.add(a.id);
 			let c = residents.get(a.id);
+			// A resident that takes its role's staff member starts again from the lounge (S16); the bench figure it replaces is dropped.
+			if (c && a.claimed && !c.claimed && !c.leaving) { residents.delete(a.id); c = undefined; }
 			if (!c) {
-				c = { id: a.id, seat: null, x: 0, y: 0, path: [], face: 'down', sit: false, moving: false, step: 0, target: null, onArrive: null, bubble: null, typing: false, leaving: false, exiting: false, leaveAt: 0, ...lookFor(a) };
+				c = { id: a.id, role: a.role, claimed: !!a.claimed, seat: null, x: 0, y: 0, path: [], face: 'down', sit: false, moving: false, step: 0, target: null, onArrive: null, bubble: null, typing: false, leaving: false, exiting: false, leaveAt: 0, ...lookFor(a) };
 				residents.set(a.id, c);
 				if (a.instant || reduced) placeAt(c, seatSpot(a.seat));
-				else { c.x = FX(cfg.door.x); c.y = FY(ROWS - 1); walkTo(c, seatSpot(a.seat)); }
+				else {
+					// A claimant walks from its role's lounge spot; any other agent walks in from the door.
+					const start = a.claimed && cfg.lounge[a.role] ? loungeSpot(a.role) : { tx: cfg.door.x, ty: ROWS - 1 };
+					c.x = FX(start.tx); c.y = FY(start.ty); walkTo(c, seatSpot(a.seat));
+				}
 			} else if (!c.leaving && !sameSeat(c.seat, a.seat)) {
 				walkTo(c, seatSpot(a.seat));
 			}
-			c.seat = a.seat;
+			c.seat = a.seat; c.claimed = !!a.claimed;
 			Object.assign(c, lookFor(a));
 			if (a.leaving && !c.leaving) startLeaving(c, a.status);
 			if (!c.leaving) c.bubble = bubbleFor(a);
@@ -926,12 +939,14 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		const walk = c.moving ? Math.floor(c.step) % 4 : 0, bob = c.moving && walk % 2 ? 1 : 0;
 		const ox = fx - 12, oy = fy - 35 - bob;
 		const typingSwing = reduced ? 0 : (Math.floor(time * 6) % 2 ? 1 : -1);
-		const sw = c.typing && c.sit ? typingSwing : c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
+		/* A sip lifts the right hand to the mug. */
+		const sw = c.sipping ? 3 : c.typing && c.sit ? typingSwing : c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
 		g.globalAlpha = 0.35; R(fx - 9, fy - 1, 18, 2, INK); g.globalAlpha = 1;
 		const { rows, flip, fam } = headFor(c);
 		drawFigure(ox, oy, { color: c.color, walk, sw, sit: c.sit });
 		sprite(rows, { K: INK, H: c.hair, h: shade(c.hair), l: hi(c.hair), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep }, ox, oy, flip);
 		drawKit(c, ox, oy, fam, flip);
+		if (c.sipping) { R(ox + 20, oy + 18, 4, 4, P.sand); R(ox + 20, oy + 18, 4, 1, P.gold); }
 	}
 	/* Desk monitor while its agent runs: a small code screen in the agent's colour, flickering like typing. */
 	function drawWorkingScreen(x, y, color, i) {
@@ -941,6 +956,27 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		if (tick % 2 === 0) R(x + 2, y + 12, 3, 1, color);
 	}
 
+	/* ---------- lounge staff (S16): one idle staff member per role chats by the coffee counter ---------- */
+	/* A staff member is drawn in its resident look while its role is unclaimed. Chat and sips are clock functions, so they hold no state. */
+	const CHAT_EVERY = 3, CHAT_FOR = 2.2;
+	const SIP_EVERY = 9, SIP_FOR = 0.9;
+	const SIP_OFFSET = { explore: 1.5, worker: 4.5, verify: 7 };
+	const staffFigures = Object.keys(cfg.lounge).map(role => {
+		const spot = cfg.lounge[role], id = `staff-${role}`;
+		return { id, role, x: FX(spot.x), y: FY(spot.y), face: spot.face, moving: false, sit: false, typing: false, sipping: false, step: 0, ...lookFor({ id, role, claimed: true }) };
+	});
+	/* The staff members the scene reports present this frame. */
+	let presentStaff = [];
+	/* A sip raises the mug for SIP_FOR seconds every SIP_EVERY; none under reduced motion. */
+	function updateStaff() {
+		for (const f of staffFigures) f.sipping = !reduced && ((time + SIP_OFFSET[f.role]) % SIP_EVERY) < SIP_FOR;
+	}
+	/* One speech bubble at a time, passed round the staff in turn. None under reduced motion. */
+	function chattingStaff() {
+		if (reduced || presentStaff.length === 0 || time % CHAT_EVERY >= CHAT_FOR) return null;
+		return presentStaff[Math.floor(time / CHAT_EVERY) % presentStaff.length];
+	}
+
 	/* ---------- scene input and frame update ---------- */
 	function setScene(next) {
 		view = next;
@@ -948,6 +984,8 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		orch.bubble = next.bubble ? { icon: next.bubble, t: Infinity } : null;
 		potTarget = next.potLevel;
 		syncResidents(next.agents || []);
+		const present = new Set((next.staff || []).filter(s => s.present).map(s => s.role));
+		presentStaff = staffFigures.filter(f => present.has(f.role));
 		deskWorking = cfg.desks.map((_, i) => {
 			const owner = (next.agents || []).find(a => a.seat && a.seat.zone === 'desk' && a.seat.index === i && a.status === 'running' && !a.leaving);
 			return owner ? lookFor(owner).color : null;
@@ -969,6 +1007,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		if (orch.bubble) { orch.bubble.t -= dt; if (orch.bubble.t <= 0) orch.bubble = null; }
 		updateOrch(dt);
 		updateResidents(dt);
+		updateStaff();
 		if (camera) updateCamera(dt);
 		potShown += (potTarget - potShown) * Math.min(1, dt * 1.2);
 		brewingNow = !!(view && view.brewing) && orch.mode === 'brew';
@@ -993,10 +1032,13 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		FEATURE_PROPS.forEach(p => list.push({ k: (p.y + p.h) * T - 1, f: () => PROP_DRAWERS[p.feature](p, lit[p.feature]) }));
 		list.push({ k: orch.y, f: () => drawOrchestrator(orch) });
 		residents.forEach(c => list.push({ k: c.y, f: () => drawResident(c) }));
+		presentStaff.forEach(f => list.push({ k: f.y, f: () => drawResident(f) }));
 		list.sort((p, q) => p.k - q.k).forEach(o => o.f());
 		drawOrchBubble();
 		/* A seated resident's bubble rises above its desk monitor. A standing one (bench queue) sits just over its head, clear of the desk chairs. */
 		residents.forEach(c => { if (c.bubble) drawBubble(Math.round(c.x) - 9, Math.round(c.y) - 35 - (c.sit ? 36 : 14), c.bubble.icon); });
+		const speaker = chattingStaff();
+		if (speaker) drawBubble(Math.round(speaker.x) - 9, Math.round(speaker.y) - 35 - 14, 'dots');
 	}
 
 	/* ---------- story camera (T14) ---------- */

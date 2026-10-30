@@ -198,3 +198,114 @@ describe("snapshot restores the room", () => {
 		assert.deepEqual(sceneView(state).agents, []);
 	});
 });
+
+describe("lounge staff (S16): a running agent claims the staff member of its role", () => {
+	const staffOf = (state: Scene, role: string) => sceneView(state).staff.find((item: { role: string }) => item.role === role);
+	const claimOf = (state: Scene, id: string) => sceneView(state).agents.find((agent: { id: string }) => agent.id === id)?.claimed;
+
+	it("a running subagent claims the staff member of its role and takes the first free desk", () => {
+		const state = run(sub("t1", "gentle-ai-explore", "running"));
+		assert.deepEqual(staffOf(state, "explore"), { role: "explore", present: false, claimedBy: "t1" });
+		assert.deepEqual(staffOf(state, "worker"), { role: "worker", present: true, claimedBy: null });
+		assert.deepEqual(seatOf(state, "t1"), { zone: "desk", index: 0 });
+		assert.equal(claimOf(state, "t1"), true);
+	});
+
+	it("a queued agent does not claim; it claims once it starts with a desk free", () => {
+		assert.equal(staffOf(run(sub("t1", "gentle-ai-verify", "queued")), "verify")?.present, true);
+		const started = run(sub("t1", "gentle-ai-verify", "queued"), sub("t1", "gentle-ai-verify", "running"));
+		assert.equal(staffOf(started, "verify")?.claimedBy, "t1");
+	});
+
+	it("a second agent of the same role is an extra: no claim, it takes the next desk", () => {
+		const state = run(sub("t1", "gentle-ai-worker", "running"), sub("t2", "gentle-ai-worker", "running"));
+		assert.equal(staffOf(state, "worker")?.claimedBy, "t1");
+		assert.deepEqual(seatOf(state, "t2"), { zone: "desk", index: 1 });
+		assert.equal(claimOf(state, "t2"), false);
+	});
+
+	it("unknown-role agents take a desk but never claim a staff member", () => {
+		const unknown = { type: "event", seq: 1, at, event: { v: 1, type: "subagent", id: "t1", agent: "mystery", role: "bogus", label: "", status: "running" } };
+		const state = run(unknown);
+		assert.deepEqual(seatOf(state, "t1"), { zone: "desk", index: 0 });
+		assert.ok(sceneView(state).staff.every((item: { present: boolean }) => item.present), "every staff member is still in the lounge");
+	});
+
+	it("a bench agent that gets a desk for the first time claims a staff member that is free", () => {
+		const state = run(
+			sub("t1", "gentle-ai-explore", "running"),
+			sub("t2", "gentle-ai-verify", "running"),
+			sub("t3", "gentle-ai-worker", "running"),
+			sub("t4", "gentle-ai-worker", "running"),
+			sub("t5", "gentle-ai-explore", "running"),
+			sub("t1", "gentle-ai-explore", "completed"),
+			departed("t1"),
+		);
+		assert.deepEqual(seatOf(state, "t5"), { zone: "desk", index: 0 });
+		assert.equal(staffOf(state, "explore")?.claimedBy, "t5");
+	});
+
+	it("finishing the claimant keeps its desk and claim while it walks back, then frees both on departure", () => {
+		const finishing = run(sub("t1", "gentle-ai-explore", "running"), sub("t1", "gentle-ai-explore", "completed"));
+		assert.deepEqual(seatOf(finishing, "t1"), { zone: "desk", index: 0 }, "still seated while it walks");
+		assert.equal(staffOf(finishing, "explore")?.claimedBy, "t1");
+		assert.equal(claimOf(finishing, "t1"), true, "it walks back to the lounge, not the door");
+		const back = reduceScene(finishing, departed("t1"));
+		assert.deepEqual(staffOf(back, "explore"), { role: "explore", present: true, claimedBy: null });
+		assert.equal(back.seats.desks[0], null, "the desk is free");
+	});
+
+	it("a failed, cancelled or timed-out claimant walks back to the lounge as well", () => {
+		for (const status of ["failed", "cancelled", "timed_out"]) {
+			const state = run(sub("t1", "gentle-ai-worker", "running"), sub("t1", "gentle-ai-worker", status), departed("t1"));
+			assert.deepEqual(staffOf(state, "worker"), { role: "worker", present: true, claimedBy: null }, status);
+		}
+	});
+
+	it("an extra leaves by the door and does not release the staff member's claim", () => {
+		const state = run(sub("t1", "gentle-ai-worker", "running"), sub("t2", "gentle-ai-worker", "running"), sub("t2", "gentle-ai-worker", "completed"), departed("t2"));
+		assert.equal(staffOf(state, "worker")?.claimedBy, "t1");
+		assert.equal(seatOf(state, "t2"), undefined);
+	});
+
+	it("a claim always points at an agent that holds a desk, across events and snapshots", () => {
+		const script: unknown[] = [
+			sub("t1", "gentle-ai-explore", "running"),
+			sub("t2", "gentle-ai-worker", "running"),
+			sub("t3", "gentle-ai-worker", "running"),
+			snapshot([{ id: "t3", agent: "gentle-ai-worker", role: "worker", label: "job", status: "running" }]),
+			sub("t4", "gentle-ai-explore", "running"),
+			sub("t1", "gentle-ai-explore", "completed"),
+			departed("t1"),
+			sub("t5", "gentle-ai-explore", "running"),
+			departed("t2"),
+		];
+		let state = initialScene();
+		for (const action of script) {
+			state = reduceScene(state, action as never);
+			for (const role of ["explore", "worker", "verify"]) {
+				const id = staffOf(state, role)?.claimedBy;
+				if (id !== null && id !== undefined) assert.ok(state.seats.desks.includes(id), `${role} claim ${id} sits at a desk`);
+			}
+		}
+	});
+
+	it("snapshot: a restored claimant sits at its desk already claimed, with no walk-in", () => {
+		const state = reduceScene(initialScene(), snapshot([{ id: "t1", agent: "gentle-ai-explore", role: "explore", label: "map", status: "running" }]));
+		assert.equal(staffOf(state, "explore")?.claimedBy, "t1");
+		assert.deepEqual(seatOf(state, "t1"), { zone: "desk", index: 0 });
+		assert.equal(sceneView(state).agents[0].instant, true);
+	});
+
+	it("snapshot: a claimant the snapshot no longer lists releases its staff member", () => {
+		const state = reduceScene(run(sub("t1", "gentle-ai-explore", "running")), snapshot([]));
+		assert.deepEqual(staffOf(state, "explore"), { role: "explore", present: true, claimedBy: null });
+	});
+
+	it("snapshot: a finished claimant that is still listed keeps its claim until it departs", () => {
+		const live = run(sub("t1", "gentle-ai-explore", "running"), sub("t1", "gentle-ai-explore", "completed"));
+		const state = reduceScene(live, snapshot([{ id: "t1", agent: "gentle-ai-explore", role: "explore", label: "map", status: "completed" }]));
+		assert.equal(staffOf(state, "explore")?.claimedBy, "t1");
+		assert.equal(staffOf(reduceScene(state, departed("t1")), "explore")?.present, true);
+	});
+});

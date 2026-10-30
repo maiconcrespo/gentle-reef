@@ -259,3 +259,32 @@ describe("dialog pacing: the box keeps up when lines back up", () => {
 		assert.ok(dwellMs(NARRATOR_QUEUE_LIMIT) >= 400, "still long enough to read");
 	});
 });
+
+describe("narrator: a claimant walks back to the coffee (S16)", () => {
+	const finish = (state: ReturnType<typeof initialNarrator>, status: string, claimant: boolean, role = "explore") =>
+		narrate(state, agent("t1", status, { role, label: "scout" }), 0, { claimant });
+
+	it("a claimant that finishes says it is finished, then narrates the break", () => {
+		const started = narrate(initialNarrator(), agent("t1", "running", { label: "scout" }), 0).state;
+		assert.deepEqual(finish(started, "completed", true).lines, [
+			{ speaker: "scout", text: "finished ✓", tone: "ok" },
+			{ speaker: "EXPLORE", text: "back to the coffee.", tone: "info" },
+		]);
+	});
+
+	it("a claimant that fails walks back too", () => {
+		const started = narrate(initialNarrator(), agent("t1", "running", { label: "scout" }), 0).state;
+		assert.deepEqual(finish(started, "failed", true, "verify").lines.map((line) => line.speaker), ["scout", "VERIFY"]);
+	});
+
+	it("an extra that finishes leaves by the door with no break line", () => {
+		const started = narrate(initialNarrator(), agent("t1", "running", { label: "scout" }), 0).state;
+		assert.deepEqual(finish(started, "completed", false).lines.map((line) => line.speaker), ["scout"]);
+	});
+
+	it("a repeated finish does not repeat the break line", () => {
+		const started = narrate(initialNarrator(), agent("t1", "running", { label: "scout" }), 0).state;
+		const done = finish(started, "completed", true).state;
+		assert.deepEqual(finish(done, "completed", true).lines, []);
+	});
+});

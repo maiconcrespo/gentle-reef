@@ -2,7 +2,7 @@
 
 A pixel-art office that shows real gentle-shell activity: the orchestrator, subagents, and tokens as a coffee pot. It ships as a standalone Pi package from this repo.
 
-**Status (T14):** event contract, adapter, hub, toggle, `/office` command, and the browser window with three layouts (full, compact, story). The window shows the orchestrator, the coffee pot, and resident subagents (explore, worker, verify) at the four desks; extra agents wait on a bench by the door. The story layout has a close-up camera and a narration dialog.
+**Status (T15):** event contract, adapter, hub, toggle, `/office` command, and the browser window with three layouts (full, compact, story). The window shows the orchestrator, the coffee pot, and resident subagents (explore, worker, verify) at the four desks; extra agents wait on a bench by the door. Idle staff chat by the coffee counter until an agent of their role takes a desk. The story layout has a close-up camera and a narration dialog.
 
 ## Install
 
@@ -36,6 +36,7 @@ The menu lists the same actions as the subcommands. While the module is off: Tur
 
 - the orchestrator at the whiteboard while it thinks or runs a tool, walking the floor while idle, and at the front with a `?` bubble when it waits for you;
 - resident subagents (explore, worker, verify, and unknown agents as generic workers) at the desks: they walk in, type while running, show `?` while waiting, and leave through the door with `✓` or `!` when they finish. Inspectors and judges are only logged until T4 and T5;
+- idle staff (S16): one per role (explore, worker, verify) stands in a lounge by the coffee counter, passing a speech bubble in turn and sipping now and then. The first agent of a role that takes a desk is that staff member: it walks over from the lounge, keeps the staff look, and walks back to the lounge when it finishes (`✓` or `!`). Its role narrates the break, for example `EXPLORE: back to the coffee.`. Further agents of that role walk in from the door as before. Team and PARTY lists show the idle staff as `on break`;
 - a story-mode dialog box with the question and its options while an `ask_user` prompt is open. It is display only: you still answer in the terminal, and it closes when the prompt ends;
 - the coffee pot: it drains as context fills (level = 1 - percent/100), and compaction walks the orchestrator to the coffee machine to brew a fresh one;
 - feature props that light up while their tool runs and for 4 s after it ends: a record player (music; idle for now, because gentle music emits no event the office can see), an easel (`gentle_design`), a filing cabinet (`mem_*`), a desk bell (`ask_user_*`), a corkboard (`todo`), the MCP rack (`mcp`, `codemode`), a pigeon (`web_search`, `fetch_content`, `get_search_content`) and a pinned map (codegraph);
@@ -43,7 +44,7 @@ The menu lists the same actions as the subcommands. While the module is off: Tur
 - an activity log with tool and compaction lines;
 - a connection indicator (`live`, `reconnecting…`, or `offline`). The page reconnects by itself and resyncs from a fresh snapshot.
 
-With `prefers-reduced-motion` set, the orchestrator does not wander and residents snap to their seats and to the door. State changes still show.
+With `prefers-reduced-motion` set, the orchestrator does not wander, residents snap to their seats and to the door, and the idle staff stand still with no bubbles or sips. State changes still show.
 
 ### Compact layout
 

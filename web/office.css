@@ -51,6 +51,8 @@ ul.crew { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--sel);
 .who b { font-weight: 600; }
 .who b, .who small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who small { color: var(--muted); font-size: 11px; }
+/* Idle staff (S16): in the lounge, on break, so a little quieter than the residents at their desks. */
+li.on-break .dot { opacity: 0.5; }
 .log { flex: 1; min-height: 0; overflow: hidden; }
 .log ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .log li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; color: var(--text); }

@@ -64,19 +64,22 @@ function run(seconds: number): void {
 }
 
 const seat = (zone: "desk" | "bench", index: number) => ({ zone, index });
-const resident = (id: string, where: { zone: "desk" | "bench"; index: number }, status: string, instant = false) => ({
+const resident = (id: string, where: { zone: "desk" | "bench"; index: number }, status: string, instant = false, role = "worker", claimed = false) => ({
 	id,
-	agent: "gentle-ai-worker",
-	role: "worker",
+	agent: `gentle-ai-${role}`,
+	role,
 	label: id,
 	status,
 	seat: where,
 	leaving: !["queued", "running", "waiting"].includes(status),
 	instant,
+	claimed,
 });
-const view = (agents: unknown[], features: Record<string, unknown> = {}) => ({
+/** Idle staff for the lounge (S16): every role present unless listed in `absent`. */
+const staffView = (absent: string[] = []) => ["explore", "worker", "verify"].map(role => ({ role, present: !absent.includes(role), claimedBy: absent.includes(role) ? "busy" : null }));
+const view = (agents: unknown[], features: Record<string, unknown> = {}, staff: unknown[] = []) => ({
 	intent: "floor", writing: false, bubble: null, brewing: false, orchestrator: "idle",
-	percent: null, potLevel: 1, activeAgents: 0, agents, features,
+	percent: null, potLevel: 1, activeAgents: 0, agents, features, staff,
 });
 
 describe("resident sprites in the engine", () => {
@@ -241,11 +244,16 @@ describe("feature props", () => {
 		const rest: [number, number] = [OFFICE_CONFIG.orchStart.x, OFFICE_CONFIG.orchStart.y];
 		const seen = reachableFrom(block, rest);
 		const spots: Array<[number, number, string]> = [
-			[9, 3, "whiteboard"], [17, 4, "coffee"], [8, 6, "front"], [9, 5, "rest"],
+			[9, 3, "whiteboard"], [17, 4, "coffee"], [17, 5, "coffee approach"], [8, 6, "front"], [9, 5, "rest"],
 			[1, 5, "desk 1"], [5, 5, "desk 2"], [1, 9, "desk 3"], [5, 9, "desk 4"],
 			[9, 12, "door"], [10, 12, "door"],
 		];
 		for (let i = 2; i < 2 + 12; i++) spots.push([i, 11, "bench overflow"]);
+		// A lounge spot is blocked for walkers, but a walker can still end on it: one of its neighbours must be reachable (S16).
+		for (const [name, tile] of Object.entries((OFFICE_CONFIG as unknown as { lounge: Record<string, { x: number; y: number }> }).lounge)) {
+			const neighbours = [[tile.x + 1, tile.y], [tile.x - 1, tile.y], [tile.x, tile.y + 1], [tile.x, tile.y - 1]];
+			assert.ok(neighbours.some(([x, y]) => seen.has(`${x},${y}`)), `${name} lounge spot ${tile.x},${tile.y} can be reached`);
+		}
 		for (const [x, y, name] of spots) assert.ok(seen.has(`${x},${y}`), `${name} at ${x},${y} is reachable`);
 	});
 
@@ -357,5 +365,186 @@ describe("story camera: an optional view transform", () => {
 		run(1);
 		assert.equal(transforms.length, before, "no transform once the camera is off");
 		engine.destroy();
+	});
+});
+
+describe("idle staff in the lounge (S16)", () => {
+	const T = OFFICE_CONFIG.tile;
+	const LOUNGE = (OFFICE_CONFIG as unknown as { lounge: Record<string, { x: number; y: number }> }).lounge;
+	// Torso colours of the explore, worker and verify looks (P.blue, P.green, P.purple).
+	const TORSO: Record<string, string> = { explore: "#A9C7EE", worker: "#B4E7C7", verify: "#F095C8" };
+	const BLUE = TORSO.explore;
+	type Rect = [number, number, number, number, string];
+	const inTile = (x: number, y: number, tile: { x: number; y: number }) => x >= tile.x * T && x < (tile.x + 1) * T && y >= tile.y * T && y < (tile.y + 1) * T;
+	// The lounge area around the coffee counter: the three staff, their bubbles and their sips.
+	const inLounge = (x: number, y: number) => x >= 13 * T && x < 17 * T && y >= 4 * T && y < 7 * T;
+	const isBubble = ([, , w, h]: Rect) => w === 18 && h === 14;
+
+	function room(camera?: { zoom: number; width: number; height: number; target: unknown }) {
+		const rects: Rect[] = [];
+		const departed: string[] = [];
+		const canvas = { width: 0, height: 0, getContext: () => styledContext(rects as unknown[][]) };
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, { onDeparted: (id: string) => departed.push(id) });
+		if (camera) engine.setCamera(camera as never);
+		return { engine, rects, departed };
+	}
+
+	it("full and dock layouts: each idle staff member stands in its lounge spot", () => {
+		const { engine, rects } = room();
+		engine.setScene(view([], {}, staffView()));
+		run(1);
+		engine.destroy();
+		for (const role of ["explore", "worker", "verify"]) {
+			assert.ok(rects.some(([x, y, , , fill]) => fill === TORSO[role] && inTile(x, y, LOUNGE[role])), `${role} stands in the lounge`);
+		}
+	});
+
+	it("story layout: the lounge staff are drawn in the same spots under the camera", () => {
+		const { engine, rects } = room({ zoom: 2, width: 960, height: 600, target: { kind: "orchestrator" } });
+		engine.setScene(view([], {}, staffView()));
+		run(1);
+		engine.destroy();
+		for (const role of ["explore", "worker", "verify"]) {
+			assert.ok(rects.some(([x, y, , , fill]) => fill === TORSO[role] && inTile(x, y, LOUNGE[role])), `${role} stands in the lounge`);
+		}
+	});
+
+	it("reduced motion: the lounge staff still stand in their spots", () => {
+		reduced = true;
+		const { engine, rects } = room();
+		engine.setScene(view([], {}, staffView()));
+		run(1);
+		engine.destroy();
+		for (const role of ["explore", "worker", "verify"]) {
+			assert.ok(rects.some(([x, y, , , fill]) => fill === TORSO[role] && inTile(x, y, LOUNGE[role])), `${role} stands in the lounge`);
+		}
+	});
+
+	it("a claimed staff member is not drawn in the lounge: its resident is at the desk", () => {
+		const { engine, rects } = room();
+		engine.setScene(view([resident("t1", seat("desk", 0), "running", true, "explore", true)], {}, staffView(["explore"])));
+		run(1);
+		engine.destroy();
+		assert.ok(!rects.some(([x, y, w, h, fill]) => fill === BLUE && w === 12 && h === 11 && inTile(x, y, LOUNGE.explore)), "no explore torso in the lounge");
+	});
+
+	it("a claimed resident starts from its lounge spot, not from the door", () => {
+		const { engine, rects } = room();
+		engine.setScene(view([resident("t1", seat("desk", 0), "running", false, "explore", true)], {}, staffView(["explore"])));
+		run(0.05);
+		engine.destroy();
+		const torsos = rects.filter(([, , w, h, fill]) => w === 12 && h === 11 && fill === BLUE);
+		assert.ok(torsos.length > 0, "the resident is drawn");
+		assert.ok(torsos.every(([x, y]) => inTile(x, y, LOUNGE.explore)), "it starts on its lounge spot");
+	});
+
+	/** Runs one agent from finishing until it is reported departed; returns where its torso was last drawn. */
+	function lastTorsoBeforeDeparture(claimed: boolean) {
+		const { engine, rects, departed } = room();
+		engine.setScene(view([resident("t1", seat("desk", 0), "running", true, "explore", claimed)], {}, staffView(["explore"])));
+		run(1);
+		engine.setScene(view([resident("t1", seat("desk", 0), "completed", true, "explore", claimed)], {}, staffView(["explore"])));
+		let last: [number, number] | null = null;
+		for (let i = 0; i < 60 * 40 && departed.length === 0; i++) {
+			rects.length = 0;
+			run(1 / 60);
+			const torso = rects.find(([, , w, h, fill]) => w === 12 && h === 11 && fill === BLUE);
+			// The feet, not the torso's top edge: a figure bobs a pixel or two while it walks, and it stands on its tile by its feet.
+			if (torso) last = [torso[0] + 6, torso[1] + 20];
+		}
+		engine.destroy();
+		return { last, departed };
+	}
+
+	it("a finished claimant walks back to its lounge spot before it leaves", () => {
+		const { last, departed } = lastTorsoBeforeDeparture(true);
+		assert.deepEqual(departed, ["t1"]);
+		assert.ok(last && inTile(last[0], last[1], LOUNGE.explore), `it leaves from the lounge, last seen at ${last}`);
+	});
+
+	it("a finished extra still walks out by the door", () => {
+		const { last, departed } = lastTorsoBeforeDeparture(false);
+		assert.deepEqual(departed, ["t1"]);
+		assert.ok(last && !inTile(last[0], last[1], LOUNGE.explore), "it does not leave from the lounge");
+		assert.ok(last && last[1] >= (OFFICE_CONFIG.rows - 2) * T, `it walks down to the door row, last seen at ${last}`);
+	});
+
+	it("the idle staff take turns on a speech bubble and sip now and then", () => {
+		const { engine, rects } = room();
+		engine.setScene(view([], {}, staffView()));
+		const bubbleXs = new Set<number>();
+		const poses: string[] = [];
+		for (let i = 0; i < 60 * 12; i++) {
+			rects.length = 0;
+			run(1 / 60);
+			const lounge = rects.filter(([x, y]) => inLounge(x, y));
+			for (const rect of lounge) if (isBubble(rect)) bubbleXs.add(rect[0]);
+			poses.push(JSON.stringify(lounge.filter(rect => !isBubble(rect))));
+		}
+		engine.destroy();
+		assert.ok(bubbleXs.size >= 2, `at least two staff take a turn on a bubble (saw ${bubbleXs.size})`);
+		assert.ok(new Set(poses).size > 1, "a sip changes a pose now and then");
+	});
+
+	it("under reduced motion the idle staff keep still and no bubble cycles", () => {
+		reduced = true;
+		const { engine, rects } = room();
+		engine.setScene(view([], {}, staffView()));
+		let bubbles = 0;
+		const samples: string[] = [];
+		for (let i = 0; i < 60 * 12; i++) {
+			rects.length = 0;
+			run(1 / 60);
+			const lounge = rects.filter(([x, y]) => inLounge(x, y));
+			bubbles += lounge.filter(isBubble).length;
+			if (i === 60 || i === 60 * 7) samples.push(JSON.stringify(lounge));
+		}
+		engine.destroy();
+		assert.notEqual(samples[0], "[]", "the staff are drawn in the lounge");
+		assert.equal(bubbles, 0, "no bubble is drawn");
+		assert.equal(samples[0], samples[1], "the poses hold still");
+	});
+});
+
+describe("idle staff: a bench resident that takes its staff member", () => {
+	it("starts again from its role's lounge spot, not from the bench it was queued on", () => {
+		const LOUNGE_EXPLORE = (OFFICE_CONFIG as unknown as { lounge: Record<string, { x: number; y: number }> }).lounge.explore;
+		const rects: Array<[number, number, number, number, string]> = [];
+		const canvas = { width: 0, height: 0, getContext: () => styledContext(rects as unknown[][]) };
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
+		engine.setScene(view([resident("t1", seat("bench", 0), "queued", false, "explore", false)], {}, staffView()));
+		run(1);
+		// The desks have freed; the queued agent starts and is seated with its role's staff member free: it becomes the claimant.
+		engine.setScene(view([resident("t1", seat("desk", 0), "running", false, "explore", true)], {}, staffView(["explore"])));
+		rects.length = 0;
+		run(1 / 60);
+		engine.destroy();
+		const torsos = rects.filter(([, , w, h, fill]) => w === 12 && h === 11 && fill === "#A9C7EE");
+		assert.equal(torsos.length, 1, "one figure, the claimant");
+		const [x, y] = torsos[0];
+		assert.ok(x >= LOUNGE_EXPLORE.x * OFFICE_CONFIG.tile && x < (LOUNGE_EXPLORE.x + 1) * OFFICE_CONFIG.tile, `drawn at lounge x ${x}`);
+		assert.ok(y >= LOUNGE_EXPLORE.y * OFFICE_CONFIG.tile && y < (LOUNGE_EXPLORE.y + 1) * OFFICE_CONFIG.tile + 4, `drawn at lounge y ${y}`);
+	});
+});
+
+describe("idle staff: an extra of a busy role walks in from the door", () => {
+	it("a new agent whose staff member is claimed starts at the door, not the lounge", () => {
+		const T = OFFICE_CONFIG.tile;
+		const rects: Array<[number, number, number, number, string]> = [];
+		const canvas = { width: 0, height: 0, getContext: () => styledContext(rects as unknown[][]) };
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
+		engine.setScene(view([
+			resident("t1", seat("desk", 0), "running", true, "explore", true),
+			resident("t2", seat("desk", 1), "running", false, "explore", false),
+		], {}, staffView(["explore"])));
+		rects.length = 0;
+		run(1 / 60);
+		engine.destroy();
+		const torsos = rects.filter(([, , w, h, fill]) => w === 12 && h === 11 && fill === "#A9C7EE");
+		assert.equal(torsos.length, 2, "both explore residents are drawn");
+		const atDoorRow = torsos.filter(([, y]) => y >= (OFFICE_CONFIG.rows - 2) * T);
+		assert.equal(atDoorRow.length, 1, "exactly one of them is still at the door row, on its way in");
+		const [x] = atDoorRow[0];
+		assert.ok(x >= 8 * T && x < 11 * T, `it is at the door columns, x ${x}`);
 	});
 });

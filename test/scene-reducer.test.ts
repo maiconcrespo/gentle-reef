@@ -236,3 +236,32 @@ describe("feature props light while their feature is active", () => {
 		assert.equal(litAt(snapped, "ask", at + 5_000), false);
 	});
 });
+
+describe("lounge staff and the team view (S16)", () => {
+	const subagent = (id: string, role: string, status: string) => event({ type: "subagent", id, agent: `gentle-ai-${role}`, role, label: "job", status });
+
+	it("staff start in the lounge, one per role", () => {
+		assert.deepEqual(sceneView(initialScene()).staff, [
+			{ role: "explore", present: true, claimedBy: null },
+			{ role: "worker", present: true, claimedBy: null },
+			{ role: "verify", present: true, claimedBy: null },
+		]);
+	});
+
+	it("the team view lists idle staff as on break, after the residents", () => {
+		assert.deepEqual(reducer.teamRows(sceneView(initialScene())), [
+			{ kind: "staff", role: "explore", status: "on break" },
+			{ kind: "staff", role: "worker", status: "on break" },
+			{ kind: "staff", role: "verify", status: "on break" },
+		]);
+	});
+
+	it("a claimed staff member is a resident row; the others stay on break", () => {
+		const rows = reducer.teamRows(sceneView(run(subagent("t1", "explore", "running"))));
+		assert.deepEqual(rows, [
+			{ kind: "resident", id: "t1", role: "explore", label: "job", status: "running" },
+			{ kind: "staff", role: "worker", status: "on break" },
+			{ kind: "staff", role: "verify", status: "on break" },
+		]);
+	});
+});
