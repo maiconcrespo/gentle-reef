@@ -4,7 +4,7 @@ import { Image, allocateImageId, getCapabilities } from "@earendil-works/pi-tui"
 import { OfficeHub, type OfficeSnapshot } from "../src/adapter/hub.ts";
 import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
-import { renderHqPng, type HqFrame } from "../src/stage/frame.ts";
+import { frameFromSnapshot, renderHqPng } from "../src/stage/frame.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping and state live in src/ so they stay testable.
@@ -32,7 +32,7 @@ function kittyStage(): TerminalStage {
 	let imageId: number | undefined;
 	let last: { key: string; png: string } | undefined;
 	const pngFor = (snapshot: OfficeSnapshot): string => {
-		const frame = frameOf(snapshot);
+		const frame = frameFromSnapshot(snapshot);
 		const key = JSON.stringify(frame);
 		if (last?.key !== key) last = { key, png: renderHqPng(frame) };
 		return last.png;
@@ -47,18 +47,5 @@ function kittyStage(): TerminalStage {
 				return new Image(png, "image/png", { fallbackColor: text => text }, { maxWidthCells: 400, maxHeightCells: rows, imageId });
 			};
 		},
-	};
-}
-
-/** Who is acting, read from the hub snapshot. A still frame until T3 animates it. */
-function frameOf(snapshot: OfficeSnapshot): HqFrame {
-	const state = snapshot.orchestrator.state;
-	const running = snapshot.agents.filter(agent => agent.status === "running");
-	return {
-		motion: false,
-		thinking: state === "thinking" || state === "tool",
-		waiting: state === "waiting-user",
-		working: running.some(agent => agent.role === "worker"),
-		exploring: running.some(agent => agent.role === "explore"),
 	};
 }

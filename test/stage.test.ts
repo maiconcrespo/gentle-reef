@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { inflateSync } from "node:zlib";
 import { encodePng } from "../src/stage/png.ts";
 import { createRaster } from "../src/stage/raster.ts";
-import { renderHqPng } from "../src/stage/frame.ts";
+import { frameFromSnapshot, renderHqPng } from "../src/stage/frame.ts";
 import { HQ_HEIGHT, HQ_PALETTE, HQ_WIDTH, drawHq } from "../web/hq-scene.js";
 
 /** Splits a PNG into its chunks, checking each CRC. */
@@ -85,11 +85,69 @@ describe("Gentle HQ room (web/hq-scene.js)", () => {
 	});
 });
 
+describe("Gentle HQ room shows the session state (T2)", () => {
+	const paint = (frame: Record<string, unknown>) => { const r = createRaster(HQ_WIDTH, HQ_HEIGHT); drawHq(r, frame); return r; };
+	const P = (name: keyof typeof HQ_PALETTE) => HQ_PALETTE[name].toUpperCase();
+
+	it("the coffee pot drains as context fills: full at 0%, empty at 100%, full when unknown", () => {
+		assert.equal(hex(paint({ context: 0 }), 69, 324), P("sand"));
+		assert.equal(hex(paint({ context: 100 }), 69, 324), P("panel"));
+		assert.equal(hex(paint({ context: 50 }), 69, 336), P("sand"), "half: the bottom is still coffee");
+		assert.equal(hex(paint({ context: 50 }), 69, 322), P("panel"), "half: the top is empty");
+		assert.equal(hex(paint({}), 69, 324), P("sand"));
+	});
+
+	it("the chalkboard marks ODD steps: done green, current gold, later muted; no step known draws plain chalk", () => {
+		const r = paint({ odd: 2 });
+		assert.equal(hex(r, 277, 16), P("green"), "step 1");
+		assert.equal(hex(r, 277, 34), P("gold"), "step 3");
+		assert.equal(hex(r, 365, 16), P("muted"), "step 5");
+		assert.equal(hex(paint({}), 277, 16), P("text"));
+	});
+
+	it("the TODO board has one row per task: done green, current pink, pending outlined; none when empty", () => {
+		const r = paint({ todo: [{ done: true }, { now: true }, {}] });
+		assert.equal(hex(r, 109, 154), P("green"));
+		assert.equal(hex(r, 109, 165), P("fuchsia"));
+		assert.equal(hex(r, 108, 175), P("border"));
+		assert.notEqual(hex(paint({ todo: [] }), 109, 154), P("green"));
+	});
+});
+
 describe("stage frame", () => {
 	it("renders the room as a base64 PNG at 2x, so the terminal never has to upscale it", () => {
 		const png = Buffer.from(renderHqPng({ t: 0, motion: false }), "base64");
 		const ihdr = chunks(png)[0]!.data;
 		assert.equal(ihdr.readUInt32BE(0), HQ_WIDTH * 2);
 		assert.equal(ihdr.readUInt32BE(4), HQ_HEIGHT * 2);
+	});
+});
+
+describe("snapshot to frame (event-to-scene mapping)", () => {
+	const base = { v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null } as const;
+	const agent = (role: string, status: string) => ({ v: 1, type: "subagent", id: role + status, agent: "gentle-ai-" + role, role, label: role, status });
+
+	it("an idle session is a still room with a full pot", () => {
+		assert.deepEqual(frameFromSnapshot(base as never), { motion: false, thinking: false, waiting: false, working: false, exploring: false, context: null, brewing: false });
+	});
+
+	it("reads who acts, the context and compaction from the snapshot", () => {
+		const frame = frameFromSnapshot({
+			...base,
+			orchestrator: { state: "waiting-user" },
+			context: { percent: 38 },
+			compaction: "start",
+			agents: [agent("worker", "running"), agent("explore", "completed")],
+		} as never);
+		assert.equal(frame.waiting, true);
+		assert.equal(frame.thinking, false);
+		assert.equal(frame.working, true);
+		assert.equal(frame.exploring, false, "a finished explorer no longer acts");
+		assert.equal(frame.context, 38);
+		assert.equal(frame.brewing, true);
+	});
+
+	it("a tool call counts as thinking (the orchestrator is at the board)", () => {
+		assert.equal(frameFromSnapshot({ ...base, orchestrator: { state: "tool", toolName: "read" } } as never).thinking, true);
 	});
 });

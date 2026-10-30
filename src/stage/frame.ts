@@ -1,3 +1,4 @@
+import type { OfficeSnapshot } from "../adapter/hub.ts";
 import { HQ_HEIGHT, HQ_WIDTH, drawHq } from "../../web/hq-scene.js";
 import { encodePng } from "./png.ts";
 import { createRaster, upscale } from "./raster.ts";
@@ -10,6 +11,29 @@ export interface HqFrame {
 	readonly waiting?: boolean;
 	readonly working?: boolean;
 	readonly exploring?: boolean;
+	/** Context used, 0-100, or null while Pi has not reported it (the pot stays full). */
+	readonly context?: number | null;
+	/** Compaction is running: the espresso machine steams. */
+	readonly brewing?: boolean;
+	/** Current ODD step, 0-6. */
+	readonly odd?: number;
+	/** TODO rows, first four drawn. */
+	readonly todo?: ReadonlyArray<{ readonly done?: boolean; readonly now?: boolean }>;
+}
+
+/** What the room shows for a hub snapshot: who acts, the context and compaction. A still frame until T3 animates it. */
+export function frameFromSnapshot(snapshot: OfficeSnapshot): HqFrame {
+	const state = snapshot.orchestrator.state;
+	const running = snapshot.agents.filter(agent => agent.status === "running");
+	return {
+		motion: false,
+		thinking: state === "thinking" || state === "tool",
+		waiting: state === "waiting-user",
+		working: running.some(agent => agent.role === "worker"),
+		exploring: running.some(agent => agent.role === "explore"),
+		context: snapshot.context.percent,
+		brewing: snapshot.compaction === "start",
+	};
 }
 
 /** The room at 2x as base64 PNG, ready for pi-tui's Image / encodeKitty. */

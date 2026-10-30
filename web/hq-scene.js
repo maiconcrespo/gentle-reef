@@ -18,7 +18,7 @@ const INK = K.bg, SKIN = K.sand, SKIN_SH = shade(K.sand);
 const W = HQ_WIDTH, H = HQ_HEIGHT;
 
 /* The frame being painted. Set by drawHq for the duration of one synchronous call. */
-let g = null, motion = false, t = 0;
+let g = null, motion = false, t = 0, potLevel = 1, brewing = false, oddStep = null, todo = [];
 const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 const O = (x, y, w, h, c) => { R(x - 1, y - 1, w + 2, h + 2, INK); R(x, y, w, h, c); };
 
@@ -164,9 +164,11 @@ function coffeeBar() {
 	/* Espresso machine: the context window. Steam while it brews. */
 	O(14, 314, 34, 26, K.muted); R(14, 314, 34, 4, K.text); R(20, 322, 8, 6, INK); R(32, 322, 10, 6, INK);
 	R(22, 336, 4, 4, K.text);
-	if (motion) for (let i = 0; i < 3; i++) R(20 + i * 6, 306 - ((t + i * 2) % 6), 2, 2, K.text);
-	/* Pot gauge: 62% left. */
-	O(60, 318, 18, 22, K.panel); R(62, 320 + 8, 14, 12, K.sand); R(62, 320 + 8, 14, 2, K.gold);
+	if (motion || brewing) for (let i = 0; i < 3; i++) R(20 + i * 6, 306 - ((t + i * 2) % 6), 2, 2, K.text);
+	/* Pot gauge: drains as context fills (level = 1 - percent / 100); full while the percent is unknown. */
+	O(60, 318, 18, 22, K.panel);
+	const fill = Math.round(18 * potLevel), top = 338 - fill;
+	if (fill > 0) { R(62, top, 14, fill, K.sand); R(62, top, 14, Math.min(2, fill), K.gold); }
 	/* Cups. */
 	for (let i = 0; i < 4; i++) { O(88 + i * 12, 332, 7, 8, K.text); R(88 + i * 12, 332, 7, 2, K.sand); }
 	/* Stools. */
@@ -183,6 +185,14 @@ function chalkboard() {
 	O(266, 6, 188, 50, shade(K.sand)); R(266, 6, 188, 2, hi(K.sand));
 	R(270, 10, 180, 42, '#0E0A0E');
 	R(272, 12, 176, 38, INK);
+	/* The ODD steps in chalk, two columns: a marker and a scribble per step. Done green, current gold and underlined, later muted. */
+	for (let i = 0; i < 7; i++) {
+		const x = 276 + Math.floor(i / 4) * 88, y = 15 + (i % 4) * 9;
+		const c = oddStep === null ? K.text : i < oddStep ? K.green : i === oddStep ? K.gold : K.muted;
+		R(x, y, 4, 4, c);
+		R(x + 7, y + 1, 18 + ((i * 11) % 5) * 9, 2, c);
+		if (i === oddStep) R(x + 7, y + 5, 40, 1, K.gold);
+	}
 	O(290, 56, 140, 3, shade(K.sand));
 	R(300, 54, 6, 2, K.text); R(312, 54, 4, 2, K.pink); R(410, 53, 10, 3, K.muted);
 }
@@ -211,10 +221,18 @@ function mailTube() {
 	R(472, 112, 16, 3, K.green);
 }
 function questBoard() {
-	/* The TODO board: big enough to read what is being done right now (text drawn at stage scale in todoText). */
+	/* The TODO board: one row per task, coloured by state (rows drawn in questBoard from the frame). */
 	O(98, 144, 110, 62, shade(K.sand)); R(101, 147, 104, 56, K.sand); R(101, 147, 104, 2, hi(K.sand));
 	R(104, 150, 98, 50, mix(K.sand, K.text, 0.55));
 	R(106, 148, 3, 3, K.red); R(196, 148, 3, 3, K.red);
+	/* One row per task (first four): done is a green box, the current one a fuchsia box with a longer line, pending an outline. */
+	todo.slice(0, 4).forEach((task, i) => {
+		const y = 153 + i * 11;
+		if (task.done) R(108, y, 4, 4, K.green);
+		else if (task.now) R(108, y, 4, 4, K.fuchsia);
+		else { R(108, y, 4, 1, K.border); R(108, y + 3, 4, 1, K.border); R(108, y, 1, 4, K.border); R(111, y, 1, 4, K.border); }
+		R(116, y + 1, task.now ? 70 : 40 + ((i * 13) % 4) * 8, 2, task.done ? K.green : task.now ? K.fdeep : K.muted);
+	});
 	R(112, 206, 2, 12, INK); R(192, 206, 2, 12, INK);
 }
 
@@ -279,9 +297,16 @@ function jobsWall() {
  * Paints one frame of the room at 1x (HQ_WIDTH x HQ_HEIGHT) on any context with `fillStyle`, `globalAlpha` and `fillRect`.
  * `frame.t` is the animation step (4 per second), `frame.motion` false draws a still frame, and the flags say who is acting:
  * `thinking`/`waiting` (the orchestrator), `working` (the writers), `exploring` (the explorer).
+ * State shown: `context` percent (the coffee pot), `brewing` (compaction steam), `odd` (current ODD step, 0-6, on the
+ * chalkboard) and `todo` ([{ done, now }] rows on the TODO board). Readable text lives in the terminal UI, not the image.
  */
 export function drawHq(ctx, frame = {}) {
 	g = ctx; t = frame.t ?? 0; motion = frame.motion ?? false;
+	const percent = typeof frame.context === 'number' && Number.isFinite(frame.context) ? Math.min(100, Math.max(0, frame.context)) : null;
+	potLevel = percent === null ? 1 : 1 - percent / 100;
+	brewing = frame.brewing === true;
+	oddStep = Number.isInteger(frame.odd) ? frame.odd : null;
+	todo = Array.isArray(frame.todo) ? frame.todo : [];
 	const bob = on => (motion && on ? t % 2 : 0);
 	try {
 		R(0, 0, W, H, K.panel);
