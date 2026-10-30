@@ -1,122 +1,82 @@
-# Gentle Office
+# Gentle Office (gentle-reef)
 
-A pixel-art office that shows real gentle-shell activity: the orchestrator, subagents, and tokens as a coffee pot. It ships as a standalone Pi package from this repo.
+**Watch your coding agent work.** Gentle Office is a pixel-art office that shows what [gentle-shell](https://github.com/Gentleman-Programming/gentle-shell) is doing in real time: the orchestrator thinks at its whiteboard, subagents walk in and type at their desks, the context window drains like a coffee pot, and questions for you pop up as game dialogs.
 
-**Status (T17):** event contract, adapter, hub, toggle, `/office` command, and the browser window with three layouts (full, compact, story). The room is now five rooms side by side: judges (left), a work room with the 2x2 desk pod and the lounge sofas, the orchestrator's office over the verify lab, and an archive. Resident subagents (explore and worker) sit at the pod, verify agents in the verify lab, and extras wait on a bench by the door. Idle staff sit on the lounge sofas, two steps from their desks. Full puts the room on top and the context brew, team and activity cards in a row below it, and the page scrolls. The story layout has a close-up camera and a narration dialog.
+It is a [Pi](https://github.com/earendil-works/pi) package. It reads the session's real events, so there is no fake data.
 
-## Install
+![The web office while explore, worker and verify subagents are running](docs/images/web-full-work.png)
 
-From a checkout:
+## Status
+
+| Mode | How to start it | State |
+| --- | --- | --- |
+| **Web window** | `/office` inside any gentle-shell session | **MVP, usable today.** Three layouts, live events, local-only server. |
+| **Terminal stage** | `gentle-reef` launcher | **Experimental.** The launcher works but only shows a one-line status widget. The full stage is designed ([preview](#terminal-mode-preview)) and still needs to be built. [Help wanted](CONTRIBUTING.md). |
+
+## What you see
+
+| | |
+| --- | --- |
+| ![Story layout: close-up camera, party list and narration dialog](docs/images/web-story.png) | ![Compact layout for a side pane](docs/images/web-dock.png) |
+| **Story layout**: the camera follows whoever acted last, and a game text box narrates every event. | **Compact layout**: one narrow column for a side pane. |
+
+![An ask_user question shown as a dialog over the office](docs/images/web-ask.png)
+
+- **The orchestrator** (top hat, monocle, pink mustache) rests in its armchair, walks to the whiteboard to think or run tools, and comes to the front with a `?` when it waits for you.
+- **Subagents** (explore, worker, verify) sit at the 2x2 desk pod or in the verify lab. They type while they run and leave with `✓` or `!`.
+- **The idle crew** chats and drinks coffee in the lounge until a subagent with their role starts.
+- **The coffee pot** is your context window. Compaction brews a fresh pot.
+- **Props** light up while their tool runs: the filing cabinet for memory, the pigeon for web search, the easel for design, and the corkboard for todos.
+- **`ask_user` prompts** appear as a dialog. It only displays the question: you still answer in the terminal.
+
+## Quick start
+
+You need [Pi](https://github.com/earendil-works/pi) with gentle-shell, and Node.js 22.18 or newer.
 
 ```bash
-pi install ./
+pi install git:github.com/maiconcrespo/gentle-reef
 ```
 
-Or add the path to the `packages` list in your Pi `settings.json`.
-
-## Two ways to use it
-
-- **`gentle-reef`: terminal mode.** Starts gentle-shell with the office attached to that session: listeners run from the start, and a one-line status widget sits above the editor, `✿ gentle-reef · terminal mode · <orchestrator state> · <n> agents`. The terminal stage comes later; the widget is the placeholder until then. The launcher is `bin/gentle-reef`. It runs `gentle-shell` with `GENTLE_REEF=1` and passes its arguments through, so it needs `gentle-shell` on your PATH. To put it on your PATH from a checkout (documented here, not run by the package):
-
-  ```bash
-  ln -s $PWD/bin/gentle-reef ~/.local/bin/gentle-reef
-  ```
-
-  Any directory on your PATH works. A plain `gentle-shell` is unchanged.
-
-- **`/office`: web window, in any session.** Start `gentle-shell` as usual, then run `/office on` and `/office open` (or `/office dock` / `/office story`). The window opens in your browser for that session only.
-
-Each session decides for itself. Turning the office on or off never carries over to the next session, and `gentle-reef` affects only the session it starts.
-
-## Use
+Then, inside a gentle-shell session:
 
 ```text
-/office          # open a menu: turn on/off, open the window (full or compact), or show status
-/office on       # attach listeners for this session
-/office open     # start the window (once per session) and open it in the browser
-/office dock     # same as open, in the compact layout (?layout=dock)
-/office story    # same as open, in the story layout (?layout=story)
-/office off      # detach listeners, close the window, clear the hub (this session)
-/office status   # enabled state, hub stats, and the window URL while it runs
+/office          # menu: turn on/off, open a layout, status
+/office on       # start listening in this session
+/office open     # open the full layout in your browser
+/office story    # or the story layout
+/office dock     # or the compact layout
 ```
 
-A session starts off, unless it was started with `gentle-reef`. When it is off, the only thing registered is the `/office` command, and `/office open` and `/office dock` refuse until you run `/office on`.
+The window is served on `127.0.0.1` behind a random token, accepts GET only, and loads no external resources. Every session decides for itself, and nothing is written to disk.
 
-The menu lists the same actions as the subcommands. While the module is off: Turn on, Turn on and open the window, Turn on and open the compact window, Turn on and open in story mode, Status. While it is on: Open the window, Turn off, Open the compact window, Open in story mode, Status.
+### Terminal mode (experimental)
 
-## The window
+```bash
+ln -s "$PWD/bin/gentle-reef" ~/.local/bin/gentle-reef   # from a checkout
+gentle-reef                                             # gentle-shell with the office attached
+```
 
-`/office open` starts a loopback server on `127.0.0.1` with a random port and prints the URL. The URL carries a random token in its path, so only the page you were given can read it. The page shows:
+## Terminal mode preview
 
-- the orchestrator at the whiteboard while it thinks or runs a tool, walking the floor while idle, and at the front with a `?` bubble when it waits for you;
-- resident subagents (explore, worker, verify, and unknown agents as generic workers) at the desks: they walk in, type while running, show `?` while waiting, and leave through the door with `✓` or `!` when they finish. Inspectors and judges are only logged until T4 and T5;
-- idle staff (S16): one per role (explore, worker, verify) waits in the lounge: explore and worker sit on the two sofas facing each other across the coffee table, verify stands by the lab door, passing a speech bubble in turn and sipping now and then. The first agent of a role that takes a desk is that staff member: it walks over from the lounge, keeps the staff look, and walks back to the lounge when it finishes (`✓` or `!`). Its role narrates the break, for example `EXPLORE: back to the coffee.`. Further agents of that role walk in from the door as before. Team and PARTY lists show the idle staff as `on break`;
-- a story-mode dialog box with the question and its options while an `ask_user` prompt is open. It is display only: you still answer in the terminal, and it closes when the prompt ends;
-- the orchestrator rests in its armchair while idle (a small head turn now and then, no walking); it walks to the whiteboard in its office while it thinks or runs a tool, and to the front spot above the pod when it waits for you;
-- the coffee pot: it drains as context fills (level = 1 - percent/100), and compaction walks the orchestrator to the coffee machine to brew a fresh one;
-- feature props that light up while their tool runs and for 4 s after it ends: a record player (music; idle for now, because gentle music emits no event the office can see), an easel (`gentle_design`), a filing cabinet (`mem_*`), a desk bell (`ask_user_*`), a corkboard (`todo`), the MCP rack (`mcp`, `codemode`), a pigeon (`web_search`, `fetch_content`, `get_search_content`) and a pinned map (codegraph);
-- a narration dialog: one line per real event with a speaker (see [Narration](#narration));
-- an activity log with tool and compaction lines;
-- a connection indicator (`live`, `reconnecting…`, or `offline`). The page reconnects by itself and resyncs from a fresh snapshot.
+This is the target design for the terminal stage (`design/terminal-office/02-stage-over-chat.html`). It uses the same engine, drawn in Ghostty through the Kitty graphics protocol. `alt+r` cycles the stage between big, small and hidden, and each reply opens a game window with the speaker's portrait.
 
-With `prefers-reduced-motion` set, the orchestrator does not wander, residents snap to their seats and to the door, and the idle staff stand still with no bubbles or sips. State changes still show.
+![Design preview of the terminal stage with a reply window](docs/images/terminal-preview.png)
 
-### Full layout
+## Roadmap
 
-The default. The room sits on top, centred, at the largest whole-number scale that fits the window's width: 2x (1440 px wide) once the window is about 1525 px wide, 1x below that. Height does not limit the scale, so on a short window the page scrolls. The legend sits under the room, then the context brew, team and activity cards in a row of three (the row wraps to fewer columns on narrow windows). The ask dialog overlays the bottom of the room, at most 60% of the frame's height, so the orchestrator's front spot stays visible above it.
+- [x] Event contract, adapter, hub and the local window server
+- [x] Web office: full, compact and story layouts, narration, idle crew, props, ask dialog
+- [x] `gentle-reef` launcher and per-session modes
+- [ ] **Terminal stage** built from the design (T7). This is the next milestone.
+- [ ] Review inspectors that visit during native review (T4)
+- [ ] Judgment-day judges debating at their table (T5)
+- [ ] A boss character you move with the keyboard, which sends prompts over an authenticated channel (T8, security-sensitive)
+- [ ] Music radio tied to gentle-shell music
 
-### Compact layout
+## Contributing
 
-Compact (`design/agent-office/02-dock-pane.html`) is one narrow column, 520 px at most. The room is on top at 1x (panned, see below), then the context brew, the team and the activity. The legend is left out, and the ask dialog overlays the bottom of the room and runs a little past it, so its top stays below the orchestrator's front spot.
+Contributions are welcome, from sprites to the terminal stage. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. The full behavior is documented in [docs/reference.md](docs/reference.md).
 
-Open the compact layout with `/office dock`, or with "Open the compact window" / "Turn on and open the compact window" in the menu. The URL gets `?layout=dock` after the token; the token, path and checks are unchanged. The header switch (Full / Compact / Story) changes layout without reloading. Its choice is saved in the browser's localStorage and written into the URL, so a reload keeps it. A `?layout=` already in the URL wins over the saved choice for that load, so `/office dock` always shows the compact layout. The room is 720 px wide, wider than this column, so the compact layout shows it at 1x through a camera that pans to follow the action (the same camera as story). Full (above) keeps whole-number scaling by width.
+## License
 
-### Story layout
-
-`/office story`, or "Open in story mode" / "Turn on and open in story mode" in the menu, opens the window at `?layout=story` (`design/agent-office/03-story-mode.html`). Story fills the whole window with a close-up of the room:
-
-- **Camera.** The room is drawn at a whole-number zoom (up to 4x), so the pixels stay square. The window is the camera: it eases toward the actor that acted last and never shows past the room's edge. Orchestrator events move it to the orchestrator, a subagent event to that resident, and a feature event to its prop.
-- **CONTEXT BREW** (top left): the context left as a rounded percent, with an HP-style bar. It shows "—" until Pi reports usage.
-- **PARTY** (top right): the orchestrator and each resident with its state. The row the camera follows is marked with ▶.
-- **Dialog** (bottom): the narration, or the `ask_user` prompt while one is open. The footer shows the key hint: Space or a click moves to the next line.
-
-Full and compact have no camera and take the same drawing path as before.
-
-### Narration
-
-The dialog narrates real events, one line each, with a speaker:
-
-- `ORCHESTRATOR: thinking…` when a turn starts; `running bash…` at a tool start; `bash done ✓ · 0.4s` or `bash failed ! · 13s` at its end; `waiting for your answer.` while an `ask_user` prompt is open; `done, back on the floor.` when the turn ends.
-- Feature props say what they do, for example `ORCHESTRATOR: saving to memory…`.
-- Compaction: brewing a fresh pot, the fresh pot, or a failure.
-- Subagents: `scout: arrived, waiting for a desk.`, `starts typing…`, `waiting for a reply.`, then `finished ✓`, `failed !`, `cancelled !` or `timed out !`.
-
-Subagents' internal tool calls are not visible to the window, so their lines cover only arrival, status and the end.
-
-Lines queue and page like a game text box: the typewriter reveals each line, a finished line waits a short time (less when several lines back up), and the next one takes the box. Space or a click finishes the typewriter, or moves on. With `prefers-reduced-motion` the line shows at once. An open `ask_user` prompt takes the box, and narration waits behind it.
-
-In story the narration is the big bottom box. In full and compact it is a one-line caption under the room, showing the current line. The narrator is pure and tested (`test/narrator.test.ts`); the page only renders what it returns.
-
-### Local-only guards
-
-- Binds `127.0.0.1` only, on a random port.
-- Every route lives under a per-instance random token. A wrong or missing token gets 404.
-- The `Host` header must be `127.0.0.1:<port>` or `localhost:<port>`. Anything else gets 403 (DNS rebinding guard).
-- GET only. The window takes no input; the boss input channel arrives in T8 with its own auth.
-- No CORS headers. A Content-Security-Policy allows only same-origin scripts, styles, and the event stream.
-- Only the files in `web/` are served, from a fixed allowlist. No external URLs, CDNs, or fonts.
-
-## Settings
-
-There is no settings file. `/office on`, `/office off` and the menu change the current session only and nothing is written to disk. The old `<agentDir>/gentle-office.json` is ignored, so a `"enabled": true` left in it does nothing; you can delete it by hand.
-
-## Layout
-
-- `src/contract/`: the normalized `OfficeEvent` contract (versioned, `v: 1`), role and feature mapping, and the inbound `boss.input` validator. Pure.
-- `src/adapter/`: maps Pi events and gentle-pi task status to contract events, plus the in-memory `OfficeHub`. Pure.
-- `src/server/`: the loopback window server (`office-server.ts`) and the platform browser opener (`open-browser.ts`).
-- `src/toggle.ts`: the per-session on/off controller, the terminal mode switch (`GENTLE_REEF`), and the status widget.
-- `bin/gentle-reef`: launcher that starts gentle-shell with `GENTLE_REEF=1`.
-- `web/`: the page. `scene-reducer.js` is pure and tested from node, and holds the narrator (`narrate`, the dialog queue); `office-engine.js` is the 32-bit canvas engine from `design/agent-office/01-overworld-hq.html`, with an optional story camera (`setCamera`); `app.js` connects the stream to both. The server serves a fixed list of files, so the narrator lives in `scene-reducer.js` rather than a separate module.
-- `extensions/gentle-office.ts`: thin Pi wiring.
-- `test/`: `npm test` runs the suite with Node's built-in test runner and TypeScript type stripping. No dependencies to install.
+[MIT](LICENSE)

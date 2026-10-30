@@ -704,7 +704,7 @@ describe("office floor plan (S17): rooms, lounge crew and short walks", () => {
 	});
 
 	it("the room's height fits 2x in a 900 px window, beside the header and footer", () => {
-		// The width is not asserted: the full layout's stage column is narrower than 2x the room, so it shows 1x or the pan (see README).
+		// The width is not asserted: the full layout's stage column is narrower than 2x the room, so it shows 1x or the pan (see docs/reference.md).
 		assert.ok(CFG.rows * CFG.tile * 2 <= 780, "height at 2x leaves room for the header and footer");
 	});
 });
