@@ -1,0 +1,11 @@
+{
+  "title": "Terminal office: the scene inside gentle-shell (Ghostty)",
+  "brief": "Pi TUI in Ghostty (1920x920) with the pixel-art office in the centre instead of the chat, in four structures: a full-centre game view with a story dialog, a stage band over the chat, a zoomed stage replacing the Status card, and a dock pane replacing the whole sidebar. The room moves at a low frame rate (5 fps, stepped) only while someone acts. Idle staff (one per role: explore, worker, verify) wait at the coffee counter on break, chatting in alternating speech bubbles and sipping now and then; a working role walks to its desk and back. The orchestrator walks between its counter and the whiteboard and never roams. Each artboard annotates rendering (Kitty graphics, half-block fallback), the redraw and resource budget, reduced motion, and the ask_user dialog.",
+  "feature": "odd/tasks/gentle-office.md",
+  "artboards": [
+    { "file": "01-game-mode.html", "title": "Game mode", "tradeoff": "Most immersive: the room fills the centre at 2x and the conversation becomes one story line above the input; chat history is hidden while on (alt+o returns to chat)", "width": 1920, "height": 920 },
+    { "file": "02-stage-over-chat.html", "title": "Stage over chat", "tradeoff": "Keeps the chat: a fixed band at about 40% height with the room at 1x, and a one-line caption as narration; the scene is smaller than in Game mode", "width": 1920, "height": 920 },
+    { "file": "03-sidebar-stage.html", "title": "Sidebar stage", "tradeoff": "Least intrusive: chat untouched at full width; the Status card becomes a zoomed stage that follows the active actor; smallest scene, and Status fields need a new home", "width": 1920, "height": 920 },
+    { "file": "04-sidebar-dock.html", "title": "Sidebar dock", "tradeoff": "Keeps the chat and shows the whole crew and context at a glance (room at 1x, coffee, team, activity); the room is small and Status (project, branch, profile, permissions) moves out of view to alt+s; the chat column is 1414 px instead of 1540 px", "width": 1920, "height": 920 }
+  ]
+}

@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal office: 04 Sidebar dock</title>
+<style>
+  :root {
+    --bg: #060407; --panel: #100A0F; --user: #2A1523; --sel: #28121E; --border: #563040;
+    --text: #F6EFF3; --muted: #A78E9B; --dim: #76616B; --gold: #E0C27A; --blue: #A9C7EE;
+    --green: #B4E7C7; --red: #FF718F; --purple: #F095C8; --sand: #F2B86D; --heading: #E0C27A; --pink: #F095C8;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1920px; height: 920px; overflow: hidden; background: var(--bg); color: var(--text); font: 14px/1.45 var(--mono); }
+  .term { position: relative; width: 1920px; height: 920px; display: grid; grid-template-rows: 28px 36px minmax(0, 1fr); }
+  .titlebar { display: flex; align-items: center; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .statusline { display: flex; align-items: center; gap: 10px; padding: 0 18px; background: var(--panel); border-bottom: 1px solid #C96AA2; font-size: 14px; white-space: nowrap; overflow: hidden; }
+  .brand { color: var(--gold); font-weight: 700; letter-spacing: .04em; }
+  .sep { color: var(--muted); }
+  .model { color: var(--blue); }
+  .right { margin-left: auto; color: var(--muted); }
+  .ctx { color: var(--sand); }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 506px; min-height: 0; }
+  .chat { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; padding: 14px 18px; }
+  .log { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow: hidden; }
+  .msg { margin: 0; font-size: 14px; line-height: 1.5; }
+  .who { color: var(--gold); font-weight: 700; }
+  .you { color: var(--pink); }
+  .tool { color: var(--blue); font-size: 13px; }
+  .ok { color: var(--green); }
+  .input { flex: none; margin: 0; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--user); border: 1px solid var(--border); font-size: 14px; }
+  .prompt { color: var(--pink); }
+
+  /* Dock pane: replaces the whole sidebar. Room at 1x (480 px) with 12 px gutters. */
+  .dock { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 12px; border-left: 1px solid var(--border); overflow: hidden; }
+  .dock-top { margin: 0; font-size: 12px; color: var(--muted); }
+  .dock-top b { color: var(--gold); font-weight: 600; }
+  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .room { box-shadow: 0 0 0 1px var(--border); }
+  .brew { display: flex; gap: 12px; align-items: center; }
+  .brew-text { flex: 1 1 auto; min-width: 0; }
+  .brew-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--muted); }
+  .pct { font-size: 20px; color: var(--sand); font-weight: 700; }
+  .cups { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; margin-top: 6px; }
+  .cups i { height: 10px; background: var(--sand); box-shadow: inset 0 3px 0 var(--gold); }
+  .cups i.empty { background: var(--sel); box-shadow: none; }
+  .card { background: var(--panel); border: 1px solid var(--border); padding: 10px 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--heading); }
+  .team { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+  .team li { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; }
+  .dot { width: 10px; height: 10px; background: var(--gold); }
+  .dot.explore { background: var(--blue); }
+  .dot.worker { background: var(--green); }
+  .dot.verify { background: var(--pink); }
+  .state { color: var(--muted); font-size: 12px; }
+  .state.working { color: var(--gold); }
+  .activity ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12px; }
+  .activity li { display: grid; grid-template-columns: 52px 1fr; gap: 8px; }
+  .activity time { color: var(--muted); }
+
+  /* Annotations sit over the empty top of the chat column (messages are bottom-anchored), so they cover no content. */
+  .notes { position: absolute; top: 80px; right: 530px; width: 420px; max-height: 420px; overflow: auto; margin: 0; background: var(--panel); border: 2px solid var(--gold); box-shadow: 0 0 0 3px var(--bg); font-size: 12px; z-index: 5; }
+  .notes summary { padding: 6px 12px; background: var(--sel); color: var(--gold); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .notes summary:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .notes ul { margin: 0; padding: 8px 12px 10px 24px; }
+  .notes li + li { margin-top: 6px; }
+  .notes b { color: var(--gold); font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="term">
+  <div class="titlebar">ghostty · pi · ~/gentle-reef</div>
+  <header class="statusline">
+    <span class="brand">✿ Gentle Shell</span><span class="sep">⋄</span>
+    <span>~/gentle-reef feat/gentle-office</span><span class="sep">⋄</span>
+    <span class="model">claude-opus-5-5 · medium · ClaudeGPT</span>
+    <span class="right">ctx <span class="ctx">▰▰▱▱▱▱▱▱ 20%</span> ⋄ $0.000 ⋄ usage · alt+u</span>
+  </header>
+  <div class="cols">
+    <main class="chat" aria-label="Chat, untouched">
+      <div class="log" aria-label="Conversation">
+        <p class="msg"><span class="you">›</span> explorá dónde se pinta el dialog de ask_user y si el cierre llega con los eventos</p>
+        <p class="msg"><span class="who">✿ orchestrator</span> Lanzo a gentle-ai-explore para ubicar los call sites. No toco nada hasta tener el mapa.</p>
+        <p class="msg tool ok">✓ gentle-ai-explore 35k · 17s</p>
+        <p class="msg"><span class="who">✿ orchestrator</span> Listo. El dialog se abre con ask open y se cierra con close, en web/app.js. El snapshot ya trae la pregunta para las ventanas que llegan tarde.</p>
+        <p class="msg tool">Falta confirmar el cierre en una sesión Pi viva; el headless no lo cubre.</p>
+      </div>
+      <p class="input"><span class="prompt" aria-hidden="true">›</span> ✿ waiting for input</p>
+    </main>
+    <aside class="dock" aria-label="Dock pane">
+      <p class="dock-top"><b>✿ Status</b> moved to alt+s · ~/gentle-reef · feat/gentle-office</p>
+      <canvas id="room" class="room" role="img" aria-label="Office room at 1x. The orchestrator writes at the whiteboard while a tool runs. Explore and Worker are on break at the coffee counter. Verify types at its desk."></canvas>
+      <section class="brew" aria-label="Context brew">
+        <canvas id="pot" role="img" aria-label="Coffee pot at 80 percent"></canvas>
+        <div class="brew-text">
+          <div class="brew-row"><span>Coffee · pot = 1 − ctx</span><b class="pct">80%</b></div>
+          <div class="cups" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="empty"></i><i class="empty"></i></div>
+          <div class="brew-row"><span>ctx 20% used</span><span>refill on compaction</span></div>
+        </div>
+      </section>
+      <section class="card" aria-labelledby="team-h">
+        <h2 id="team-h">Team</h2>
+        <ul class="team">
+          <li><span class="dot"></span><span>✿ orchestrator</span><span class="state">at the whiteboard</span></li>
+          <li><span class="dot explore"></span><span>◦ explore</span><span class="state">on break · 35k</span></li>
+          <li><span class="dot worker"></span><span>◦ worker</span><span class="state">on break</span></li>
+          <li><span class="dot verify"></span><span>● verify</span><span class="state working">checking · web/app.js</span></li>
+        </ul>
+      </section>
+      <section class="card activity" aria-labelledby="act-h">
+        <h2 id="act-h">Activity</h2>
+        <ol>
+          <li><time>00:17</time><span class="ok">✓ explore done · 35k tokens</span></li>
+          <li><time>00:09</time><span>⌕ grep ask_user · web/</span></li>
+          <li><time>00:00</time><span>✿ orchestrator planning the next step</span></li>
+        </ol>
+      </section>
+      <details class="notes" open>
+        <summary>Annotations · toggle</summary>
+        <ul>
+          <li><b>Layout.</b> The dock replaces the whole sidebar (Status and Agents). Room at 1x (480 x 312) with 12 px gutters, so the sidebar is 506 px and the chat column 1414 px.</li>
+          <li><b>Status (proposed).</b> Its fields (project, branch, profile, changes, integrations, permissions) move to an alt+s overlay; the top line of the dock points to it.</li>
+          <li><b>Rendering.</b> Kitty graphics image in Ghostty; a frame is sent only when its pixels change. Fallback: half-block ▀ cells on terminals without image support.</li>
+          <li><b>Idle crew.</b> One staff per role waits at the counter, on break: explore and worker chat in alternating bubbles and sip now and then. A working role walks to its desk and back; the orchestrator never roams. Team and activity update on the same events.</li>
+          <li><b>Budget.</b> 5 fps, stepped, only while someone walks, types, writes, blinks or sips; chat bubbles tick at 2 fps. Idle wakes only at the next changing frame; no 60 fps loop. Paused when the window is unfocused, hidden or off-screen. Reduced motion: one still frame, no timers.</li>
+          <li><b>ask_user.</b> The team card marks the orchestrator as waiting; the question and options show in the chat. Answers stay in the terminal (display only).</li>
+        </ul>
+      </details>
+    </aside>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var W = 480, H = 312, L = 32, FRAME_MS = 200;          // 5 fps while something moves
+  var OUT = document.getElementById('room');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Colours come from the :root tokens, so the scene carries no palette of its own.
+  var cs = getComputedStyle(document.documentElement), C = {};
+  ['bg', 'panel', 'user', 'sel', 'border', 'text', 'muted', 'gold', 'blue', 'green', 'red', 'pink', 'sand'].forEach(function (k) {
+    C[k] = cs.getPropertyValue('--' + k).trim();
+  });
+  var EXPLORE = { hat: 'safari', hatColor: C.gold, suit: C.blue, shirt: C.text, pants: C.border, skin: C.sand };
+  var WORKER = { hat: 'hard', hatColor: C.gold, suit: C.green, shirt: C.text, pants: C.border, skin: C.sand };
+  var VERIFY = { hair: C.gold, suit: C.text, shirt: C.pink, pants: C.border, skin: C.sand };
+  var ORCH = { hat: 'top', hatColor: C.panel, suit: C.gold, shirt: C.text, pants: C.panel, skin: C.sand };
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function fill(g, x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
+  function box(g, x, y, w, h, edge, face) { fill(g, x - 1, y - 1, w + 2, h + 2, edge); fill(g, x, y, w, h, face); }
+
+  // 16x24 figure. p: walk, legs, typing, b, write, arm, sip, blink.
+  function person(g, x, y, o, p) {
+    p = p || {};
+    if (o.hat === 'top') {
+      box(g, x + 5, y + 1, 6, 6, C.bg, o.hatColor);
+      fill(g, x + 5, y + 4, 6, 1, C.pink);
+      fill(g, x + 10, y + 2, 2, 2, C.pink);
+      box(g, x + 2, y + 7, 12, 2, C.bg, o.hatColor);
+    } else if (o.hat === 'safari') {
+      box(g, x + 4, y + 1, 8, 4, C.bg, o.hatColor);
+      box(g, x + 1, y + 4, 14, 2, C.bg, o.hatColor);
+    } else if (o.hat === 'hard') {
+      box(g, x + 4, y + 3, 8, 4, C.bg, o.hatColor);
+      fill(g, x + 3, y + 7, 10, 1, o.hatColor);
+    } else {
+      fill(g, x + 5, y + 8, 6, 2, o.hair || C.bg);
+    }
+    box(g, x + 5, y + 9, 6, 6, C.bg, o.skin);             // head
+    if (!p.blink) fill(g, x + 6, y + 11, 1, 1, C.bg);     // eye, dropped on a blink
+    box(g, x + 3, y + 15, 10, 7, C.bg, o.suit);           // torso
+    fill(g, x + 7, y + 15, 2, 3, o.shirt);                // shirt
+    var lx = 5, rx = 9;                                   // legs step while walking
+    if (p.walk) { lx = p.legs ? 6 : 4; rx = p.legs ? 8 : 10; }
+    fill(g, x + lx, y + 22, 2, 2, o.pants);
+    fill(g, x + rx, y + 22, 2, 2, o.pants);
+    if (p.typing) {
+      fill(g, x + 1, y + 16, 2, 4, o.suit); fill(g, x + 13, y + 16, 2, 4, o.suit);
+      fill(g, x + 3, y + 19 + p.b, 3, 1, o.skin);         // hands on the keys, alternating
+      fill(g, x + 10, y + 20 - p.b, 3, 1, o.skin);
+    } else if (p.write) {
+      fill(g, x + 1, y + 6 + p.arm * 2, 2, 11, o.suit);   // left arm raised to the board
+      fill(g, x - 2, y + 5 + p.arm * 2, 3, 2, o.skin);
+      fill(g, x + 13, y + 16, 2, 6, o.suit); fill(g, x + 13, y + 22, 2, 1, o.skin);
+    } else if (p.sip) {
+      fill(g, x + 1, y + 12, 2, 5, o.suit);               // left arm up to the mouth
+      fill(g, x + 1, y + 10, 4, 3, C.text);               // cup
+      fill(g, x + 1, y + 10, 4, 1, C.sand);               // coffee
+      fill(g, x + 13, y + 16, 2, 6, o.suit); fill(g, x + 13, y + 22, 2, 1, o.skin);
+    } else {
+      fill(g, x + 1, y + 16, 2, 6, o.suit); fill(g, x + 13, y + 16, 2, 6, o.suit);
+      fill(g, x + 1, y + 22, 2, 1, o.skin); fill(g, x + 13, y + 22, 2, 1, o.skin);
+    }
+  }
+  function orchestratorExtras(g, x, y) {
+    fill(g, x + 3, y + 12, 2, 2, C.pink);                 // mustache curls
+    fill(g, x + 11, y + 12, 2, 2, C.pink);
+    fill(g, x + 5, y + 13, 6, 2, C.pink);                 // mustache bar
+    fill(g, x + 8, y + 10, 3, 3, C.gold);                 // monocle ring
+    fill(g, x + 9, y + 11, 1, 1, C.bg);                   // monocle lens
+  }
+  // Small speech bubble with a three-dot ellipsis; dots = 0..2 lights one to three dots.
+  function bubble(g, x, y, dots) {
+    box(g, x, y, 14, 8, C.bg, C.text);
+    fill(g, x + 4, y + 8, 2, 2, C.text);
+    for (var i = 0; i < 3; i++) fill(g, x + 3 + i * 3, y + 3, 2, 2, i <= dots ? C.bg : C.muted);
+  }
+  function desk(g, x, y, w) {
+    fill(g, x, y, w, 5, C.border);
+    fill(g, x + 2, y + 5, w - 4, 12, C.sel);
+    fill(g, x + 2, y + 17, 3, 8, C.bg);
+    fill(g, x + w - 5, y + 17, 3, 8, C.bg);
+  }
+  function monitor(g, x, y, c, lit, shift) {
+    box(g, x, y, 24, 14, C.bg, C.border);
+    fill(g, x + 2, y + 2, 20, 10, lit ? C.user : C.bg);
+    var len = [10, 14, 7];
+    for (var i = 0; i < 3; i++) fill(g, x + 4, y + 4 + i * 3, len[(i + shift) % 3], 1, lit ? c : C.muted);
+    fill(g, x + 10, y + 15, 4, 2, C.border);
+  }
+  function drawPot(g, x, y, level) {                      // glass pot; liquid = 1 - context usage
+    fill(g, x + 3, y - 2, 10, 2, C.muted);
+    box(g, x, y, 16, 20, C.muted, C.bg);
+    var h = Math.round(18 * level);
+    fill(g, x + 1, y + 20 - h, 14, h, C.sand);
+    fill(g, x + 16, y + 6, 2, 10, C.muted);
+  }
+
+  function paintRoom(g, v) {
+    // wall, baseboard, checker floor
+    fill(g, 0, 0, W, 96, C.user);
+    for (var wx = 0; wx < W; wx += 24) fill(g, wx, 0, 1, 94, C.sel);
+    fill(g, 0, 94, W, 3, C.border);
+    fill(g, 0, 97, W, H - 97, C.panel);
+    for (var r = 0, ty = 97; ty < H; r++, ty += 24) {
+      for (var tx = (r % 2) * 24; tx < W; tx += 48) fill(g, tx, ty, 24, 24, C.bg);
+    }
+    // whiteboard: one line appears per step while the orchestrator writes
+    box(g, 204, 24, 96, 56, C.border, C.text);
+    fill(g, 204, 80, 96, 3, C.border);
+    var rows = [[30, 36, C.pink], [38, 52, C.green], [46, 30, C.blue], [54, 44, C.muted]];
+    for (var i = 0; i < rows.length; i++) {
+      fill(g, 212, rows[i][0] - 1, 4, 4, C.bg);
+      if (i < v.wb) fill(g, 220, rows[i][0], rows[i][1], 2, rows[i][2]);
+    }
+    // wall props: music radio on a shelf, MCP rack (LEDs light on tool runs), memory cabinet
+    fill(g, 88, 60, 40, 3, C.border);
+    box(g, 96, 46, 24, 14, C.bg, C.border);
+    fill(g, 99, 49, 8, 8, C.bg); fill(g, 101, 51, 4, 4, C.pink);
+    fill(g, 124, 36, 2, 9, C.pink); fill(g, 121, 42, 3, 3, C.pink);
+    box(g, 134, 20, 26, 40, C.bg, C.border);
+    for (var k = 0; k < 4; k++) {
+      var on = v.leds >= 0 && (v.leds + k) % 3 === 0;
+      fill(g, 138, 26 + k * 9, 3, 3, on ? C.green : C.sel);
+      fill(g, 144, 26 + k * 9, 12, 3, C.bg);
+    }
+    box(g, 12, 30, 24, 48, C.bg, C.border);
+    fill(g, 14, 46, 20, 1, C.bg); fill(g, 14, 62, 20, 1, C.bg);
+    fill(g, 30, 36, 2, 4, C.gold); fill(g, 30, 52, 2, 4, C.gold);
+    // coffee counter: pot level and the ask_user bell
+    fill(g, 400, 76, 76, 4, C.border);
+    fill(g, 402, 80, 72, 16, C.panel);
+    drawPot(g, 410, 52, 0.8);
+    fill(g, 434, 62, 2, 4, C.gold); fill(g, 436, 66, 10, 8, C.gold); fill(g, 434, 74, 14, 2, C.gold);
+    // design easel, off the lounge floor
+    fill(g, 446, 190, 2, 26, C.gold); fill(g, 462, 190, 2, 26, C.gold);
+    box(g, 444, 174, 22, 16, C.bg, C.text);
+    fill(g, 448, 178, 8, 2, C.pink); fill(g, 452, 184, 10, 2, C.blue);
+
+    // desks with no task stay empty; idle roles wait at the lounge by the counter
+    desk(g, 40, 168, 72); desk(g, 150, 168, 72); desk(g, 250, 168, 72);
+    person(g, 392, 104, EXPLORE, { blink: v.eBlink, sip: v.eSip });
+    person(g, 412, 104, WORKER, { blink: v.wBlink, sip: v.wSip });
+    // verify: lounge, walking to its desk, or typing at it
+    box(g, v.vx + 14, v.vy + 14, 4, 6, C.bg, C.sand);     // clipboard travels with it
+    person(g, v.vx, v.vy, VERIFY, { walk: v.vpose === 'walk', legs: v.vlegs, typing: v.vpose === 'type', b: v.vb, blink: v.vBlink, sip: v.vSip });
+    desk(g, 352, 168, 72); monitor(g, 372, 152, C.pink, v.vpose === 'type', v.vb);
+
+    // orchestrator: rests by the counter, walks to the whiteboard for tool runs
+    person(g, v.ox, v.oy, ORCH, { walk: v.opose === 'walk', legs: v.legs, write: v.opose === 'write', arm: v.arm, sip: v.opose === 'sip' });
+    orchestratorExtras(g, v.ox, v.oy);
+
+    // lounge chat: alternating bubbles above the speaker
+    if (v.bubble === 0) bubble(g, 393, 95, v.dots);
+    if (v.bubble === 1) bubble(g, 413, 95, v.dots);
+  }
+
+  // Keyframe at time t (seconds in a 32 s loop). Only visual fields go in v.
+  // fast = something moves or gestures (5 fps); chat bubbles tick slower (2 fps) and sleep between changes.
+  function snap(t) {
+    var f = Math.floor(t * 5), fast = false;
+    var v = { ox: 372, oy: 104, opose: 'rest', arm: 0, legs: 0, wb: 0, leds: -1 };
+    if (t >= 0.6 && t < 1.8) {                                  // orchestrator walks to the whiteboard
+      var a = Math.floor((t - 0.6) / 0.2);
+      v.ox = 372 - 12 * a; v.oy = 104 - 4 * a; v.opose = 'walk'; v.legs = a % 2; fast = true;
+    } else if (t >= 1.8 && t < 4.6) {                           // writes
+      v.ox = 300; v.oy = 80; v.opose = 'write'; v.arm = f % 2; fast = true;
+    } else if (t >= 4.6 && t < 5.8) {                           // walks back to the counter
+      var b = Math.floor((t - 4.6) / 0.2);
+      v.ox = 300 + 12 * b; v.oy = 80 + 4 * b; v.opose = 'walk'; v.legs = b % 2; fast = true;
+    } else if (t >= 5.8 && (t % 9.5) < 0.6) {                   // sips at the counter
+      v.opose = 'sip'; fast = true;
+    }
+    v.wb = t < 1.8 ? 0 : Math.min(4, Math.floor((t - 1.8) / 0.7));
+    v.leds = (t >= 0.6 && t < 5.8) ? f % 3 : -1;
+
+    // Verify claims its role: walks from the lounge to its desk, types, walks back
+    v.vx = 432; v.vy = 104; v.vpose = 'lounge'; v.vlegs = 0; v.vb = 0;
+    var s = -1;
+    if (t >= 6.0 && t < 8.6) s = Math.floor((t - 6.0) / 0.2);
+    else if (t >= 12.6 && t < 15.2) s = 12 - Math.floor((t - 12.6) / 0.2);
+    if (s >= 0) {                                               // 5 steps down, then 8 steps left to the desk
+      v.vx = s <= 4 ? 432 : 432 - 12 * (s - 4);
+      v.vy = s <= 4 ? 104 + 8 * s : 144;
+      v.vpose = 'walk'; v.vlegs = s % 2; fast = true;
+    } else if (t >= 8.6 && t < 12.6) {
+      v.vx = 336; v.vy = 144; v.vpose = 'type'; v.vb = f % 2; fast = true;
+    }
+
+    // Idle gestures: blink and sip at their own rhythm
+    v.eBlink = (t % 7.3) < 0.2;  v.eSip = !v.eBlink && (t % 9.1) < 0.6;
+    v.wBlink = (t % 8.9) < 0.2;  v.wSip = !v.wBlink && (t % 11.3) < 0.6;
+    var atLounge = v.vpose === 'lounge' || v.vpose === 'type';
+    v.vBlink = atLounge && (t % 9.7) < 0.2;
+    v.vSip = v.vpose === 'lounge' && !v.vBlink && (t % 13.7) < 0.6;
+    if (v.eBlink || v.eSip || v.wBlink || v.wSip || v.vBlink || v.vSip) fast = true;
+
+    // Lounge chat bursts: explore and worker trade bubbles every 2 s, dots tick at 2 fps
+    v.bubble = -1; v.dots = 0;
+    if ((t >= 16.0 && t < 22.0) || (t >= 25.0 && t < 29.0)) {
+      v.bubble = Math.floor((t - (t < 22.0 ? 16.0 : 25.0)) / 2) % 2;
+      v.dots = Math.floor(t * 2) % 3;
+    }
+    return { v: v, fast: fast };
+  }
+
+  var off = document.createElement('canvas'); off.width = W; off.height = H;
+  var og = off.getContext('2d');
+  function camFor() { return { x: 0, y: 0, w: W, h: H, s: 1 }; }   // dock: whole room at 1x
+  function paint(v) {
+    paintRoom(og, v);
+    var cam = camFor(v);
+    OUT.width = cam.w * cam.s; OUT.height = cam.h * cam.s;
+    var g = OUT.getContext('2d'); g.imageSmoothingEnabled = false;
+    g.drawImage(off, cam.x, cam.y, cam.w, cam.h, 0, 0, OUT.width, OUT.height);
+  }
+
+  // Dock pot: a 20 x 24 sprite shown at 2x; drawn once, it only changes with the context usage.
+  var pot = document.getElementById('pot');
+  pot.width = 20; pot.height = 24;
+  var pg = pot.getContext('2d'); pg.imageSmoothingEnabled = false;
+  drawPot(pg, 2, 2, 0.8);
+  pot.style.width = '40px'; pot.style.height = '48px';
+
+  // Event-driven scheduler: 200 ms steps while something moves, otherwise sleep until the next changing frame.
+  var last = '', timer = 0, t0 = performance.now();
+  function untilChange(t) {
+    var here = JSON.stringify(snap(t).v);
+    for (var d = 0.05; d <= 8; d += 0.05) {
+      if (JSON.stringify(snap((t + d) % L).v) !== here) return Math.round(d * 1000);
+    }
+    return 1000;
+  }
+  function step() {
+    var t = ((performance.now() - t0) / 1000) % L;
+    var r = snap(t), key = JSON.stringify(r.v);
+    if (key !== last) { last = key; paint(r.v); }        // no paint when the frame is unchanged
+    timer = setTimeout(step, r.fast ? FRAME_MS : untilChange(t));
+  }
+  function pause() { clearTimeout(timer); timer = 0; }
+  function resume() { if (!timer) step(); }
+
+  if (reduced) {
+    paint(snap(21).v);                                    // one still frame, no timers
+  } else {
+    step();
+    document.addEventListener('visibilitychange', function () { if (document.hidden) pause(); else resume(); });
+    window.addEventListener('blur', pause);
+    window.addEventListener('focus', resume);
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (es) { if (es[0].isIntersecting) resume(); else pause(); }).observe(OUT);
+    }
+  }
+})();
+</script>
+</body>
+</html>

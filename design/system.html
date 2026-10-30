@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design system: gentle-shell (Gentle Office)</title>
+<style>
+  :root {
+    --bg: #060407; --panel: #100A0F; --user: #2A1523; --sel: #28121E; --border: #563040;
+    --text: #F6EFF3; --muted: #A78E9B; --dim: #76616B; --gold: #E0C27A; --blue: #A9C7EE;
+    --green: #B4E7C7; --red: #FF718F; --purple: #F095C8; --sand: #F2B86D; --heading: #E0C27A; --pink: #F095C8;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 var(--mono); }
+  body { width: 1440px; min-height: 900px; padding: 32px 40px; }
+  h1 { margin: 0 0 4px; font-size: 26px; color: var(--heading); letter-spacing: .04em; }
+  h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--heading); }
+  p.lead { margin: 0 0 24px; color: var(--muted); }
+  section { margin-bottom: 28px; }
+  .grid { display: grid; gap: 12px; }
+  .swatches { grid-template-columns: repeat(4, 1fr); }
+  .sw { background: var(--panel); border: 1px solid var(--border); padding: 10px; display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: center; }
+  .chip { width: 52px; height: 40px; border: 1px solid var(--border); }
+  .sw b { display: block; color: var(--gold); font-weight: 600; }
+  .sw small { display: block; color: var(--muted); font-size: 11px; }
+  .sw code { color: var(--text); font-size: 12px; }
+  .literal { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .scale p { margin: 4px 0; color: var(--text); }
+  .scale small { color: var(--muted); font-size: 11px; margin-left: 10px; }
+  .space { display: flex; align-items: flex-end; gap: 14px; }
+  .space div { background: var(--sel); border: 1px solid var(--border); width: 14px; }
+  .space span { display: block; color: var(--muted); font-size: 10px; margin-top: 6px; text-align: center; }
+  .shadows { grid-template-columns: repeat(3, 1fr); }
+  .shadow-demo { background: var(--panel); height: 72px; padding: 10px; font-size: 11px; color: var(--muted); }
+  .shadow-demo.frame { box-shadow: inset 0 0 0 4px var(--bg), inset 0 0 0 5px var(--sel); border: 1px solid var(--border); }
+  .shadow-demo.dialog { border: 3px solid var(--text); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border); }
+  .shadow-demo.story { border: 3px solid var(--text); box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 5px var(--sel), 6px 6px 0 rgba(6, 4, 7, .7); }
+  .components { grid-template-columns: repeat(2, 1fr); }
+  .card { background: var(--panel); border: 1px solid var(--border); padding: 14px 16px; }
+  .card h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--heading); }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; margin: 0; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .dialog-demo { background: var(--panel); color: var(--text); border: 3px solid var(--text); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border); padding: 12px 18px; font-size: 15px; line-height: 1.5; }
+  .dialog-demo .who { color: var(--gold); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-right: 8px; }
+  .dialog-demo ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; gap: 6px 22px; flex-wrap: wrap; }
+  .dialog-demo li::before { content: "▸ "; color: var(--pink); }
+  .switch { display: inline-flex; border: 1px solid var(--border); background: var(--user); }
+  .switch button { font: inherit; font-size: 12px; color: var(--muted); background: transparent; border: 0; padding: 2px 12px; }
+  .switch button + button { border-left: 1px solid var(--border); }
+  .switch button[aria-pressed="true"] { color: var(--gold); background: var(--sel); }
+  .switch button:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .caption { margin: 0; padding: 6px 10px; border: 1px solid var(--border); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .caption .who { color: var(--gold); margin-right: 6px; text-transform: uppercase; }
+  .caption .ok { color: var(--green); } .caption .fail { color: var(--red); }
+  .caption .ask { color: var(--purple); } .caption .coffee { color: var(--sand); }
+  .cups { display: flex; gap: 4px; }
+  .cups i { width: 14px; height: 14px; background: var(--sand); box-shadow: inset 0 3px 0 var(--gold); }
+  .cups i.empty { background: var(--sel); box-shadow: none; }
+  .roles { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .roles span { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+  .dot { width: 12px; height: 12px; background: var(--gold); display: inline-block; }
+  .dot.role-explore { background: var(--blue); } .dot.role-worker { background: var(--green); } .dot.role-verify { background: var(--pink); }
+  .live { display: inline-flex; align-items: center; gap: 8px; color: var(--green); }
+  .live::before { content: ""; width: 8px; height: 8px; background: currentColor; box-shadow: 0 0 0 2px #151316; }
+  .live.warn { color: var(--gold); }
+  .live.bad { color: var(--red); }
+  .rail { border-left: 2px solid var(--sel); padding: 2px 10px; font-size: 12px; }
+  .rail dt { color: var(--gold); } .rail dd { margin: 0; color: var(--muted); }
+  .motion p { margin: 4px 0; color: var(--muted); }
+  footer { color: var(--muted); font-size: 11px; border-top: 1px solid var(--border); padding-top: 10px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>gentle-shell · Gentle Office design system</h1>
+  <p class="lead">Synced from web/office.css. Every value below is recorded from that file; nothing is invented.</p>
+</header>
+
+<section aria-labelledby="colours-h">
+  <h2 id="colours-h">Colour · 16 aliases over 14 values</h2>
+  <div class="grid swatches">
+    <div class="sw"><span class="chip" style="background: var(--bg)"></span><div><b>--bg</b><code>#060407</code><small>body, frame outline</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--panel)"></span><div><b>--panel</b><code>#100A0F</code><small>header, cards, dialog face</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--user)"></span><div><b>--user</b><code>#2A1523</code><small>input surface, switch</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--sel)"></span><div><b>--sel</b><code>#28121E</code><small>selected, empty, rings</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--border)"></span><div><b>--border</b><code>#563040</code><small>borders, dividers</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--text)"></span><div><b>--text</b><code>#F6EFF3</code><small>body text, dialog border</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--muted)"></span><div><b>--muted</b><code>#A78E9B</code><small>secondary text</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--dim)"></span><div><b>--dim</b><code>#76616B</code><small>decoration only (3.4:1 on panel)</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--gold)"></span><div><b>--gold · --heading</b><code>#E0C27A</code><small>brand, headings, speakers</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--blue)"></span><div><b>--blue</b><code>#A9C7EE</code><small>explore role, tool lines</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--green)"></span><div><b>--green</b><code>#B4E7C7</code><small>live, worker role, ok</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--red)"></span><div><b>--red</b><code>#FF718F</code><small>fail, live bad</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--purple)"></span><div><b>--purple · --pink</b><code>#F095C8</code><small>ask tone, verify role, mustache</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--sand)"></span><div><b>--sand</b><code>#F2B86D</code><small>coffee, brew, cups</small></div></div>
+  </div>
+  <h2 style="margin-top: 18px">Literal values (recorded, not tokens)</h2>
+  <div class="grid literal">
+    <div class="sw"><span class="chip" style="background: #C96AA2"></span><div><b>#C96AA2</b><small>header bottom border · office.css:10</small></div></div>
+    <div class="sw"><span class="chip" style="background: #151316"></span><div><b>#151316</b><small>live dot ring · office.css:15</small></div></div>
+    <div class="sw"><span class="chip" style="background: rgba(6, 4, 7, .7)"></span><div><b>rgba(6, 4, 7, .7)</b><small>story box shadow · office.css:137</small></div></div>
+  </div>
+</section>
+
+<section aria-labelledby="type-h">
+  <h2 id="type-h">Typography · --mono</h2>
+  <p class="lead" style="margin-bottom: 10px">ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace · base 13px / 1.45</p>
+  <div class="scale">
+    <p style="font-size: 26px; color: var(--heading)">26 · Gentle Office <small>brew number</small></p>
+    <p style="font-size: 20px; color: var(--sand)">20 · 80% <small>dock brew</small></p>
+    <p style="font-size: 18px">18 · story line <small>story dialog</small></p>
+    <p style="font-size: 15px">15 · ask dialog text <small>ask dialog</small></p>
+    <p style="font-size: 13px">13 · base body text <small>base</small></p>
+    <p style="font-size: 12px; color: var(--muted)">12 · labels, uppercase, .08em tracking <small>card headings</small></p>
+    <p style="font-size: 11px; color: var(--muted)">11 · small caption <small>meta</small></p>
+    <p style="font-size: 10px; color: var(--muted)">10 · minimum observed size <small>tiny</small></p>
+  </div>
+  <p class="lead" style="margin-top: 10px">Weights: 600 headings and labels, 700 brand, speakers and brew number.</p>
+</section>
+
+<section aria-labelledby="space-h">
+  <h2 id="space-h">Spacing · observed padding, gap, margin and inset values (px)</h2>
+  <div class="space" aria-hidden="true">
+    <div style="height: 1px"></div><span>1</span>
+    <div style="height: 2px"></div><span>2</span>
+    <div style="height: 4px"></div><span>4</span>
+    <div style="height: 6px"></div><span>6</span>
+    <div style="height: 8px"></div><span>8</span>
+    <div style="height: 10px"></div><span>10</span>
+    <div style="height: 12px"></div><span>12</span>
+    <div style="height: 14px"></div><span>14</span>
+    <div style="height: 16px"></div><span>16</span>
+    <div style="height: 20px"></div><span>20</span>
+    <div style="height: 24px"></div><span>24</span>
+    <div style="height: 30px"></div><span>30</span>
+  </div>
+  <p class="lead" style="margin: 12px 0 0">No named scale in the source. Radius: none (no border-radius). Layout: header 44 px, footer 30 px, sidebar 392 px, room 480 x 312.</p>
+</section>
+
+<section aria-labelledby="shadow-h">
+  <h2 id="shadow-h">Shadows and borders</h2>
+  <div class="grid shadows">
+    <div class="shadow-demo frame">frame · inset 4 px bg + 5 px sel</div>
+    <div class="shadow-demo dialog">dialog · 3 px text border + 3/4 px rings</div>
+    <div class="shadow-demo story">story box · inset rings + 6 px hard drop</div>
+  </div>
+</section>
+
+<section aria-labelledby="comp-h">
+  <h2 id="comp-h">Components</h2>
+  <div class="grid components">
+    <div class="card">
+      <h3>✿ Status · card</h3>
+      <dl class="kv">
+        <dt>Project</dt><dd>~/gentle-reef</dd>
+        <dt>Branch</dt><dd>feat/gentle-office</dd>
+        <dt>Permissions</dt><dd>NORMAL</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h3>Layout switch · pressed state</h3>
+      <div class="switch" role="group" aria-label="Layout">
+        <button type="button" aria-pressed="false">Full</button>
+        <button type="button" aria-pressed="true">Compact</button>
+        <button type="button" aria-pressed="false">Story</button>
+      </div>
+      <p class="lead" style="margin: 12px 0 0">Focus ring: 2 px gold, offset -2 px.</p>
+    </div>
+    <div class="card">
+      <h3>Caption · tone colours</h3>
+      <p class="caption"><span class="who">orchestrator</span> Explore done in 17s</p>
+      <p class="caption" style="margin-top: 6px"><span class="ok">● ok</span> <span class="fail">● fail</span> <span class="ask">● ask</span> <span class="coffee">● coffee</span></p>
+    </div>
+    <div class="card">
+      <h3>Cups · brew</h3>
+      <div class="cups" aria-label="8 of 10 cups full"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="empty"></i><i class="empty"></i></div>
+    </div>
+    <div class="card">
+      <h3>Roles · dots (12 px)</h3>
+      <div class="roles">
+        <span><i class="dot"></i> orchestrator</span>
+        <span><i class="dot role-explore"></i> explore</span>
+        <span><i class="dot role-worker"></i> worker</span>
+        <span><i class="dot role-verify"></i> verify</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Live · states</h3>
+      <p class="live" style="margin: 0 0 8px">live</p>
+      <p class="live warn" style="margin: 0 0 8px">waiting</p>
+      <p class="live bad" style="margin: 0">failed</p>
+    </div>
+    <div class="card">
+      <h3>Ask dialog · story box</h3>
+      <div class="dialog-demo">
+        <p style="margin: 0"><span class="who">orchestrator</span> ¿Cómo querés cerrar el dialog?</p>
+        <ul><li>Cerrar al terminar</li><li>Cerrar con close</li></ul>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Map legend · rail</h3>
+      <dl class="rail" style="margin: 0">
+        <dt>Explore</dt><dd>reads the repo, no writes</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<section class="motion" aria-labelledby="motion-h">
+  <h2 id="motion-h">Motion · light and stepped</h2>
+  <p>Terminal office artboards: 5 fps (200 ms steps), only while something moves; idle wakes at the next changing frame.</p>
+  <p>Source motion: caret bob .8s steps(2) infinite (disabled under prefers-reduced-motion); story brew fill .3s steps(6).</p>
+  <p>Reduced motion: one still frame, no timers.</p>
+</section>
+
+<footer>Sources: web/office.css (read-only). Self-check: see the handoff. This board is the first artboard of every design in this system.</footer>
+</body>
+</html>
