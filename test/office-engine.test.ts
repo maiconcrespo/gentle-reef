@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 // Browser module, loaded as-is. The canvas and frame loop are stubbed below; the engine is driven frame by frame.
-import { HEAD_MAPS, OFFICE_CONFIG, SPRITE, createOfficeEngine } from "../web/office-engine.js";
+import { HEAD_MAPS, OFFICE_CONFIG, SPRITE, createOfficeEngine, walkableGrid } from "../web/office-engine.js";
 // Feature props are read through the namespace so the rest of this file still runs while they are missing.
 import * as engineModule from "../web/office-engine.js";
 
@@ -178,6 +178,22 @@ describe("desk chairs and bench queue", () => {
 		const lowestChair = Math.max(...OFFICE_CONFIG.desks.map(d => (d.y + 1) * OFFICE_CONFIG.tile + 13));
 		assert.equal(bubbles.length, 6, "one queue bubble per queued agent");
 		for (const [, y] of bubbles) assert.ok(y > lowestChair, `bubble top ${y} clears the chairs, which end at ${lowestChair}`);
+	});
+});
+
+describe("partition walls (S18)", () => {
+	it("are drawn one third of a tile thick, centred on their tile, and still block walkers", () => {
+		const bg: number[][] = [];
+		g.document = { createElement: () => ({ width: 0, height: 0, getContext: () => recordingContext(bg) }) };
+		createOfficeEngine({ width: 0, height: 0, getContext: () => recordingContext([]) }, OFFICE_CONFIG).destroy();
+		const T = OFFICE_CONFIG.tile, third = T / 3, offset = (T - third) / 2;
+		const grid = walkableGrid(OFFICE_CONFIG);
+		for (const w of OFFICE_CONFIG.walls) for (let y = w.y; y < w.y + w.h; y++) for (let x = w.x; x < w.x + w.w; x++) {
+			const left = x * T + offset, top = y * T + offset;
+			const covered = bg.some(([rx, ry, rw, rh]) => rx === left && rw === third && ry <= top && ry + rh >= top + third);
+			assert.ok(covered, `wall tile ${x},${y} has a ${third} px square on its centre line`);
+			assert.equal(grid[y][x], true, `wall tile ${x},${y} still blocks walkers`);
+		}
 	});
 });
 

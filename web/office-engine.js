@@ -495,11 +495,22 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 
 	/* ---------- rooms (S17): walls, the pod's cross divider, sofas, armchair, judges' table, research screen frame ---------- */
 	function paintRooms() {
-		/* Walls and partitions: wood panels with a lit top edge and a shadow along the bottom, so no wall reads as floor. */
-		for (const w of cfg.walls) {
-			const x = w.x * T, y = w.y * T, ww = w.w * T, hh = w.h * T;
-			B(x, y, ww, hh, P.border); B(x, y, ww, 1, C.steelH);
-			B(x + ww - 2, y, 2, hh, shade(P.border)); B(x, y + hh - 2, ww, 2, P.sel);
+		/* Walls and partitions (S18): a wall tile still blocks walkers, but the drawn wall is 1/3 of a tile (8 px) on the tile's centre line.
+		   Each wall tile joins its wall neighbours to the east and south, the back wall band above and the front edge below. Exposed edges get the lit top and the shadow right and bottom. */
+		const WALL = T / 3, OFF = (T - WALL) / 2;
+		const wallAt = (x, y) => cfg.walls.some(w => x >= w.x && x < w.x + w.w && y >= w.y && y < w.y + w.h);
+		for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+			if (!wallAt(x, y)) continue;
+			const cx = x * T + OFF, cy = y * T + OFF;
+			const e = wallAt(x + 1, y), s = wallAt(x, y + 1), n = wallAt(x, y - 1);
+			const top = y - 1 < 2 ? y * T : cy, bottom = y + 1 >= ROWS ? ROWS * T : cy + WALL;
+			/* Square (also reaches the back band or the front edge), then a bar toward each wall neighbour to the east and south. */
+			B(cx, top, WALL, bottom - top, P.border);
+			if (!n && y - 1 >= 2) B(cx, top, WALL, 1, C.steelH);
+			if (!e) B(cx + WALL - 2, top, 2, bottom - top, shade(P.border));
+			if (!s && y + 1 < ROWS) B(cx, bottom - 2, WALL, 2, P.sel);
+			if (e) { B(cx + WALL, cy, T - WALL, WALL, P.border); B(cx + WALL, cy, T - WALL, 1, C.steelH); B(cx + WALL, cy + WALL - 2, T - WALL, 2, P.sel); }
+			if (s) { B(cx, cy + WALL, WALL, T - WALL, P.border); B(cx + WALL - 2, cy + WALL, 2, T - WALL, shade(P.border)); }
 		}
 		/* Cross divider of the pod: steel panels between the four monitors. */
 		for (const a of cfg.podArms) {
