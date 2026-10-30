@@ -12,7 +12,7 @@ Branch: feat/1-terminal-stage (from design/1-gentle-hq). Design: design/reef-que
 - S6 — Same design on the web, with mouse zoom: "ok el mismo diseno hagamos para web, teniendo la opcion en la web de hacer zoom con el mouse." Assumed until the user says otherwise: the web window shows the Gentle HQ layout (room, Doing now, chat, overlays); the mouse wheel zooms in whole steps (1x to 4x, pixels stay square) around the cursor, and dragging pans.
 
 ## Tasks
-- T1 — S1, S5: spike. Draw one frame of the Gentle HQ room in Node (no browser, no native dependency) into an RGBA buffer and show it in Pi as a Kitty image in gentle-reef mode; detect Kitty support and keep the one-line widget otherwise. Route: inline after one explore map of the pi-tui image API. Commit: pending.
+- T1 — S1, S5: spike. Draw one frame of the Gentle HQ room in Node (no browser, no native dependency) into an RGBA buffer and show it in Pi as a Kitty image in gentle-reef mode; detect Kitty support and keep the one-line widget otherwise. Route: inline after one explore map of the pi-tui image API (task mvvlhlyt-1-1ifw). Commits: 983e63e (room module, raster, PNG), 9311f89 (Kitty widget, fallback). Tests: `npm test` 282/282; smoke with the real pi-tui 1.4.0: 1440x816 PNG, 37 KB, 67 ms, 22 Kitty rows. Pending: the user's look in Ghostty. Not drawn yet in Node: chalk and TODO board text (no fonts; a bitmap font comes with T2/T4).
 - T2 — S1, S3: scene module. Move the Gentle HQ room and characters into one pure drawing module shared by Node and the browser, driven by the scene view (who works, orchestrator state, todo, context). Route: pending. Commit: pending.
 - T3 — S5: live stage. Redraw the image from hub events at a low frame rate, only while someone acts; fallback widget when Kitty is missing. Route: pending. Commit: pending.
 - T4 — S2, S4: session UI. Chat, live thought (alt+t shows or hides it), notices, confirm dialog with the orchestrator portrait, Doing now. Route: pending. Commit: pending.
@@ -25,3 +25,4 @@ Branch: feat/1-terminal-stage (from design/1-gentle-hq). Design: design/reef-que
 - L3 — User asked to be told when the Todos and Agents sidebar panels should appear, to check them for bugs. They are hidden only while empty (visibility settings all true).
 - L4 — User: "si" (start the terminal stage: feature document, task list, spike).
 - L5 — User: "ok el mismo diseno hagamos para web, teniendo la opcion en la web de hacer zoom con el mouse." Added S6 and T6; T2 (shared scene module) now feeds both stages.
+- L6 — Slice boundary: design/1-gentle-hq (a2c956c) is its own PR; 983e63e + 9311f89 are the T1 slice (about 650 authored lines, most of them the room ported from the design).
