@@ -644,7 +644,7 @@ export function actorOf(event) {
     case "compaction":
       return { kind: "orchestrator" };
     case "review":
-      return { kind: "review" };
+      return { kind: "inspector" };
     case "subagent":
       return typeof event.id === "string" ? { kind: "resident", id: event.id } : null;
     case "feature":

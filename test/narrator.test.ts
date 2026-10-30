@@ -316,6 +316,7 @@ describe("narrator: review inspectors (T1)", () => {
 	});
 
 	it("a review event moves the story camera to the inspectors, not to the orchestrator", () => {
-		assert.deepEqual(actorOf(review({ phase: "arrive" })), { kind: "review" });
+		assert.deepEqual(actorOf(review({ phase: "arrive" })), { kind: "inspector" });
+		assert.deepEqual(actorOf(review({ phase: "verdict", verdict: "approved" })), { kind: "inspector" });
 	});
 });

@@ -370,6 +370,24 @@ describe("story camera: an optional view transform", () => {
 		engine.destroy();
 	});
 
+	it("the camera follows the review inspectors to the midpoint of their check spots, and holds once none are on the floor", () => {
+		const { canvas, transforms } = onScreen();
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
+		const review = (phase: string, extra: Record<string, unknown> = {}) => ({ ...view([], {}, []), review: { phase, count: 2, verdict: null, labels: ["Risk", "Reliability"], ...extra } });
+		engine.setScene(review("arriving"));
+		run(8);
+		// The check spots are (9,12) and (13,12): their feet are at x 228 and 324, y 308. The midpoint is x 276, lifted 20 px to the figures' middle.
+		engine.setCamera({ zoom: 2, width: 200, height: 120, target: { kind: "inspector" } });
+		run(5);
+		assert.deepEqual(transforms.at(-1), [2, 0, 0, 2, -452, -516]);
+		engine.setScene(review("leaving", { verdict: "correction" }));
+		run(40);
+		const held = transforms.at(-1);
+		run(3);
+		assert.deepEqual(transforms.at(-1), held, "once they are out the camera holds where it was");
+		engine.destroy();
+	});
+
 	it("a point target is followed, and clearing the camera restores the room size and drawing", () => {
 		const { canvas, transforms } = onScreen();
 		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});

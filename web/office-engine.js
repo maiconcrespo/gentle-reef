@@ -1325,6 +1325,13 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 			const p = FEATURE_PROPS.find(q => q.feature === target.feature);
 			return p ? { x: (p.x + p.w / 2) * T, y: (p.y + p.h / 2) * T } : null;
 		}
+		// The review inspectors on the floor: the midpoint between them (T1).
+		if (target.kind === 'inspector') {
+			const on = inspectors.filter(ins => ins.present);
+			if (on.length === 0) return null;
+			const mid = key => on.reduce((sum, ins) => sum + ins[key], 0) / on.length;
+			return { x: mid('x'), y: mid('y') - 20 };
+		}
 		return null;
 	}
 	/* Moves the camera centre toward its target, then clamps it so the view never shows past the room. A view wider or taller than the room is centred. */
