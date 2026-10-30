@@ -1,0 +1,27 @@
+# Terminal stage (issue #1)
+
+Build the Gentle HQ design in both stages: the gentle-reef terminal (the office as a Kitty image in the Pi TUI) and the web window, with the session UI around the room.
+Branch: feat/1-terminal-stage (from design/1-gentle-hq). Design: design/reef-quest/02-gentle-hq.html (phase 1). Parent doc: odd/tasks/gentle-office.md.
+
+## Specs
+- S1 — Phase 1 target: design/reef-quest/02-gentle-hq.html. User: "me gusta como fase 1."
+- S2 — Immersive game, messages to the user, thoughts by choice: "hazme una idea tuya, pero por este estilo y colores, manteniendo la personalidad del orchestrador. Hazme un diseno tuyo como deberia quedar si gentle shell fuera un juego al estilo gameboy advances de graficos, pero en terminal y que mantenga el [Image#1] estilo. las mensages directa a mi, y el pensamiento en oculto o visivel segun mi selecion, las infos de status, contx , Gentle shell y directorio info del modelo, no necesariametne tiene que ser asi pero mas imersivo en el juego , toma refeencia pokemon , zelda etc."
+- S3 — New scene and characters: "dame una opcion de diseno de escenario, mejorado. creo que mi criterio no me ha convencido. los personages todo, algo nuevo. solo mantiene la tonalida y el estilo del orchestrador pero ahora con un traje rosa, y la pizzara puede ser negra. lo demas pudes cambiar posiciones, objetos, etc. mira lo que tiene genntle shell, en github y tienta plazmar en una imagen."
+- S4 — Session UI and layout fixes: "creo que sobra el semafor de esta manera en mita del salon , es de coches, el armario engram muy grande, pero te falto el chat, la linea de pensamiento mientras vas escribiendo , los mensages y avisos. Preguntas para confirmar. starmap podria estar en la ventana, map table, essel  tescope ocupan mucho espacio , questbox TODO , deberia ser una visible lo que esta haciendo."
+- S5 — Done when (issue #1): "The stage renders in Ghostty from live session events, with the chat, live thoughts, notices and confirm dialog working." "Terminals without Kitty graphics fall back to the current one-line widget." "Tests cover the fallback and the event-to-scene mapping."
+- S6 — Same design on the web, with mouse zoom: "ok el mismo diseno hagamos para web, teniendo la opcion en la web de hacer zoom con el mouse." Assumed until the user says otherwise: the web window shows the Gentle HQ layout (room, Doing now, chat, overlays); the mouse wheel zooms in whole steps (1x to 4x, pixels stay square) around the cursor, and dragging pans.
+
+## Tasks
+- T1 — S1, S5: spike. Draw one frame of the Gentle HQ room in Node (no browser, no native dependency) into an RGBA buffer and show it in Pi as a Kitty image in gentle-reef mode; detect Kitty support and keep the one-line widget otherwise. Route: inline after one explore map of the pi-tui image API. Commit: pending.
+- T2 — S1, S3: scene module. Move the Gentle HQ room and characters into one pure drawing module shared by Node and the browser, driven by the scene view (who works, orchestrator state, todo, context). Route: pending. Commit: pending.
+- T3 — S5: live stage. Redraw the image from hub events at a low frame rate, only while someone acts; fallback widget when Kitty is missing. Route: pending. Commit: pending.
+- T4 — S2, S4: session UI. Chat, live thought (alt+t shows or hides it), notices, confirm dialog with the orchestrator portrait, Doing now. Route: pending. Commit: pending.
+- T6 — S6: web. The web window draws the room with the shared scene module (T2) and the same session UI (T4), with wheel zoom around the cursor and drag to pan; tests pin the zoom steps and the clamping. Route: pending. Commit: pending.
+- T5 — S5, S6: docs. README, docs/reference.md and help text for the terminal stage. Route: inline. Commit: pending.
+
+## Log
+- L1 — User: "empecemos con el modo terminal? que diseno quedamos?"
+- L2 — Design rounds on design/reef-quest/ (01 Reef Quest, 02 Gentle HQ); S2-S4 quote the user's briefs. User approved 02: "me gusta como fase 1." Design committed on design/1-gentle-hq (a2c956c), issue #1 updated to point at it.
+- L3 — User asked to be told when the Todos and Agents sidebar panels should appear, to check them for bugs. They are hidden only while empty (visibility settings all true).
+- L4 — User: "si" (start the terminal stage: feature document, task list, spike).
+- L5 — User: "ok el mismo diseno hagamos para web, teniendo la opcion en la web de hacer zoom con el mouse." Added S6 and T6; T2 (shared scene module) now feeds both stages.

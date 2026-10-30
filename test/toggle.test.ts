@@ -44,8 +44,9 @@ beforeEach(() => {
 
 // Fake ui for the terminal widget: records every setWidget call.
 function fakeUi() {
-	const widgets: Array<{ key: string; content: string[] | undefined }> = [];
-	return { widgets, ui: { setWidget(key: string, content: string[] | undefined) { widgets.push({ key, content }); } } };
+	// `content` is lines of text, a component factory (the terminal stage), or undefined to clear.
+	const widgets: Array<{ key: string; content: any }> = [];
+	return { widgets, ui: { setWidget(key: string, content: unknown) { widgets.push({ key, content }); } } };
 }
 
 // The module reads GENTLE_REEF once at load, so each mode gets its own fresh instance.
@@ -595,6 +596,33 @@ describe("terminal mode (GENTLE_REEF=1)", () => {
 
 		fake.emitChannel("gentle-pi:notification:source", { source: "subagent", taskId: "t1", status: "completed", parentSessionId: "s1" });
 		assert.equal(widgets.at(-1)?.content?.[0], "✿ gentle-reef · terminal mode · thinking · 0 agents");
+	});
+
+	it("draws the stage when the terminal shows Kitty images, and keeps the one-line widget when it does not (#1)", async () => {
+		const toggle = await loadToggle("1");
+		let kitty = true;
+		const seen: unknown[] = [];
+		const stage = {
+			available: () => kitty,
+			widget: (snapshot: unknown) => {
+				seen.push(snapshot);
+				return () => ({ render: () => ["stage"], invalidate() {} });
+			},
+		};
+		const fake = fakeHost();
+		const { widgets, ui } = fakeUi();
+		toggle.registerOffice(fake.host, { hub: new OfficeHub(), stage });
+		fake.emitPi("session_start", { type: "session_start" }, { ui });
+		assert.equal(widgets.at(-1)?.key, "gentle-reef");
+		assert.equal(typeof widgets.at(-1)?.content, "function", "a component factory, not text");
+		assert.equal(seen.length, 1, "the stage gets the hub snapshot");
+
+		kitty = false;
+		fake.emitPi("agent_start", { type: "agent_start" });
+		assert.deepEqual(widgets.at(-1), { key: "gentle-reef", content: ["✿ gentle-reef · terminal mode · thinking · 0 agents"] });
+
+		run(fake, "off");
+		assert.deepEqual(widgets.at(-1), { key: "gentle-reef", content: undefined });
 	});
 
 	it("/office off detaches this session's listeners and clears the widget; /office on brings both back", async () => {
