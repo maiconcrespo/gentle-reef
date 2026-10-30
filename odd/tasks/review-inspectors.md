@@ -16,7 +16,7 @@ Branch: feat/2-review-inspectors. Parent doc: odd/tasks/gentle-office.md (T4, S7
 - S4 — Real data only (gentle-office S1): a scene state changes only on a real event. Inspectors leave on `acknowledge-approved`, on a capture end that is not approved and has no follow-up, or when the session goes idle (`agent_settled`), so they never stay forever.
 
 ## Tasks
-- T1 — S1-S4: contract `review` event (additive, v1 stays), adapter reads `args.operation` / bindings count at start and the approved / correction state from the result at end (bounded, tolerant), reducer state + narration, two inspector sprites (briefcase + magnifying glass) with enter / inspect / verdict / leave in the engine, story camera and party list include them; docs/reference.md and README roadmap updated. Route: worker (context backstop). Commit: pending.
+- T1 — S1-S4: contract `review` event (additive, v1 stays), adapter reads `args.operation` / bindings count at start and the approved / correction state from the result at end (bounded, tolerant), reducer state + narration, two inspector sprites (briefcase + magnifying glass) with enter / inspect / verdict / leave in the engine, story camera and party list include them; docs/reference.md and README roadmap updated. Route: worker (context backstop). Commits: 8f86ae2 (review events), 780efd9 (reducer state, narration), 4fdd46c (tour routes, review-gone), 2495c7c (sprites, walking, verdict, leave), c85f52a (story camera, PARTY, team labels), 1e2d688 (docs). Tests: `npm test` 320/320.
 
 ## Log
 - L1 — User: "cuando aparece callin the inspector no veo los resonages ddel review y RDD trabajando en la escena"
