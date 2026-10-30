@@ -15,8 +15,8 @@ header { display: flex; align-items: center; gap: 14px; padding: 0 20px; border-
 .live::before { content: ""; width: 8px; height: 8px; background: currentColor; box-shadow: 0 0 0 2px #151316; }
 .live.warn { color: var(--gold); }
 .live.bad { color: var(--red); }
-/* The stage is as wide as its frame, and the stage + sidebar pair is centred, so no empty track opens between them. */
-main { display: grid; grid-template-columns: auto 392px; justify-content: center; gap: 20px; padding: 20px; min-height: 0; }
+/* Full: the stage is on top, centred, as wide as its frame; the cards sit below it in a row the same width and the page scrolls (S17). */
+main { display: grid; grid-template-columns: max-content; justify-content: center; gap: 20px; padding: 20px; min-height: 0; }
 .stage { display: flex; flex-direction: column; gap: 12px; min-width: 0; width: max-content; max-width: 100%; justify-self: center; align-self: start; }
 .frame { position: relative; padding: 14px; background: var(--panel); border: 1px solid var(--border); box-shadow: inset 0 0 0 4px var(--bg), inset 0 0 0 5px var(--sel); align-self: start; max-width: 100%; }
 .frame-title { position: absolute; top: -9px; left: 18px; padding: 0 8px; background: var(--bg); color: var(--heading); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
@@ -27,10 +27,14 @@ canvas.office { display: block; height: auto; image-rendering: pixelated; image-
 .map div { display: flex; white-space: nowrap; overflow: hidden; column-gap: 8px; align-items: baseline; border-left: 2px solid var(--sel); padding: 2px 10px; }
 .map dt { color: var(--gold); font-size: 12px; }
 .map dd { margin: 0; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
-aside { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
-.card { background: var(--panel); border: 1px solid var(--border); padding: 14px 16px; }
+/* Three cards side by side on wide windows; the row wraps to fewer columns as the window narrows. Zero own width with min-width 100%
+   (like the legend): the row takes the stage's width and does not widen the column. */
+aside { width: 0; min-width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); align-items: stretch; gap: 16px; min-height: 0; }
+.card { background: var(--panel); border: 1px solid var(--border); padding: 14px 16px; container-type: inline-size; }
 .card h2 { margin: 0 0 10px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--heading); }
 .brew { display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: center; }
+/* The stage sets the card width (about 240 px at 1x, 470 px at 2x): below 320 px the pot stacks above its text, so the cups and the text do not overflow. */
+@container (max-width: 320px) { .brew { grid-template-columns: minmax(0, 1fr); } }
 canvas.pot { width: 96px; height: 114px; image-rendering: pixelated; }
 .brew-num { font-size: 26px; color: var(--sand); font-weight: 700; }
 .brew-sub { color: var(--muted); }
@@ -55,6 +59,8 @@ ul.crew { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--sel);
 li.on-break .dot { opacity: 0.5; }
 .log { flex: 1; min-height: 0; overflow: hidden; }
 .log ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+/* Full: the activity list keeps to a fixed height and scrolls, so the card row stays short (the log keeps 40 lines). */
+[data-layout="full"] .log ol { max-height: 260px; overflow: auto; }
 .log li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; color: var(--text); }
 .log time { color: var(--dim); }
 .log .k-coffee { color: var(--sand); }
@@ -68,9 +74,9 @@ footer { display: flex; gap: 18px; align-items: center; padding: 0 20px; border-
 footer b { color: var(--gold); font-weight: 600; }
 .footer-end { margin-left: auto; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-@media (max-width: 1100px) { main { grid-template-columns: 1fr; } aside { max-width: 560px; justify-self: center; width: 100%; } }
-/* ask_user dialog: story-mode text box over the bottom of the office. Display only; answers stay in the terminal. */
-.dialog { position: absolute; left: 30px; right: 30px; bottom: 28px; max-height: 70%; overflow: auto; padding: 16px 22px 20px; background: var(--panel); color: var(--text); border: 3px solid var(--text); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border); font-size: 15px; line-height: 1.5; }
+/* ask_user dialog: story-mode text box over the bottom of the office. Display only; answers stay in the terminal.
+   Full caps it at 60% of the frame so the top stays below the orchestrator's front spot (tile 11,3) at 1x and 2x; longer asks scroll. */
+.dialog { position: absolute; left: 30px; right: 30px; bottom: 28px; max-height: 60%; overflow: auto; padding: 16px 22px 20px; background: var(--panel); color: var(--text); border: 3px solid var(--text); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border); font-size: 15px; line-height: 1.5; }
 .dialog[hidden] { display: none; }
 .dialog .who { color: var(--gold); font-weight: 700; margin-right: 8px; }
 .dialog .q + .q { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
@@ -107,6 +113,7 @@ footer b { color: var(--gold); font-weight: 600; }
 [data-layout="dock"] header { padding: 0 12px; gap: 10px; }
 [data-layout="dock"] .crumb, [data-layout="dock"] .footer-end { display: none; }
 [data-layout="dock"] main { grid-template-columns: minmax(0, 1fr); align-content: start; justify-content: stretch; justify-self: center; width: 100%; max-width: 520px; gap: 10px; padding: 10px; }
+[data-layout="dock"] aside { display: flex; flex-direction: column; width: auto; min-width: 0; }
 [data-layout="dock"] .stage { width: 100%; max-width: 100%; gap: 8px; }
 [data-layout="dock"] .frame { padding: 4px; }
 [data-layout="dock"] .map { display: none; }

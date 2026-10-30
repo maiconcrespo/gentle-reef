@@ -135,8 +135,9 @@ for (const button of layoutButtons) {
 // Integer-scale fit for full and compact: the room is shown at the largest whole multiple (1x, 2x, 3x...) that fits the stage
 // column and keeps the whole room on screen. Whole multiples keep the pixel art crisp. When even 1x is wider than the column
 // (the wide room of S17 in a narrow dock), the room is shown at 1x through a camera that pans to follow the action.
+// Full fits the width only (S17): the cards sit below the stage and the page scrolls, so height never caps it. Compact is a
+// single column in a window of its own height, so it keeps the height cap.
 const mainEl = document.querySelector("main");
-const asideEl = document.querySelector("aside");
 let fitKey = "";
 
 function fitCanvas() {
@@ -144,27 +145,29 @@ function fitCanvas() {
 	const main = getComputedStyle(mainEl);
 	const frame = getComputedStyle(frameEl);
 	const num = (style, prop) => parseFloat(style[prop]) || 0;
-	// Two grid tracks means the sidebar sits beside the stage; one track means it sits under it.
-	const sideBySide = main.gridTemplateColumns.trim().split(/\s+/).length > 1;
-	const roomW = mainEl.clientWidth - num(main, "paddingLeft") - num(main, "paddingRight")
-		- (sideBySide ? asideEl.offsetWidth + num(main, "columnGap") : 0);
+	const roomW = mainEl.clientWidth - num(main, "paddingLeft") - num(main, "paddingRight");
 	const frameX = num(frame, "paddingLeft") + num(frame, "paddingRight") + num(frame, "borderLeftWidth") + num(frame, "borderRightWidth");
-	// Height left for the canvas: viewport minus header, footer, main padding and the rest of the stage (frame chrome, caption).
-	// The legend is left out: it may scroll below the fold rather than shrink the room to 1x.
-	const legend = document.querySelector(".map");
-	const legendH = legend && legend.offsetParent !== null ? legend.offsetHeight + num(getComputedStyle(canvas.closest(".stage")), "rowGap") : 0;
-	const stageRest = canvas.closest(".stage").offsetHeight - canvas.offsetHeight - legendH;
-	const roomH = window.innerHeight - document.querySelector("header").offsetHeight - document.querySelector("footer").offsetHeight
-		- num(main, "paddingTop") - num(main, "paddingBottom") - stageRest;
+	const capsHeight = document.documentElement.dataset.layout === "dock";
+	let maxH = Infinity;
+	if (capsHeight) {
+		// Height left for the canvas: viewport minus header, footer, main padding and the rest of the stage (frame chrome, caption).
+		// The legend is left out: it may scroll below the fold rather than shrink the room to 1x.
+		const legend = document.querySelector(".map");
+		const legendH = legend && legend.offsetParent !== null ? legend.offsetHeight + num(getComputedStyle(canvas.closest(".stage")), "rowGap") : 0;
+		const stageRest = canvas.closest(".stage").offsetHeight - canvas.offsetHeight - legendH;
+		maxH = window.innerHeight - document.querySelector("header").offsetHeight - document.querySelector("footer").offsetHeight
+			- num(main, "paddingTop") - num(main, "paddingBottom") - stageRest;
+	}
 	const roomPxW = OFFICE_CONFIG.cols * OFFICE_CONFIG.tile, roomPxH = OFFICE_CONFIG.rows * OFFICE_CONFIG.tile;
 	const columnW = roomW - frameX;
-	const whole = Math.min(Math.floor(columnW / roomPxW), Math.floor(roomH / roomPxH));
+	const whole = Math.min(Math.floor(columnW / roomPxW), Math.floor(maxH / roomPxH));
 	const panned = whole < 1;
+	const roomH = Math.min(roomPxH, maxH);
 	const key = panned ? `pan:${Math.floor(columnW)}x${Math.floor(roomH)}` : `room:${whole}`;
 	if (key === fitKey) return;
 	fitKey = key;
 	if (panned) {
-		roomView = { zoom: 1, width: Math.max(1, Math.min(roomPxW, Math.floor(columnW))), height: Math.max(1, Math.min(roomPxH, Math.floor(roomH))) };
+		roomView = { zoom: 1, width: Math.max(1, Math.min(roomPxW, Math.floor(columnW))), height: Math.max(1, Math.floor(roomH)) };
 		pushCamera();
 		canvas.style.width = `${roomView.width}px`;
 		canvas.style.height = `${roomView.height}px`;

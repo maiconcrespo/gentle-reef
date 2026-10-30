@@ -2,7 +2,7 @@
 
 A pixel-art office that shows real gentle-shell activity: the orchestrator, subagents, and tokens as a coffee pot. It ships as a standalone Pi package from this repo.
 
-**Status (T16):** event contract, adapter, hub, toggle, `/office` command, and the browser window with three layouts (full, compact, story). The room is now five rooms side by side: judges (left), a work room with the 2x2 desk pod and the lounge sofas, the orchestrator's office over the verify lab, and an archive. Resident subagents (explore and worker) sit at the pod, verify agents in the verify lab, and extras wait on a bench by the door. Idle staff sit on the lounge sofas, two steps from their desks. The story layout has a close-up camera and a narration dialog.
+**Status (T17):** event contract, adapter, hub, toggle, `/office` command, and the browser window with three layouts (full, compact, story). The room is now five rooms side by side: judges (left), a work room with the 2x2 desk pod and the lounge sofas, the orchestrator's office over the verify lab, and an archive. Resident subagents (explore and worker) sit at the pod, verify agents in the verify lab, and extras wait on a bench by the door. Idle staff sit on the lounge sofas, two steps from their desks. Full puts the room on top and the context brew, team and activity cards in a row below it, and the page scrolls. The story layout has a close-up camera and a narration dialog.
 
 ## Install
 
@@ -47,14 +47,15 @@ The menu lists the same actions as the subcommands. While the module is off: Tur
 
 With `prefers-reduced-motion` set, the orchestrator does not wander, residents snap to their seats and to the door, and the idle staff stand still with no bubbles or sips. State changes still show.
 
+### Full layout
+
+The default. The room sits on top, centred, at the largest whole-number scale that fits the window's width: 2x (1440 px wide) once the window is about 1525 px wide, 1x below that. Height does not limit the scale, so on a short window the page scrolls. The legend sits under the room, then the context brew, team and activity cards in a row of three (the row wraps to fewer columns on narrow windows). The ask dialog overlays the bottom of the room, at most 60% of the frame's height, so the orchestrator's front spot stays visible above it.
+
 ### Compact layout
 
-The window has two layouts that share one page and one state:
+Compact (`design/agent-office/02-dock-pane.html`) is one narrow column, 520 px at most. The room is on top at 1x (panned, see below), then the context brew, the team and the activity. The legend is left out, and the ask dialog overlays the bottom of the room and runs a little past it, so its top stays below the orchestrator's front spot.
 
-- **Full** (default): the desk window described above.
-- **Compact** (`design/agent-office/02-dock-pane.html`): one narrow column, 520 px at most. The room is on top at 1x (panned, see below), then the context brew, the team and the activity. The legend is left out, and the ask dialog overlays the bottom of the room and runs a little past it, so its top stays below the orchestrator's front spot.
-
-Open the compact layout with `/office dock`, or with "Open the compact window" / "Turn on and open the compact window" in the menu. The URL gets `?layout=dock` after the token; the token, path and checks are unchanged. The header switch (Full / Compact / Story) changes layout without reloading. Its choice is saved in the browser's localStorage and written into the URL, so a reload keeps it. A `?layout=` already in the URL wins over the saved choice for that load, so `/office dock` always shows the compact layout. The room is 720 px wide, wider than this column, so the compact layout shows it at 1x through a camera that pans to follow the action (the same camera as story). Full keeps whole-number scaling when the stage column is wide enough for the room.
+Open the compact layout with `/office dock`, or with "Open the compact window" / "Turn on and open the compact window" in the menu. The URL gets `?layout=dock` after the token; the token, path and checks are unchanged. The header switch (Full / Compact / Story) changes layout without reloading. Its choice is saved in the browser's localStorage and written into the URL, so a reload keeps it. A `?layout=` already in the URL wins over the saved choice for that load, so `/office dock` always shows the compact layout. The room is 720 px wide, wider than this column, so the compact layout shows it at 1x through a camera that pans to follow the action (the same camera as story). Full (above) keeps whole-number scaling by width.
 
 ### Story layout
 
