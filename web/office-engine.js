@@ -93,6 +93,16 @@ export function walkableGrid(cfg, props = FEATURE_PROPS) {
 	return block;
 }
 
+/* Review inspectors (T1, S1-S3): each waits at its check spot by the door, then tours two desks. A tour stop names the desk it checks, and stands
+   beside that desk, never on a resident's seat. The two tours together cover the four pod desks. */
+export const INSPECTOR = {
+	check: [{ tx: 9, ty: 12, face: 'up' }, { tx: 13, ty: 12, face: 'up' }],
+	tours: [
+		[{ tx: 8, ty: 5, face: 'right', desk: 2 }, { tx: 14, ty: 6, face: 'left', desk: 0 }],
+		[{ tx: 14, ty: 9, face: 'left', desk: 1 }, { tx: 8, ty: 9, face: 'right', desk: 3 }]
+	]
+};
+
 const P = {
 	bg: '#060407', panel: '#100A0F', user: '#2A1523', sel: '#28121E', border: '#563040',
 	text: '#F6EFF3', muted: '#A78E9B', dim: '#76616B', gold: '#E0C27A', blue: '#A9C7EE', sky: '#C4DAF6',
@@ -124,6 +134,12 @@ const C = {
 	leaf: P.green, leafS: shade(P.green), leafH: hi(P.green),
 	coffee: goMix(P.sand, '#2A1523', 0.3), coffeeH: goMix(P.sand, '#2A1523', 0.1)
 };
+/* Inspector looks (T1): two suits that tell them apart, each with its own tie and hair. Residents never wear these colours. */
+export const INSPECTOR_LOOKS = [
+	{ suit: '#3D5A8A', tie: P.red, hair: '#8A8290' },
+	{ suit: '#7B2D45', tie: P.gold, hair: ORCH_HAIR }
+];
+const LEATHER = '#7A4E34';
 
 /* Sprite box: SPRITE.w x SPRITE.h px, feet on the anchor row, hats extend above it. Head maps are 24x14 letter grids.
    K ink, H hair, h hair shade, l hair light, S skin, s skin shade, E eye, W glint, C cheek, M mouth.
@@ -210,6 +226,7 @@ export function drawPot(ctx, level, t, brewing) {
 /**
  * Creates the office on `canvas` and starts its frame loop.
  * `hooks.onPot({ level, brewing, time })` runs about every 150 ms so the page can redraw the sidebar pot.
+ * `hooks.onReviewGone()` runs once both review inspectors have walked out (T1, S4).
  */
 export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	const T = cfg.tile, COLS = cfg.cols, ROWS = cfg.rows, W = COLS * T, H = ROWS * T;
@@ -1093,6 +1110,115 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		if (tick % 2 === 0) R(x + 2, y + 12, 3, 1, color);
 	}
 
+	/* ---------- review inspectors (T1, S1-S4): two inspectors from the native review, with a briefcase and a magnifying glass ---------- */
+	/* Seconds at each desk stop before the inspector moves on. */
+	const INSPECT_DWELL = 2.4;
+	const inspectors = INSPECTOR.check.map((_, index) => ({
+		index, present: false, leaving: false, exiting: false, leaveAt: 0, mode: 'check', tour: 0, dwell: 0,
+		x: 0, y: 0, path: [], face: 'up', sit: false, moving: false, step: 0, target: null, onArrive: null, bubble: null, ...INSPECTOR_LOOKS[index]
+	}));
+	let reviewPhase = 'idle', reviewVerdict = null, goneDue = false;
+	/* Walks an inspector to a spot, or places it there at once under reduced motion. `done` runs on arrival. */
+	function walkInspector(ins, s, done) {
+		if (reduced) { placeAt(ins, s); if (done) done(); return; }
+		goTo(ins, s, done);
+	}
+	/* New inspectors come in through the door, one tile apart. */
+	function enterInspector(ins) {
+		ins.present = true; ins.x = FX(cfg.door.x + ins.index); ins.y = FY(ROWS - 1);
+		ins.path = []; ins.moving = false; ins.bubble = null;
+	}
+	function arriveInspector(ins) {
+		if (!ins.present) enterInspector(ins);
+		ins.leaving = false; ins.exiting = false; ins.mode = 'check';
+		walkInspector(ins, INSPECTOR.check[ins.index]);
+	}
+	/* Walks to the next desk stop of its tour. The dwell counts down only while it stands still at a stop. */
+	function nextStop(ins) {
+		const tour = INSPECTOR.tours[ins.index];
+		walkInspector(ins, tour[ins.tour % tour.length]);
+		ins.tour += 1; ins.dwell = INSPECT_DWELL;
+	}
+	function leaveInspector(ins) {
+		ins.leaving = true; ins.exiting = false; ins.mode = 'leave'; ins.leaveAt = time + LEAVE_DELAY;
+	}
+	function startInspectorExit(ins) {
+		ins.exiting = true;
+		walkInspector(ins, { tx: cfg.door.x + ins.index, ty: ROWS - 1, face: 'down' }, () => departInspector(ins));
+	}
+	function departInspector(ins) {
+		ins.present = false; ins.leaving = false; ins.exiting = false; ins.bubble = null; ins.path = []; ins.moving = false;
+		if (!inspectors.some(other => other.present)) goneDue = true;
+	}
+	/* The check bubble: the approved sign-off, shown at the check spot and during the beat before they leave. A correction or failure shows the bang. */
+	function bubbleOf(ins) {
+		if (!ins.present || ins.exiting) return null;
+		if (ins.leaving) return reviewVerdict === 'approved' ? 'check' : reviewVerdict ? 'bang' : null;
+		return reviewPhase === 'verdict' && reviewVerdict === 'approved' && ins.mode === 'check' && !ins.moving && ins.path.length === 0 ? 'check' : null;
+	}
+	/* Acts only when the review's phase changes; the same phase sent again (a new count, a status call) changes nothing. */
+	function setReview(review) {
+		const phase = review ? review.phase : 'idle';
+		reviewVerdict = review ? review.verdict : null;
+		if (phase === reviewPhase) return;
+		reviewPhase = phase;
+		if (phase === 'arriving' || phase === 'verdict') inspectors.forEach(arriveInspector);
+		else if (phase === 'inspecting') inspectors.forEach(ins => { if (!ins.present) enterInspector(ins); ins.mode = 'tour'; nextStop(ins); });
+		else if (phase === 'leaving') {
+			inspectors.forEach(ins => { if (ins.present && !ins.leaving) leaveInspector(ins); });
+			if (!inspectors.some(ins => ins.present)) goneDue = true;
+		} else if (phase === 'idle') inspectors.forEach(ins => { if (ins.present && !ins.leaving) leaveInspector(ins); });
+	}
+	function updateInspectors(dt) {
+		for (const ins of inspectors) {
+			if (!ins.present) continue;
+			moveChar(ins, dt);
+			if (!ins.present) continue;
+			if (ins.leaving && !ins.exiting && time >= ins.leaveAt) startInspectorExit(ins);
+			if (ins.mode === 'tour' && !ins.moving && ins.path.length === 0) {
+				ins.dwell -= dt;
+				if (ins.dwell <= 0) nextStop(ins);
+			}
+			ins.bubble = bubbleOf(ins);
+		}
+		// Reported once, and only if nobody came back in meanwhile (a new review can arrive while they walk out).
+		if (goneDue) {
+			goneDue = false;
+			if (!inspectors.some(ins => ins.present) && hooks.onReviewGone) hooks.onReviewGone();
+		}
+	}
+	/* Inspector sprite (T1): the resident body in its suit, a bowler hat, a tie and two props. The briefcase hangs in the left hand.
+	   The magnifying glass is raised over the head while it inspects (with a slow sway), and held low while it walks or waits. */
+	function drawInspector(c) {
+		const fx = Math.round(c.x), fy = Math.round(c.y);
+		const walk = c.moving ? Math.floor(c.step) % 4 : 0, bob = c.moving && walk % 2 ? 1 : 0;
+		const ox = fx - 12, oy = fy - 35 - bob;
+		const sw = c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
+		g.globalAlpha = 0.35; R(fx - 9, fy - 1, 18, 2, INK); g.globalAlpha = 1;
+		const { rows, flip, fam } = headFor(c);
+		drawFigure(ox, oy, { color: c.suit, walk, sw, sit: false });
+		sprite(rows, { K: INK, H: c.hair, h: shade(c.hair), l: hi(c.hair), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep }, ox, oy, flip);
+		drawInspectorKit(c, ox, oy, fam, flip);
+	}
+	function drawInspectorKit(c, ox, oy, fam, flip) {
+		const fx = (x, w) => (flip ? ox + 23 - x - (w || 1) + 1 : ox + x);
+		const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
+		/* Bowler hat: dark crown with a band in the tie colour, and a brim. */
+		hX(5, 14, -9, 6, P.bg); hX(5, 14, -9, 1, P.border); hX(5, 14, -4, 1, c.tie);
+		hX(2, 20, -3, 2, P.bg); hX(2, 20, -3, 1, P.border);
+		/* Shirt front and tie. */
+		hX(10, 4, 15, 2, P.text); hX(11, 2, 16, 6, c.tie); hX(11, 2, 22, 1, shade(c.tie));
+		/* Briefcase: a handle over a case, held in the left hand. */
+		R(ox + 1, oy + 22, 4, 1, INK); R(ox + 1, oy + 23, 1, 2, INK); R(ox + 4, oy + 23, 1, 2, INK);
+		R(ox - 1, oy + 25, 8, 7, INK); R(ox, oy + 26, 6, 5, LEATHER); R(ox, oy + 26, 6, 1, hi(LEATHER)); R(ox + 2, oy + 28, 2, 1, P.gold);
+		/* Magnifying glass in the right hand: raised over the head while it inspects, held low otherwise. */
+		const raised = c.mode === 'tour' && !c.moving;
+		const cx = ox + 22, cy = raised ? oy + 2 - (reduced ? 0 : Math.round(triangle(time * 0.4))) : oy + 29;
+		/* Handle from the hand to the rim, then a steel rim round the glass, so it reads as a magnifier and not a ball. */
+		line(ox + 20, raised ? oy + 23 : oy + 24, cx - 2, cy + 3, P.border);
+		disc(cx, cy, 4, INK); disc(cx, cy, 3, P.steel); disc(cx, cy, 2, P.sky); R(cx - 1, cy - 1, 1, 1, P.text);
+	}
+
 	/* ---------- lounge staff (S16): one idle staff member per role chats by the coffee counter ---------- */
 	/* A staff member is drawn in its resident look while its role is unclaimed. Chat and sips are clock functions, so they hold no state. */
 	const CHAT_EVERY = 3, CHAT_FOR = 2.2;
@@ -1121,6 +1247,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		orch.bubble = next.bubble ? { icon: next.bubble, t: Infinity } : null;
 		potTarget = next.potLevel;
 		syncResidents(next.agents || []);
+		setReview(next.review);
 		const present = new Set((next.staff || []).filter(s => s.present).map(s => s.role));
 		presentStaff = staffFigures.filter(f => present.has(f.role));
 		deskWorking = allDesks.map((_, i) => {
@@ -1145,6 +1272,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		if (orch.bubble) { orch.bubble.t -= dt; if (orch.bubble.t <= 0) orch.bubble = null; }
 		updateOrch(dt);
 		updateResidents(dt);
+		updateInspectors(dt);
 		updateStaff();
 		if (camera) updateCamera(dt);
 		potShown += (potTarget - potShown) * Math.min(1, dt * 1.2);
@@ -1170,9 +1298,11 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		FEATURE_PROPS.forEach(p => list.push({ k: (p.y + p.h) * T - 1, f: () => PROP_DRAWERS[p.feature](p, lit[p.feature]) }));
 		list.push({ k: orch.y, f: () => drawOrchestrator(orch) });
 		residents.forEach(c => list.push({ k: c.y, f: () => drawResident(c) }));
+		inspectors.forEach(ins => { if (ins.present) list.push({ k: ins.y, f: () => drawInspector(ins) }); });
 		presentStaff.forEach(f => list.push({ k: f.y, f: () => drawResident(f) }));
 		list.sort((p, q) => p.k - q.k).forEach(o => o.f());
 		drawOrchBubble();
+		inspectors.forEach(ins => { if (ins.present && ins.bubble) drawBubble(Math.round(ins.x) - 9, Math.round(ins.y) - 35 - 30, ins.bubble); });
 		/* A seated resident's bubble rises above its desk monitor. A standing one (bench queue) sits just over its head, clear of the desk chairs. */
 		residents.forEach(c => { if (c.bubble) drawBubble(Math.round(c.x) - 9, Math.round(c.y) - 35 - (c.sit ? 36 : 14), c.bubble.icon); });
 		const speaker = chattingStaff();
@@ -1194,6 +1324,13 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		if (target.kind === 'feature') {
 			const p = FEATURE_PROPS.find(q => q.feature === target.feature);
 			return p ? { x: (p.x + p.w / 2) * T, y: (p.y + p.h / 2) * T } : null;
+		}
+		// The review inspectors on the floor: the midpoint between them (T1).
+		if (target.kind === 'inspector') {
+			const on = inspectors.filter(ins => ins.present);
+			if (on.length === 0) return null;
+			const mid = key => on.reduce((sum, ins) => sum + ins[key], 0) / on.length;
+			return { x: mid('x'), y: mid('y') - 20 };
 		}
 		return null;
 	}

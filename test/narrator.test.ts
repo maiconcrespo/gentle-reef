@@ -288,3 +288,35 @@ describe("narrator: a claimant walks back to the coffee (S16)", () => {
 		assert.deepEqual(finish(done, "completed", true).lines, []);
 	});
 });
+
+describe("narrator: review inspectors (T1)", () => {
+	const review = (body: Record<string, unknown>) => ev({ type: "review", ...body });
+	const speak = (text: string, tone: string) => ({ speaker: "INSPECTORS", text, tone });
+
+	it("announces the arrival, the lens count of the inspection, and an approved verdict", () => {
+		assert.deepEqual(lines([
+			{ event: review({ phase: "arrive" }) },
+			{ event: review({ phase: "inspect", count: 1 }) },
+			{ event: review({ phase: "verdict", verdict: "approved" }) },
+		]), [speak("arriving at the door.", "info"), speak("inspecting the desks, 1 lens…", "info"), speak("approved ✓", "ok")]);
+	});
+
+	it("uses the plural for several lenses", () => {
+		assert.deepEqual(lines([{ event: review({ phase: "inspect", count: 3 }) }]), [speak("inspecting the desks, 3 lenses…", "info")]);
+	});
+
+	it("says a correction, a failed review, and the sign-off", () => {
+		assert.deepEqual(lines([{ event: review({ phase: "verdict", verdict: "correction" }) }]), [speak("correction required !", "fail")]);
+		assert.deepEqual(lines([{ event: review({ phase: "verdict", verdict: "failed" }) }]), [speak("review failed !", "fail")]);
+		assert.deepEqual(lines([{ event: review({ phase: "acknowledged" }) }]), [speak("signed off, leaving.", "ok")]);
+	});
+
+	it("keeps the feature line that calls the inspectors", () => {
+		assert.deepEqual(lines([{ event: ev({ type: "feature", feature: "review", detail: "gentle_review_capture" }) }]), [{ speaker: "ORCHESTRATOR", text: "calling the inspectors…", tone: "info" }]);
+	});
+
+	it("a review event moves the story camera to the inspectors, not to the orchestrator", () => {
+		assert.deepEqual(actorOf(review({ phase: "arrive" })), { kind: "inspector" });
+		assert.deepEqual(actorOf(review({ phase: "verdict", verdict: "approved" })), { kind: "inspector" });
+	});
+});

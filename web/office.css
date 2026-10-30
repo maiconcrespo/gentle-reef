@@ -50,6 +50,7 @@ ul.team li.plain { grid-template-columns: 1fr; }
 .dot.role-explore { background: var(--blue); }
 .dot.role-worker { background: var(--green); }
 .dot.role-verify { background: var(--pink); }
+.dot.role-inspector { background: var(--sand); }
 ul.crew { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--sel); }
 .who { min-width: 0; }
 .who b { font-weight: 600; }

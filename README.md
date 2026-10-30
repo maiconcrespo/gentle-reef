@@ -70,7 +70,7 @@ This is the target design for the terminal stage (`design/terminal-office/02-sta
 - [x] Web office: full, compact and story layouts, narration, idle crew, props, ask dialog
 - [x] `gentle-reef` launcher and per-session modes
 - [ ] **Terminal stage** built from the design (T7). This is the next milestone. [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
-- [ ] Review inspectors that visit during native review (T4) [#2](https://github.com/maiconcrespo/gentle-reef/issues/2)
+- [x] Review inspectors that visit during native review (T4) [#2](https://github.com/maiconcrespo/gentle-reef/issues/2)
 - [ ] Judgment-day judges debating at their table (T5) [#3](https://github.com/maiconcrespo/gentle-reef/issues/3)
 - [ ] A boss character you move with the keyboard, which sends prompts over an authenticated channel (T8, security-sensitive) [#4](https://github.com/maiconcrespo/gentle-reef/issues/4)
 - [ ] Music radio tied to gentle-shell music [#5](https://github.com/maiconcrespo/gentle-reef/issues/5)
