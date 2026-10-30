@@ -625,6 +625,20 @@ describe("terminal mode (GENTLE_REEF=1)", () => {
 		assert.deepEqual(widgets.at(-1), { key: "gentle-reef", content: undefined });
 	});
 
+	it("refreshWidget redraws with the stage's current availability (alt+g game mode hides the stage image)", async () => {
+		const toggle = await loadToggle("1");
+		let kitty = true;
+		const stage = { available: () => kitty, widget: () => () => ({ render: () => [], invalidate() {} }) };
+		const fake = fakeHost();
+		const { widgets, ui } = fakeUi();
+		const controller = toggle.registerOffice(fake.host, { hub: new OfficeHub(), stage });
+		fake.emitPi("session_start", { type: "session_start" }, { ui });
+		assert.equal(typeof widgets.at(-1)?.content, "function");
+		kitty = false;
+		controller.refreshWidget();
+		assert.deepEqual(widgets.at(-1), { key: "gentle-reef", content: ["✿ gentle-reef · terminal mode · idle · 0 agents"] });
+	});
+
 	it("/office off detaches this session's listeners and clears the widget; /office on brings both back", async () => {
 		const toggle = await loadToggle("1");
 		const fake = fakeHost();

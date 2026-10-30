@@ -1,13 +1,15 @@
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Image, allocateImageId, getCapabilities } from "@earendil-works/pi-tui";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Image, allocateImageId, deleteKittyImage, getCapabilities, getCellDimensions, type OverlayHandle } from "@earendil-works/pi-tui";
 import { OfficeHub, type OfficeSnapshot } from "../src/adapter/hub.ts";
 import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
 import { frameFromSnapshot, renderHqPng } from "../src/stage/frame.ts";
+import { composeGame, gameHud, gameLayout, gameSide } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
-// Thin wiring only. Event mapping and state live in src/ so they stay testable.
+// Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
 // The window server is built here but binds nothing until `/office open`.
 // Terminal mode (GENTLE_REEF=1, set by bin/gentle-reef) is read in src/toggle.ts. Nothing is persisted between sessions.
 export default function gentleOffice(pi: ExtensionAPI): void {
@@ -17,28 +19,53 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 		assetsDir: fileURLToPath(new URL("../web/", import.meta.url)),
 		openUrl: url => openInBrowser(url),
 	});
-	registerOffice(pi, { hub, server, stage: kittyStage() });
+	const png = roomPng();
+	const game = gameMode(hub, png);
+	const controller = registerOffice(pi, { hub, server, stage: kittyStage(png, () => game.visible()) });
+	if (!controller.terminal) return;
+
+	// Game mode (T3): on by default in gentle-reef on Kitty terminals; alt+g goes back to plain Pi and forth.
+	pi.on("session_start", (_event, ctx) => {
+		try {
+			if (kitty()) game.open(ctx);
+		} catch {
+			// Game mode is display only; plain Pi stays if it cannot open.
+		}
+		controller.refreshWidget();
+	});
+	pi.registerShortcut("alt+g", {
+		description: "Gentle HQ: switch between game mode and plain chat",
+		handler: ctx => {
+			if (kitty()) game.toggle(ctx);
+			controller.refreshWidget();
+		},
+	});
 }
 
-/** Share of the terminal height the stage may take; the chat and the editor keep the rest. */
-const STAGE_HEIGHT_SHARE = 0.55;
+const kitty = (): boolean => getCapabilities().images === "kitty";
 
-/**
- * The terminal stage (issue #1, T1 spike): the Gentle HQ room as one Kitty image above the editor.
- * One image id for the whole session, so each new frame replaces the previous one instead of stacking.
- * The PNG is re-encoded only when what the room shows changes.
- */
-function kittyStage(): TerminalStage {
-	let imageId: number | undefined;
+/** The room PNG for a snapshot, re-encoded only when what the room shows changes. */
+function roomPng(): (snapshot: OfficeSnapshot) => string {
 	let last: { key: string; png: string } | undefined;
-	const pngFor = (snapshot: OfficeSnapshot): string => {
+	return snapshot => {
 		const frame = frameFromSnapshot(snapshot);
 		const key = JSON.stringify(frame);
 		if (last?.key !== key) last = { key, png: renderHqPng(frame) };
 		return last.png;
 	};
+}
+
+/** Share of the terminal height the band above the editor may take (when game mode is off but the band is shown). */
+const STAGE_HEIGHT_SHARE = 0.55;
+
+/**
+ * The band above the editor (T1): the room as one Kitty image. Hidden while game mode shows the room, so the widget
+ * falls back to the one status line. One image id for the session, so frames replace each other.
+ */
+function kittyStage(pngFor: (snapshot: OfficeSnapshot) => string, gameVisible: () => boolean): TerminalStage {
+	let imageId: number | undefined;
 	return {
-		available: () => getCapabilities().images === "kitty",
+		available: () => kitty() && !gameVisible(),
 		widget: snapshot => {
 			const png = pngFor(snapshot);
 			return tui => {
@@ -46,6 +73,81 @@ function kittyStage(): TerminalStage {
 				const rows = Math.max(8, Math.floor((tui?.terminal?.rows ?? 40) * STAGE_HEIGHT_SHARE));
 				return new Image(png, "image/png", { fallbackColor: text => text }, { maxWidthCells: 400, maxHeightCells: rows, imageId });
 			};
+		},
+	};
+}
+
+/** Rows left under the overlay for Pi's editor, its frame and the status line. */
+const EDITOR_ROWS = 8;
+
+/**
+ * Game mode (T3 spike): a full-width, non-capturing overlay over Pi's chat with the Gentle HQ layout (src/stage/game.ts):
+ * HUD, the room on the left, the party and chat column on the right. The editor below keeps the focus.
+ */
+function gameMode(hub: OfficeHub, pngFor: (snapshot: OfficeSnapshot) => string) {
+	let handle: OverlayHandle | undefined;
+	let opening = false;
+	let terminalRows = 40;
+	let write: ((data: string) => void) | undefined;
+	const imageId = allocateImageId();
+	const project = process.cwd().replace(homedir(), "~");
+
+	const open = (ctx: ExtensionContext): void => {
+		if (handle || opening) return;
+		opening = true;
+		void ctx.ui.custom<void>(
+			(tui, theme) => {
+				terminalRows = tui.terminal.rows;
+				write = data => tui.terminal.write(data);
+				let image: { png: string; cols: number; rows: number; view: Image } | undefined;
+				const unsubscribe = hub.subscribe(() => tui.requestRender());
+				return {
+					render(width: number): string[] {
+						terminalRows = tui.terminal.rows;
+						const layout = gameLayout(width, Math.max(1, terminalRows - EDITOR_ROWS), getCellDimensions());
+						if (!layout) return [];
+						const snapshot = hub.snapshot();
+						const png = pngFor(snapshot);
+						if (image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
+							const view = new Image(png, "image/png", { fallbackColor: text => theme.fg("muted", text) }, { maxWidthCells: layout.roomCols, maxHeightCells: layout.bodyRows, imageId });
+							image = { png, cols: layout.roomCols, rows: layout.bodyRows, view };
+						}
+						return composeGame(layout, { hud: gameHud(snapshot, { project }), room: image.view.render(layout.roomCols + 2), side: gameSide(snapshot) });
+					},
+					invalidate() {
+						image?.view.invalidate();
+					},
+					dispose() {
+						unsubscribe();
+					},
+				};
+			},
+			{
+				overlay: true,
+				overlayOptions: () => ({ anchor: "top-left", width: "100%", maxHeight: Math.max(1, terminalRows - EDITOR_ROWS), margin: 0, nonCapturing: true }),
+				onHandle: h => {
+					handle = h;
+					opening = false;
+				},
+			},
+		)
+			// Display only: a host that cannot show the overlay leaves plain Pi, never a broken session.
+			.catch(() => undefined)
+			.finally(() => {
+				handle = undefined;
+				opening = false;
+			});
+	};
+
+	return {
+		visible: () => (handle !== undefined && !handle.isHidden()) || opening,
+		open,
+		toggle(ctx: ExtensionContext): void {
+			if (!handle) return open(ctx);
+			const hide = !handle.isHidden();
+			handle.setHidden(hide);
+			// A Kitty image stays on screen until it is deleted; the overlay's lines going away does not remove it.
+			if (hide) write?.(deleteKittyImage(imageId));
 		},
 	};
 }

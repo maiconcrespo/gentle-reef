@@ -86,6 +86,8 @@ export interface OfficeController {
 	isEnabled(): boolean;
 	/** Affects this session only. Nothing is written to disk. */
 	setEnabled(enabled: boolean): void;
+	/** Redraws the terminal widget, e.g. after game mode (alt+g) changes whether the stage image is shown. */
+	refreshWidget(): void;
 }
 
 function usageOf(ctx: PiContext | undefined): UsageReading | undefined {
@@ -182,6 +184,7 @@ export function registerOffice(
 			if (next) attach();
 			else detach();
 		},
+		refreshWidget: () => renderWidget(),
 	};
 
 	if (terminal) {
