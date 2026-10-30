@@ -13,6 +13,7 @@ import {
 	reduceDialog,
 	reduceScene,
 	sceneView,
+	teamRows,
 	typedLength,
 } from "./scene-reducer.js";
 import { OFFICE_CONFIG, createOfficeEngine, drawPot, storyZoom } from "./office-engine.js";
@@ -142,8 +143,11 @@ function fitCanvas() {
 	const roomW = mainEl.clientWidth - num(main, "paddingLeft") - num(main, "paddingRight")
 		- (sideBySide ? asideEl.offsetWidth + num(main, "columnGap") : 0);
 	const frameX = num(frame, "paddingLeft") + num(frame, "paddingRight") + num(frame, "borderLeftWidth") + num(frame, "borderRightWidth");
-	// Height left for the canvas: viewport minus header, footer, main padding and everything else in the stage (frame chrome, legend).
-	const stageRest = canvas.closest(".stage").offsetHeight - canvas.offsetHeight;
+	// Height left for the canvas: viewport minus header, footer, main padding and the rest of the stage (frame chrome, caption).
+	// The legend is left out: it may scroll below the fold rather than shrink the room to 1x.
+	const legend = document.querySelector(".map");
+	const legendH = legend && legend.offsetParent !== null ? legend.offsetHeight + num(getComputedStyle(canvas.closest(".stage")), "rowGap") : 0;
+	const stageRest = canvas.closest(".stage").offsetHeight - canvas.offsetHeight - legendH;
 	const roomH = window.innerHeight - document.querySelector("header").offsetHeight - document.querySelector("footer").offsetHeight
 		- num(main, "paddingTop") - num(main, "paddingBottom") - stageRest;
 	const fits = Math.min(Math.floor((roomW - frameX) / canvas.width), Math.floor(roomH / canvas.height));
@@ -249,31 +253,21 @@ function renderBrew() {
 	$("footAgents").textContent = `${view.activeAgents} subagent${view.activeAgents === 1 ? "" : "s"}`;
 }
 
-// Team sidebar: one row per resident agent. Labels and statuses go in through textContent only.
+// Team sidebar: the residents, then each idle staff member on break (S16). Labels and statuses go in through textContent only.
 function renderCrew() {
-	const rows = view.agents.map((agent) => {
-		const li = el("li");
-		const dot = el("span", `dot role-${agent.role}`);
+	const rows = teamRows(view).map((row) => {
+		const staff = row.kind === "staff";
+		const li = el("li", staff ? "on-break" : "");
+		const dot = el("span", `dot role-${row.role}`);
 		const who = el("span", "who");
 		const name = el("b");
-		name.textContent = agent.label || ROLE_LABEL[agent.role];
+		name.textContent = staff ? ROLE_LABEL[row.role] : row.label || ROLE_LABEL[row.role];
 		const status = el("small");
-		status.textContent = `${ROLE_LABEL[agent.role]} · ${STATUS_LABEL[agent.status] ?? agent.status}`;
+		status.textContent = staff ? row.status : `${ROLE_LABEL[row.role]} · ${STATUS_LABEL[row.status] ?? row.status}`;
 		who.append(name, status);
 		li.append(dot, who);
 		return li;
 	});
-	if (rows.length === 0) {
-		const li = el("li", "plain");
-		const who = el("span", "who");
-		const name = el("b");
-		name.textContent = "No resident agents";
-		const hint = el("small");
-		hint.textContent = "Explore, worker and verify agents take a desk while they run.";
-		who.append(name, hint);
-		li.append(who);
-		rows.push(li);
-	}
 	crewEl.replaceChildren(...rows);
 }
 
@@ -281,12 +275,19 @@ function renderCrew() {
 function renderParty() {
 	const rows = [
 		partyRow("orchestrator", "Orchestrator", orchestratorLabel(view), follow.kind === "orchestrator"),
-		...view.agents.map((agent) => partyRow(
-			agent.role,
-			agent.label || ROLE_LABEL[agent.role],
-			`${ROLE_LABEL[agent.role]} · ${STATUS_LABEL[agent.status] ?? agent.status}`,
-			follow.kind === "resident" && follow.id === agent.id,
-		)),
+		...teamRows(view).map((row) => {
+			if (row.kind === "staff") {
+				const li = partyRow(row.role, ROLE_LABEL[row.role], row.status, false);
+				li.className = "on-break";
+				return li;
+			}
+			return partyRow(
+				row.role,
+				row.label || ROLE_LABEL[row.role],
+				`${ROLE_LABEL[row.role]} · ${STATUS_LABEL[row.status] ?? row.status}`,
+				follow.kind === "resident" && follow.id === row.id,
+			);
+		}),
 	];
 	$("sParty").replaceChildren(...rows);
 }
@@ -389,7 +390,9 @@ function dispatchDialog(action) {
 }
 
 function narrateEvent(event, at) {
-	const result = narrate(narrator, event, at);
+	// Read after the scene took the event, so a finishing claimant still holds its staff member and narrates the walk back.
+	const claimant = event && event.type === "subagent" && view.agents.some((agent) => agent.id === event.id && agent.claimed);
+	const result = narrate(narrator, event, at, { claimant: Boolean(claimant) });
 	narrator = result.state;
 	if (result.lines.length > 0) dispatchDialog({ type: "lines", lines: result.lines });
 }
