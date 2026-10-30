@@ -265,3 +265,101 @@ describe("lounge staff and the team view (S16)", () => {
 		]);
 	});
 });
+
+describe("review inspectors: the native review lifecycle (T1, S2-S4)", () => {
+	const review = (body: Record<string, unknown>) => event({ type: "review", ...body });
+	const arrive = (extra: Record<string, unknown> = {}) => review({ phase: "arrive", ...extra });
+	const inspect = (count = 2) => review({ phase: "inspect", count });
+	const verdict = (value: string) => review({ phase: "verdict", verdict: value });
+	const ack = () => review({ phase: "acknowledged" });
+	const phaseOf = (state: Scene) => sceneView(state).review.phase;
+	const snapshot = (state: string) => ({ type: "snapshot", snapshot: { v: 1, orchestrator: { state }, context: { percent: null }, agents: [] } });
+	const inspectors = (state: Scene) => reducer.teamRows(sceneView(state)).filter(row => row.kind === "inspector");
+
+	it("starts idle, with no inspector on site", () => {
+		assert.equal(phaseOf(run()), "idle");
+		assert.deepEqual(inspectors(run()), []);
+	});
+
+	it("a review start walks the inspectors in, and an inspect puts them to work", () => {
+		assert.equal(phaseOf(run(arrive())), "arriving");
+		const working = sceneView(run(arrive(), inspect(2))).review;
+		assert.equal(working.phase, "inspecting");
+		assert.equal(working.count, 2);
+		assert.equal(working.verdict, null);
+	});
+
+	it("an approved verdict keeps them on site, with the check", () => {
+		const view = sceneView(run(arrive(), inspect(), verdict("approved"))).review;
+		assert.equal(view.phase, "verdict");
+		assert.equal(view.verdict, "approved");
+	});
+
+	it("a correction verdict sends them out with the bang, since there is no follow-up yet (S4)", () => {
+		const view = sceneView(run(arrive(), inspect(), verdict("correction"))).review;
+		assert.equal(view.phase, "leaving");
+		assert.equal(view.verdict, "correction");
+	});
+
+	it("a failed review sends them out too", () => {
+		assert.equal(phaseOf(run(arrive(), inspect(), verdict("failed"))), "leaving");
+	});
+
+	it("acknowledging an approved review signs them off and sends them out (S3)", () => {
+		const view = sceneView(run(arrive(), inspect(), verdict("approved"), ack())).review;
+		assert.equal(view.phase, "leaving");
+		assert.equal(view.verdict, "approved");
+	});
+
+	it("the session going idle sends them out, whatever the review was doing (S4)", () => {
+		assert.equal(phaseOf(run(arrive(), inspect(), orchestrator("idle"))), "leaving");
+		assert.equal(phaseOf(run(arrive(), verdict("approved"), orchestrator("idle"))), "leaving");
+	});
+
+	it("an idle snapshot sends them out, and a working snapshot keeps them", () => {
+		assert.equal(phaseOf(run(arrive(), snapshot("thinking"))), "arriving");
+		assert.equal(phaseOf(run(arrive(), snapshot("idle"))), "leaving");
+	});
+
+	it("a new review after they left brings them back in, with no old verdict", () => {
+		const view = sceneView(run(arrive(), verdict("correction"), arrive())).review;
+		assert.equal(view.phase, "arriving");
+		assert.equal(view.verdict, null);
+	});
+
+	it("a verdict or an acknowledgement with no inspectors on site changes nothing", () => {
+		assert.equal(phaseOf(run(verdict("approved"))), "idle");
+		assert.equal(phaseOf(run(ack())), "idle");
+	});
+
+	it("names the two inspectors after the lenses the start asked for, else Inspector A and B", () => {
+		assert.deepEqual(inspectors(run(arrive({ names: ["reliability", "risk"] }))).map(row => row.label), ["Reliability", "Risk"]);
+		assert.deepEqual(inspectors(run(arrive())).map(row => row.label), ["Inspector A", "Inspector B"]);
+	});
+
+	it("the team list shows the inspectors on site, with what they are doing", () => {
+		assert.deepEqual(inspectors(run(arrive(), inspect())).map(row => row.status), ["inspecting the desks", "inspecting the desks"]);
+		assert.deepEqual(inspectors(run(arrive(), inspect(), verdict("approved"))).map(row => row.status), ["approved ✓", "approved ✓"]);
+	});
+
+	it("the team list drops the inspectors once they leave", () => {
+		assert.deepEqual(inspectors(run(arrive(), verdict("correction"))), []);
+		assert.deepEqual(inspectors(run(arrive(), verdict("approved"), ack())), []);
+	});
+
+	it("a verdict logs one line: approved in the tool colour, a correction or failure as a failure", () => {
+		const top = (state: Scene) => {
+			const { id: _id, ...entry } = state.log[0]!;
+			return entry;
+		};
+		assert.deepEqual(top(run(arrive(), verdict("approved"))), { kind: "tool", text: "review approved ✓", at });
+		assert.deepEqual(top(run(arrive(), verdict("correction"))), { kind: "fail", text: "review correction required !", at });
+	});
+
+	it("review events leave the orchestrator, the desks and the residents alone", () => {
+		const view = sceneView(run(arrive(), inspect(), verdict("approved")));
+		assert.equal(view.orchestrator, "idle");
+		assert.deepEqual(view.agents, []);
+		assert.equal(view.activeAgents, 0);
+	});
+});
