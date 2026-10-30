@@ -12,6 +12,9 @@
 			"./extensions"
 		]
 	},
+	"bin": {
+		"gentle-reef": "./bin/gentle-reef"
+	},
 	"scripts": {
 		"test": "node --test \"test/**/*.test.ts\""
 	},

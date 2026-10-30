@@ -1,13 +1,17 @@
 import { piEventToOffice, type PiEvent, type UsageReading } from "./adapter/pi-events.ts";
 import { GENTLE_NOTIFICATION_SOURCE_EVENT, subagentFromNotification } from "./adapter/task-status.ts";
 import { SubagentIdentityBridge } from "./adapter/subagent-identity.ts";
-import { OfficeHub, type HubStats } from "./adapter/hub.ts";
+import { OfficeHub, type HubStats, type OfficeSnapshot } from "./adapter/hub.ts";
 import type { OfficeEvent } from "./contract/office-event.ts";
 import type { OfficeServer } from "./server/office-server.ts";
-import { officeSettingsPath, readOfficeSettings, writeOfficeSettings } from "./settings.ts";
 
 export const OFFICE_COMMAND_NAME = "office";
-const OFFICE_COMMAND_DESCRIPTION = "Open the Gentle Office menu, or run /office on | off | status | open | dock | story";
+const OFFICE_COMMAND_DESCRIPTION = "Open the Gentle Office menu, or run /office on | off | status | open | dock | story (this session only)";
+/** Set by bin/gentle-reef. Read once, at load; a plain gentle-shell session leaves it unset. */
+export const TERMINAL_MODE_ENV = "GENTLE_REEF";
+const TERMINAL_MODE_AT_LOAD = process.env[TERMINAL_MODE_ENV] === "1";
+/** Key of the one-line status widget. Placeholder until T7 draws the stage. */
+export const REEF_WIDGET_KEY = "gentle-reef";
 /** Query the window page reads to pick the compact (dock) layout. The token path is unchanged. */
 const COMPACT_LAYOUT_QUERY = "layout=dock";
 /** Query the window page reads to pick the story layout (close-up camera, dialog). The token path is unchanged. */
@@ -28,8 +32,16 @@ export const OFFICE_PI_EVENTS = [
 	"session_compact_failed",
 ] as const;
 
+/** Task states that still count as an agent in flight on the widget. */
+const IN_FLIGHT_STATUSES: ReadonlySet<string> = new Set(["queued", "running", "waiting"]);
+
+interface WidgetUi {
+	setWidget(key: string, content: string[] | undefined): void;
+}
+
 interface PiContext {
 	readonly getContextUsage?: () => { readonly percent: number | null } | undefined;
+	readonly ui?: WidgetUi;
 }
 
 export interface OfficeCommandContext {
@@ -56,10 +68,12 @@ export type OfficeWindow = Pick<OfficeServer, "open" | "stop" | "status">;
 
 export interface OfficeController {
 	readonly hub: OfficeHub;
-	readonly settingsPath: string;
 	readonly server: OfficeWindow | undefined;
+	/** Started by bin/gentle-reef: listeners attach at start and the status widget is drawn. */
+	readonly terminal: boolean;
 	isEnabled(): boolean;
-	setEnabled(enabled: boolean): { ok: true } | { ok: false; error: string };
+	/** Affects this session only. Nothing is written to disk. */
+	setEnabled(enabled: boolean): void;
 }
 
 function usageOf(ctx: PiContext | undefined): UsageReading | undefined {
@@ -67,15 +81,26 @@ function usageOf(ctx: PiContext | undefined): UsageReading | undefined {
 	return usage === undefined ? undefined : { percent: usage.percent };
 }
 
+/** The terminal widget: one line with the orchestrator state and the agents still in flight. */
+export function reefWidgetLine(snapshot: OfficeSnapshot): string {
+	const agents = snapshot.agents.filter(agent => IN_FLIGHT_STATUSES.has(agent.status)).length;
+	return `✿ gentle-reef · terminal mode · ${snapshot.orchestrator.state} · ${agents} agents`;
+}
+
 /**
- * Registers `/office` and attaches listeners only while enabled. When off, the
- * only registration is the command. Reads the settings file once, here.
+ * Registers `/office` and, per session, attaches listeners while enabled. Plain
+ * sessions start off and attach nothing until `/office on`. Terminal sessions
+ * (GENTLE_REEF=1) start on and draw the status widget. No state is persisted.
  */
-export function registerOffice(host: OfficeHost, options: { agentDir: string; hub: OfficeHub; server?: OfficeWindow }): OfficeController {
-	const { agentDir, hub, server } = options;
+export function registerOffice(
+	host: OfficeHost,
+	options: { hub: OfficeHub; server?: OfficeWindow; terminal?: boolean },
+): OfficeController {
+	const { hub, server, terminal = TERMINAL_MODE_AT_LOAD } = options;
 	const identity = new SubagentIdentityBridge();
 	let enabled = false;
 	let detachers: Array<() => void> = [];
+	let widgetUi: WidgetUi | undefined;
 	const stopWindow = (): void => {
 		if (server) void server.stop().catch(() => undefined);
 	};
@@ -85,6 +110,16 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 			for (const event of events) hub.publish(event);
 		} catch {
 			// Display state must never interrupt a Pi event.
+		}
+	};
+
+	// The widget only exists in terminal mode and only once Pi has handed us the session's ui.
+	const renderWidget = (): void => {
+		if (!terminal || widgetUi === undefined) return;
+		try {
+			widgetUi.setWidget(REEF_WIDGET_KEY, enabled ? [reefWidgetLine(hub.snapshot())] : undefined);
+		} catch {
+			// The widget is display only; a host that cannot draw it must not break a Pi event.
 		}
 	};
 
@@ -104,7 +139,9 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 				if (event) publish([identity.observe(event)]);
 			}),
 			host.on(OFFICE_SHUTDOWN_EVENT, () => stopWindow()),
+			hub.subscribe(() => renderWidget()),
 		];
+		renderWidget();
 	};
 
 	const detach = (): void => {
@@ -115,23 +152,27 @@ export function registerOffice(host: OfficeHost, options: { agentDir: string; hu
 		stopWindow();
 		identity.reset();
 		hub.reset();
+		renderWidget();
 	};
 
 	const controller: OfficeController = {
 		hub,
 		server,
-		settingsPath: officeSettingsPath(agentDir),
+		terminal,
 		isEnabled: () => enabled,
 		setEnabled(next) {
-			const written = writeOfficeSettings(agentDir, { enabled: next });
-			if (!written.ok) return written;
 			if (next) attach();
 			else detach();
-			return { ok: true };
 		},
 	};
 
-	if (readOfficeSettings(agentDir).enabled) attach();
+	if (terminal) {
+		host.on("session_start", (_event, ctx) => {
+			widgetUi = ctx?.ui;
+			renderWidget();
+		});
+		attach();
+	}
 
 	host.registerCommand(OFFICE_COMMAND_NAME, {
 		description: OFFICE_COMMAND_DESCRIPTION,
@@ -199,7 +240,7 @@ const windowLine = (server: OfficeWindow | undefined): string => {
 
 /** `/office open` (and `/office dock` with the compact query): only while enabled. Starts the single window server if needed, then opens its URL. */
 export async function openOffice(controller: OfficeController, query?: string): Promise<OfficeCommandResult> {
-	if (!controller.isEnabled()) return { level: "warning", message: "Gentle Office is off. Run /office on first." };
+	if (!controller.isEnabled()) return { level: "warning", message: "Gentle Office is off for this session. Run /office on first." };
 	if (controller.server === undefined) return { level: "error", message: "Gentle Office window is not available in this host." };
 	try {
 		const result = await controller.server.open(query);
@@ -214,13 +255,13 @@ export function runOfficeCommand(args: string, controller: OfficeController): Of
 	const subcommand = args.trim().toLowerCase();
 	if (subcommand === "on" || subcommand === "off") {
 		const next = subcommand === "on";
-		const result = controller.setEnabled(next);
-		if (!result.ok) return { level: "error", message: `Gentle Office: could not write ${controller.settingsPath}: ${result.error}` };
-		return { level: "info", message: next ? "Gentle Office on: listeners attached." : "Gentle Office off: listeners detached." };
+		controller.setEnabled(next);
+		return { level: "info", message: next ? "Gentle Office on for this session: listeners attached." : "Gentle Office off for this session: listeners detached." };
 	}
 	if (subcommand === "" || subcommand === "status") {
 		const state = controller.isEnabled() ? "enabled" : "disabled";
-		return { level: "info", message: `Gentle Office ${state} · ${statsLine(controller.hub.stats())}${windowLine(controller.server)}` };
+		const mode = controller.terminal ? " · terminal mode" : "";
+		return { level: "info", message: `Gentle Office ${state} for this session${mode} · ${statsLine(controller.hub.stats())}${windowLine(controller.server)}` };
 	}
 	return { level: "warning", message: "Usage: /office on | off | status | open | dock | story" };
 }

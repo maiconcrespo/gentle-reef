@@ -14,19 +14,33 @@ pi install ./
 
 Or add the path to the `packages` list in your Pi `settings.json`.
 
+## Two ways to use it
+
+- **`gentle-reef`: terminal mode.** Starts gentle-shell with the office attached to that session: listeners run from the start, and a one-line status widget sits above the editor, `✿ gentle-reef · terminal mode · <orchestrator state> · <n> agents`. The terminal stage comes later; the widget is the placeholder until then. The launcher is `bin/gentle-reef`. It runs `gentle-shell` with `GENTLE_REEF=1` and passes its arguments through, so it needs `gentle-shell` on your PATH. To put it on your PATH from a checkout (documented here, not run by the package):
+
+  ```bash
+  ln -s $PWD/bin/gentle-reef ~/.local/bin/gentle-reef
+  ```
+
+  Any directory on your PATH works. A plain `gentle-shell` is unchanged.
+
+- **`/office`: web window, in any session.** Start `gentle-shell` as usual, then run `/office on` and `/office open` (or `/office dock` / `/office story`). The window opens in your browser for that session only.
+
+Each session decides for itself. Turning the office on or off never carries over to the next session, and `gentle-reef` affects only the session it starts.
+
 ## Use
 
 ```text
 /office          # open a menu: turn on/off, open the window (full or compact), or show status
-/office on       # attach listeners
+/office on       # attach listeners for this session
 /office open     # start the window (once per session) and open it in the browser
 /office dock     # same as open, in the compact layout (?layout=dock)
 /office story    # same as open, in the story layout (?layout=story)
-/office off      # detach listeners, close the window, clear the hub
+/office off      # detach listeners, close the window, clear the hub (this session)
 /office status   # enabled state, hub stats, and the window URL while it runs
 ```
 
-The module is off by default. When it is off, the only thing registered is the `/office` command, and `/office open` and `/office dock` refuse until you run `/office on`.
+A session starts off, unless it was started with `gentle-reef`. When it is off, the only thing registered is the `/office` command, and `/office open` and `/office dock` refuse until you run `/office on`.
 
 The menu lists the same actions as the subcommands. While the module is off: Turn on, Turn on and open the window, Turn on and open the compact window, Turn on and open in story mode, Status. While it is on: Open the window, Turn off, Open the compact window, Open in story mode, Status.
 
@@ -94,20 +108,15 @@ In story the narration is the big bottom box. In full and compact it is a one-li
 
 ## Settings
 
-`<agentDir>/gentle-office.json`:
-
-```json
-{ "enabled": false }
-```
-
-A missing or invalid file means disabled. Only an explicit `"enabled": true` turns the module on.
+There is no settings file. `/office on`, `/office off` and the menu change the current session only and nothing is written to disk. The old `<agentDir>/gentle-office.json` is ignored, so a `"enabled": true` left in it does nothing; you can delete it by hand.
 
 ## Layout
 
 - `src/contract/`: the normalized `OfficeEvent` contract (versioned, `v: 1`), role and feature mapping, and the inbound `boss.input` validator. Pure.
 - `src/adapter/`: maps Pi events and gentle-pi task status to contract events, plus the in-memory `OfficeHub`. Pure.
 - `src/server/`: the loopback window server (`office-server.ts`) and the platform browser opener (`open-browser.ts`).
-- `src/settings.ts`, `src/toggle.ts`: settings file and the on/off controller.
+- `src/toggle.ts`: the per-session on/off controller, the terminal mode switch (`GENTLE_REEF`), and the status widget.
+- `bin/gentle-reef`: launcher that starts gentle-shell with `GENTLE_REEF=1`.
 - `web/`: the page. `scene-reducer.js` is pure and tested from node, and holds the narrator (`narrate`, the dialog queue); `office-engine.js` is the 32-bit canvas engine from `design/agent-office/01-overworld-hq.html`, with an optional story camera (`setCamera`); `app.js` connects the stream to both. The server serves a fixed list of files, so the narrator lives in `scene-reducer.js` rather than a separate module.
 - `extensions/gentle-office.ts`: thin Pi wiring.
 - `test/`: `npm test` runs the suite with Node's built-in test runner and TypeScript type stripping. No dependencies to install.

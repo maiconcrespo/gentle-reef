@@ -1,0 +1,8 @@
+#!/bin/sh
+# Starts gentle-shell in terminal mode: the Gentle Office listeners and status widget stay on for this session only.
+# Plain gentle-shell is unchanged. Put this file on PATH (see README, "Two ways to use it").
+if ! command -v gentle-shell >/dev/null 2>&1; then
+	echo "gentle-reef: gentle-shell not found on PATH" >&2
+	exit 127
+fi
+GENTLE_REEF=1 exec gentle-shell "$@"
