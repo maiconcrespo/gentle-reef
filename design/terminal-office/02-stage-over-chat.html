@@ -13,38 +13,87 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; width: 1920px; height: 920px; overflow: hidden; background: var(--bg); color: var(--text); font: 14px/1.45 var(--mono); }
-  .term { position: relative; width: 1920px; height: 920px; display: grid; grid-template-rows: 28px 36px minmax(0, 1fr); }
+  .term { position: relative; width: 1920px; height: 920px; display: grid; grid-template-rows: 28px 56px minmax(0, 1fr); }
+  /* Pixel frame of the reef module around the whole window (same rings as the web office frame). */
+  .term::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 20; box-shadow: inset 0 0 0 4px var(--bg), inset 0 0 0 5px var(--sel); }
   .titlebar { display: flex; align-items: center; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
-  .statusline { display: flex; align-items: center; gap: 10px; padding: 0 18px; background: var(--panel); border-bottom: 1px solid #C96AA2; font-size: 14px; white-space: nowrap; overflow: hidden; }
-  .brand { color: var(--gold); font-weight: 700; letter-spacing: .04em; }
-  .sep { color: var(--muted); }
+
+  /* HUD: game panels, one per status fact. */
+  .hud { display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--panel); border-bottom: 2px solid var(--border); white-space: nowrap; overflow: hidden; }
+  .badge { padding: 6px 12px; background: var(--gold); color: var(--bg); font-weight: 700; letter-spacing: .04em; box-shadow: inset 0 -3px 0 var(--sand); }
+  .box { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; background: var(--user); border: 2px solid var(--border); box-shadow: inset 0 0 0 2px var(--bg), inset 0 0 0 3px var(--sel); }
+  .box.end { margin-left: auto; }
+  .lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .muted { color: var(--muted); font-size: 12px; }
   .model { color: var(--blue); }
-  .right { margin-left: auto; color: var(--muted); }
-  .ctx { color: var(--sand); }
-  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
-  .chat { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; padding: 14px 18px; }
-  .band { flex: none; height: 342px; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--border); }
-  .caption { flex: none; margin: 0; padding: 6px 10px; background: var(--panel); border: 1px solid var(--border); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .caption .who { margin-right: 6px; }
-  .log { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; overflow: hidden; }
-  .msg { margin: 0; font-size: 14px; line-height: 1.5; }
+  .box b { font-weight: 700; }
+  .bar { display: flex; gap: 2px; padding: 3px; background: var(--bg); border: 1px solid var(--border); }
+  .seg { width: 10px; height: 16px; background: var(--sel); }
+  .seg.on { background: var(--sand); box-shadow: inset 0 3px 0 var(--gold); }
+  #coffee-pct { color: var(--sand); }
+
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; min-height: 0; }
+  .col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  /* Stage: full bleed across the chat column, 1 px per engine pixel. */
+  .stage { position: relative; flex: none; height: 360px; overflow: hidden; background: var(--panel); border-bottom: 2px solid var(--border); }
+  .stage canvas { display: block; width: 1560px; height: 360px; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+  /* ask_user dialog: story-mode box over the stage floor, display only. */
+  .ask { position: absolute; left: 18px; bottom: 14px; width: 560px; padding: 12px 16px 14px; background: var(--panel); border: 3px solid var(--text); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border); }
+  .ask[hidden] { display: none; }
+  .ask h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+  .ask p { margin: 0; font-size: 14px; }
+  .ask ol { margin: 8px 0 0; padding: 0 0 0 4px; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+  .ask li::before { content: "▸ "; color: var(--pink); }
+  .ask .note { margin-top: 8px; font-size: 12px; color: var(--muted); }
   .who { color: var(--gold); font-weight: 700; }
+
+  .caption { margin: 12px 18px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .caption .who { margin-right: 6px; }
+  .log { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; padding: 14px 18px; overflow: hidden; }
+  .msg { margin: 0; max-width: 900px; font-size: 14px; line-height: 1.5; }
   .you { color: var(--pink); }
   .tool { color: var(--blue); font-size: 13px; }
   .ok { color: var(--green); }
-  .input { flex: none; margin: 0; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--user); border: 1px solid var(--border); font-size: 14px; }
-  .prompt { color: var(--pink); }
-  .side { display: flex; flex-direction: column; gap: 14px; min-height: 0; padding: 14px 16px; border-left: 1px solid var(--border); overflow: hidden; }
-  .card { background: var(--panel); border: 1px solid var(--border); padding: 12px 14px; }
-  .card h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--heading); }
+
+  /* Input: the one place to type, with a gold frame and a visible caret. */
+  .input { flex: none; display: flex; align-items: center; gap: 12px; margin: 0 18px 16px; padding: 12px 16px; background: var(--bg); border: 2px solid var(--gold); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--border); }
+  .chip-you { padding: 2px 6px; background: var(--pink); color: var(--bg); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+  .prompt { color: var(--pink); font-weight: 700; }
+  .placeholder { color: var(--muted); }
+  .caret { color: var(--gold); }
+  .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+  /* Sidebar: framed panels with a ribbon heading, like the story-mode boxes. */
+  .side { display: flex; flex-direction: column; gap: 14px; min-height: 0; padding: 14px; background: var(--panel); border-left: 2px solid var(--border); overflow: hidden; }
+  .box2 { background: var(--panel); border: 2px solid var(--border); box-shadow: inset 0 0 0 2px var(--panel), inset 0 0 0 3px var(--sel); }
+  .box2 > h2 { margin: 0; padding: 6px 12px; background: var(--sel); color: var(--gold); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+  .box2 > .body { padding: 10px 12px 12px; }
   .kv { display: grid; grid-template-columns: 104px 1fr; gap: 4px 10px; margin: 0; font-size: 13px; }
   .kv dt { color: var(--muted); }
   .kv dd { margin: 0; }
-  .agents { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
-  .break { color: var(--muted); }
-  .working { color: var(--gold); }
-  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
-  .notes { position: absolute; right: 16px; bottom: 16px; width: 348px; max-height: 330px; overflow: auto; margin: 0; background: var(--panel); border: 2px solid var(--gold); box-shadow: 0 0 0 3px var(--bg); font-size: 12px; z-index: 5; }
+
+  .party { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .party .row { display: grid; grid-template-columns: 48px 1fr; gap: 10px; align-items: center; padding: 6px 8px; background: var(--user); border: 1px solid var(--border); }
+  .party .row.on { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+  .face { width: 48px; height: 48px; image-rendering: pixelated; background: var(--user); border: 2px solid var(--border); }
+  .head { display: flex; align-items: center; gap: 8px; }
+  .name { font-weight: 600; font-size: 13px; }
+  .chip { padding: 1px 6px; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--bg); }
+  .chip.orch { background: var(--gold); }
+  .chip.explore { background: var(--blue); }
+  .chip.worker { background: var(--green); }
+  .chip.verify { background: var(--pink); }
+  .state { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+  .party .row.on .state { color: var(--gold); }
+
+  .counters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .counter { padding: 8px 10px; background: var(--panel); border: 2px solid var(--border); box-shadow: inset 0 0 0 2px var(--panel), inset 0 0 0 3px var(--sel); }
+  .counter b { display: block; margin-top: 2px; font-size: 18px; font-weight: 700; color: var(--gold); }
+
+  /* Annotation strip: toggleable, updated for this round. */
+  .notes { position: absolute; right: 386px; top: 484px; width: 440px; max-height: 340px; overflow: auto; margin: 0; background: var(--panel); border: 2px solid var(--gold); box-shadow: 0 0 0 3px var(--bg); font-size: 12px; z-index: 5; }
   .notes summary { padding: 6px 12px; background: var(--sel); color: var(--gold); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
   .notes summary:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
   .notes ul { margin: 0; padding: 8px 12px 10px 24px; }
@@ -56,307 +105,1272 @@
 <body>
 <div class="term">
   <div class="titlebar">ghostty · pi · ~/gentle-reef</div>
-  <header class="statusline">
-    <span class="brand">✿ Gentle Shell</span><span class="sep">⋄</span>
-    <span>~/gentle-reef feat/gentle-office</span><span class="sep">⋄</span>
-    <span class="model">claude-opus-5-5 · medium · ClaudeGPT</span>
-    <span class="right">ctx <span class="ctx">▰▰▱▱▱▱▱▱ 20%</span> ⋄ $0.000 ⋄ usage · alt+u</span>
+  <header class="hud" aria-label="Status bar">
+    <span class="badge">✿ Gentle Shell</span>
+    <div class="box"><span class="lbl">Project</span><b>~/gentle-reef</b><span class="muted">feat/gentle-office</span></div>
+    <div class="box"><span class="lbl">Model</span><span class="model">claude-opus-5-5</span><span class="muted">medium</span></div>
+    <div class="box"><span class="lbl">Coffee</span><span class="bar" id="coffee-bar" role="img" aria-label="Coffee left"><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></span><b id="coffee-pct">80%</b><span class="muted" id="ctx">ctx 20%</span></div>
+    <div class="box end"><span class="lbl">Profile</span><b>ClaudeGPT</b></div>
   </header>
-  <div class="cols">
-    <main class="chat" aria-label="Stage over chat">
-      <section class="band" aria-label="Office stage">
-        <canvas id="room" role="img" aria-label="Office room in a fixed band. The orchestrator writes at the whiteboard while a tool runs. Explore and Worker chat on break at the coffee counter. Verify types at its desk."></canvas>
+  <div class="main">
+    <section class="col" aria-label="Chat">
+      <section class="stage" aria-label="Office stage">
+        <canvas id="room" role="img" aria-label="Office room across the full stage. The orchestrator writes on the whiteboard while a tool runs. Explore and Worker chat by the coffee counter on break. A working role walks to its desk and back."></canvas>
+        <section class="ask" id="ask" aria-live="polite" hidden>
+          <h3>ask_user · display only</h3>
+          <p id="ask-q"></p>
+          <ol id="ask-opts"></ol>
+          <p class="note">Answer in the terminal prompt. This stage only shows the question and closes with the ask.</p>
+        </section>
       </section>
-      <p class="caption"><span class="who">orchestrator</span> Explore terminó en 17s; el dialog de ask_user se cierra con close.</p>
+      <p class="caption" aria-live="polite"><span class="who" id="narr-who">orchestrator</span><span id="narr-text">sipping at the counter. Explore and Worker are on break by the coffee machine.</span></p>
       <div class="log" aria-label="Conversation">
         <p class="msg"><span class="you">›</span> explorá dónde se pinta el dialog de ask_user y si el cierre llega con los eventos</p>
         <p class="msg"><span class="who">✿ orchestrator</span> Lanzo a gentle-ai-explore para ubicar los call sites. No toco nada hasta tener el mapa.</p>
         <p class="msg tool ok">✓ gentle-ai-explore 35k · 17s</p>
         <p class="msg"><span class="who">✿ orchestrator</span> Listo. El dialog se abre con ask open y se cierra con close, en web/app.js. El snapshot ya trae la pregunta para las ventanas que llegan tarde.</p>
         <p class="msg tool">Falta confirmar el cierre en una sesión Pi viva; el headless no lo cubre.</p>
+        <p class="msg"><span class="you">›</span> me gusta la 02, pero la veo muy simplificada: que el escenario se llene de lado a lado y que las barras de status sean parte del módulo reef</p>
+        <p class="msg"><span class="who">✿ orchestrator</span> Hecho: arte real del motor, escenario de borde a borde y paneles de juego para status, agentes y entrada. Explore y Worker esperan junto a la cafetera; cada uno pasa a su desk cuando arranca su rol.</p>
+        <p class="msg tool ok">✓ design/terminal-office/02-stage-over-chat.html</p>
       </div>
-      <p class="input"><span class="prompt" aria-hidden="true">›</span> ✿ waiting for input</p>
-    </main>
+      <div class="input" role="textbox" aria-readonly="true" aria-label="Prompt input">
+        <span class="chip-you">YOU</span><span class="prompt" aria-hidden="true">›</span><span class="placeholder">waiting for input · type your prompt in the terminal</span><span class="caret" aria-hidden="true">▌</span>
+        <span class="hint">enter send · shift+enter newline</span>
+      </div>
+    </section>
     <aside class="side" aria-label="Sidebar">
-      <section class="card" aria-labelledby="st-h">
+      <section class="box2" aria-labelledby="st-h">
         <h2 id="st-h">✿ Status</h2>
-        <dl class="kv">
-          <dt>Project</dt><dd>~/gentle-reef</dd>
-          <dt>Branch</dt><dd>feat/gentle-office</dd>
-          <dt>Profile</dt><dd>ClaudeGPT</dd>
-          <dt>Changes</dt><dd>2 modified · 1 new</dd>
-          <dt>Integrations</dt><dd>engram · codegraph · context7</dd>
-          <dt>Permissions</dt><dd>NORMAL</dd>
-        </dl>
+        <div class="body">
+          <dl class="kv">
+            <dt>Changes</dt><dd>2 modified · 1 new</dd>
+            <dt>Branch</dt><dd>feat/gentle-office</dd>
+            <dt>Integrations</dt><dd>engram · codegraph · context7</dd>
+            <dt>Permissions</dt><dd>NORMAL</dd>
+          </dl>
+        </div>
       </section>
-      <section class="card" aria-labelledby="ag-h">
-        <h2 id="ag-h">❀ Agents · Collapse</h2>
-        <ul class="agents">
-          <li class="ok">✓ gentle-ai-explore 35k · 17s · <span class="break">on break</span></li>
-          <li><span class="break">◦ gentle-ai-worker · on break</span></li>
-          <li><span class="working">● gentle-ai-verify · checking web/app.js</span></li>
-        </ul>
+      <section class="box2" aria-labelledby="pt-h">
+        <h2 id="pt-h">❀ Party · agents</h2>
+        <div class="body">
+          <ul class="party">
+            <li class="row" data-row="orch"><canvas class="face" data-face="orch" width="24" height="24" aria-hidden="true"></canvas><div><div class="head"><span class="name">orchestrator</span><span class="chip orch">ORCH</span></div><span class="state">at the counter</span></div></li>
+            <li class="row" data-row="explore"><canvas class="face" data-face="explore" width="24" height="24" aria-hidden="true"></canvas><div><div class="head"><span class="name">gentle-ai-explore</span><span class="chip explore">EXPLORE</span></div><span class="state">on break</span></div></li>
+            <li class="row" data-row="worker"><canvas class="face" data-face="worker" width="24" height="24" aria-hidden="true"></canvas><div><div class="head"><span class="name">gentle-ai-worker</span><span class="chip worker">WORKER</span></div><span class="state">on break</span></div></li>
+            <li class="row" data-row="verify"><canvas class="face" data-face="verify" width="24" height="24" aria-hidden="true"></canvas><div><div class="head"><span class="name">gentle-ai-verify</span><span class="chip verify">VERIFY</span></div><span class="state">on break</span></div></li>
+          </ul>
+        </div>
       </section>
-      <details class="notes" open>
-        <summary>Annotations · toggle</summary>
-        <ul>
-          <li><b>Layout.</b> The band is about 40% of the body and holds the room at 1x (480 x 312). The caption is the latest narration line; the chat scrolls below it.</li>
-          <li><b>Rendering.</b> Kitty graphics image in Ghostty; a frame is sent only when its pixels change. Fallback: half-block ▀ cells on terminals without image support.</li>
-          <li><b>Idle crew.</b> One staff per role waits at the coffee counter, on break: explore and worker chat in alternating bubbles and sip now and then. A working role walks to its desk and back; the orchestrator never roams.</li>
-          <li><b>Budget.</b> 5 fps, stepped, only while someone walks, types, writes, blinks or sips; chat bubbles tick at 2 fps. Idle wakes only at the next changing frame; no 60 fps loop. Paused when the window is unfocused, hidden or off-screen. Reduced motion: one still frame, no timers.</li>
-          <li><b>ask_user.</b> The caption and chat show the question and options. Answers stay in the terminal (display only). The dialog closes with the ask.</li>
-        </ul>
-      </details>
+      <div class="counters">
+        <div class="counter"><span class="lbl">Cost</span><b id="cost">$0.012</b></div>
+        <div class="counter"><span class="lbl">Usage</span><b id="usage">18%</b></div>
+      </div>
     </aside>
   </div>
+  <details class="notes" open>
+    <summary>Annotations · toggle</summary>
+    <ul>
+      <li><b>Stage.</b> Edge to edge: the room is the real engine art at 1x, 65 x 15 tiles (1560 x 360 px), so the band fills the chat column with no side margin. Pixels stay square.</li>
+      <li><b>Panels.</b> Status bar, Status, Party and the input box are framed pixel panels. Coffee is the context as an HP bar: it shows what is left of the pot (1 minus context).</li>
+      <li><b>Idle crew.</b> Explore and Worker chat by the counter in turns and sip now and then; Verify sips. A role that acts walks to its desk and back. A second worker walks in from the door and out again.</li>
+      <li><b>Budget.</b> 5 fps (200 ms steps) only while someone walks, types, writes or a prop is lit. Otherwise it sleeps until the next idle gesture or scene step, with no fixed timer. Paused on blur, hidden or off-screen. Reduced motion: one still frame, no timers.</li>
+      <li><b>ask_user.</b> The dialog opens over the stage floor while the question is open and closes with it. Display only: answers stay in the terminal.</li>
+      <li><b>Pin a moment.</b> Open this file with <b>#t=12</b> (0 to 80 s) to start the loop there.</li>
+    </ul>
+  </details>
 </div>
 <script>
-(function () {
-  'use strict';
-  var W = 480, H = 312, L = 32, FRAME_MS = 200;          // 5 fps while something moves
-  var OUT = document.getElementById('room');
-  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* Design 02, terminal stage over chat. The Gentle Office engine from web/office-engine.js at HEAD, with four
+   changes for the terminal: a 65 x 15 tile room that fills the stage band, a palette read from the page tokens,
+   no random wandering, and a page-driven step (advance). Browser module: no imports, no network. */
+const OFFICE_CONFIG = {
+	cols: 65, rows: 15, tile: 24,
+	desks: [{ x: 28, y: 5 }, { x: 35, y: 5 }, { x: 42, y: 5 }, { x: 21, y: 5 }],
+	whiteboard: { x: 33, w: 4 }, coffee: { x: 50, y: 2, w: 3 }, table: { x: 42, y: 9, w: 4, h: 2 },
+	rug: { x: 39, y: 8, w: 12, h: 6 }, window: { x: 2, w: 4 }, shelf: 12, clock: 8, door: { x: 31, w: 2 },
+	plants: [{ x: 0, y: 2 }, { x: 63, y: 2 }, { x: 0, y: 13 }, { x: 63, y: 13 }], rack: { x: 63, y: 5 },
+	orchStart: { x: 51, y: 4 }, front: { x: 28, y: 9 },
+	bench: { x: 34, w: 6 },
+	// Idle staff (S16): one lounge spot per role by the coffee counter. They block walkers, and a claimant walks back to its own spot.
+	lounge: { explore: { x: 46, y: 4, face: 'right' }, worker: { x: 48, y: 4, face: 'left' }, verify: { x: 54, y: 4, face: 'left' } }
+};
 
-  // Colours come from the :root tokens, so the scene carries no palette of its own.
-  var cs = getComputedStyle(document.documentElement), C = {};
-  ['bg', 'panel', 'user', 'sel', 'border', 'text', 'muted', 'gold', 'blue', 'green', 'red', 'pink', 'sand'].forEach(function (k) {
-    C[k] = cs.getPropertyValue('--' + k).trim();
-  });
-  var EXPLORE = { hat: 'safari', hatColor: C.gold, suit: C.blue, shirt: C.text, pants: C.border, skin: C.sand };
-  var WORKER = { hat: 'hard', hatColor: C.gold, suit: C.green, shirt: C.text, pants: C.border, skin: C.sand };
-  var VERIFY = { hair: C.gold, suit: C.text, shirt: C.pink, pants: C.border, skin: C.sand };
-  var ORCH = { hat: 'top', hatColor: C.panel, suit: C.gold, shirt: C.text, pants: C.panel, skin: C.sand };
+/* One prop per gentle-shell feature (S8). Each footprint is tiles walkers cannot stand on. The rack is the existing one (cfg.rack). */
+const FEATURE_PROPS = [
+	{ feature: 'music', x: 6, y: 3, w: 2, h: 2 },
+	{ feature: 'design', x: 9, y: 3, w: 2, h: 2 },
+	{ feature: 'memory', x: 18, y: 3, w: 1, h: 2 },
+	{ feature: 'ask', x: 27, y: 3, w: 1, h: 2 },
+	{ feature: 'todo', x: 56, y: 3, w: 2, h: 2 },
+	{ feature: 'mcp', x: OFFICE_CONFIG.rack.x, y: OFFICE_CONFIG.rack.y, w: 1, h: 2 },
+	{ feature: 'web', x: 57, y: 9, w: 1, h: 2 },
+	{ feature: 'codegraph', x: 59, y: 9, w: 2, h: 2 }
+];
 
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-  function fill(g, x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
-  function box(g, x, y, w, h, edge, face) { fill(g, x - 1, y - 1, w + 2, h + 2, edge); fill(g, x, y, w, h, face); }
+/* The grid a figure walks on: true where it cannot stand. Walls, furniture, feature props and the lounge spots block; the rug, floor and door do not. */
+function walkableGrid(cfg, props = FEATURE_PROPS) {
+	const block = Array.from({ length: cfg.rows }, (_, y) => Array(cfg.cols).fill(y < 2));
+	const mark = (x, y, w, h) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (block[j] && i < cfg.cols) block[j][i] = true; };
+	cfg.desks.forEach(d => mark(d.x, d.y, 2, 1));
+	mark(cfg.table.x, cfg.table.y, cfg.table.w, cfg.table.h);
+	mark(cfg.coffee.x, cfg.coffee.y, cfg.coffee.w, 1);
+	cfg.plants.forEach(p => mark(p.x, p.y, 1, 1));
+	mark(cfg.rack.x, cfg.rack.y, 1, 2);
+	mark(cfg.bench.x, cfg.rows - 1, cfg.bench.w, 1);
+	Object.values(cfg.lounge).forEach(s => mark(s.x, s.y, 1, 1));
+	props.forEach(p => mark(p.x, p.y, p.w, p.h));
+	return block;
+}
 
-  // 16x24 figure. p: walk, legs, typing, b, write, arm, sip, blink.
-  function person(g, x, y, o, p) {
-    p = p || {};
-    if (o.hat === 'top') {
-      box(g, x + 5, y + 1, 6, 6, C.bg, o.hatColor);
-      fill(g, x + 5, y + 4, 6, 1, C.pink);
-      fill(g, x + 10, y + 2, 2, 2, C.pink);
-      box(g, x + 2, y + 7, 12, 2, C.bg, o.hatColor);
-    } else if (o.hat === 'safari') {
-      box(g, x + 4, y + 1, 8, 4, C.bg, o.hatColor);
-      box(g, x + 1, y + 4, 14, 2, C.bg, o.hatColor);
-    } else if (o.hat === 'hard') {
-      box(g, x + 4, y + 3, 8, 4, C.bg, o.hatColor);
-      fill(g, x + 3, y + 7, 10, 1, o.hatColor);
-    } else {
-      fill(g, x + 5, y + 8, 6, 2, o.hair || C.bg);
-    }
-    box(g, x + 5, y + 9, 6, 6, C.bg, o.skin);             // head
-    if (!p.blink) fill(g, x + 6, y + 11, 1, 1, C.bg);     // eye, dropped on a blink
-    box(g, x + 3, y + 15, 10, 7, C.bg, o.suit);           // torso
-    fill(g, x + 7, y + 15, 2, 3, o.shirt);                // shirt
-    var lx = 5, rx = 9;                                   // legs step while walking
-    if (p.walk) { lx = p.legs ? 6 : 4; rx = p.legs ? 8 : 10; }
-    fill(g, x + lx, y + 22, 2, 2, o.pants);
-    fill(g, x + rx, y + 22, 2, 2, o.pants);
-    if (p.typing) {
-      fill(g, x + 1, y + 16, 2, 4, o.suit); fill(g, x + 13, y + 16, 2, 4, o.suit);
-      fill(g, x + 3, y + 19 + p.b, 3, 1, o.skin);         // hands on the keys, alternating
-      fill(g, x + 10, y + 20 - p.b, 3, 1, o.skin);
-    } else if (p.write) {
-      fill(g, x + 1, y + 6 + p.arm * 2, 2, 11, o.suit);   // left arm raised to the board
-      fill(g, x - 2, y + 5 + p.arm * 2, 3, 2, o.skin);
-      fill(g, x + 13, y + 16, 2, 6, o.suit); fill(g, x + 13, y + 22, 2, 1, o.skin);
-    } else if (p.sip) {
-      fill(g, x + 1, y + 12, 2, 5, o.suit);               // left arm up to the mouth
-      fill(g, x + 1, y + 10, 4, 3, C.text);               // cup
-      fill(g, x + 1, y + 10, 4, 1, C.sand);               // coffee
-      fill(g, x + 13, y + 16, 2, 6, o.suit); fill(g, x + 13, y + 22, 2, 1, o.skin);
-    } else {
-      fill(g, x + 1, y + 16, 2, 6, o.suit); fill(g, x + 13, y + 16, 2, 6, o.suit);
-      fill(g, x + 1, y + 22, 2, 1, o.skin); fill(g, x + 13, y + 22, 2, 1, o.skin);
-    }
-  }
-  function orchestratorExtras(g, x, y) {
-    fill(g, x + 3, y + 12, 2, 2, C.pink);                 // mustache curls
-    fill(g, x + 11, y + 12, 2, 2, C.pink);
-    fill(g, x + 5, y + 13, 6, 2, C.pink);                 // mustache bar
-    fill(g, x + 8, y + 10, 3, 3, C.gold);                 // monocle ring
-    fill(g, x + 9, y + 11, 1, 1, C.bg);                   // monocle lens
-  }
-  // Small speech bubble with a three-dot ellipsis; dots = 0..2 lights one to three dots.
-  function bubble(g, x, y, dots) {
-    box(g, x, y, 14, 8, C.bg, C.text);
-    fill(g, x + 4, y + 8, 2, 2, C.text);
-    for (var i = 0; i < 3; i++) fill(g, x + 3 + i * 3, y + 3, 2, 2, i <= dots ? C.bg : C.muted);
-  }
-  function desk(g, x, y, w) {
-    fill(g, x, y, w, 5, C.border);
-    fill(g, x + 2, y + 5, w - 4, 12, C.sel);
-    fill(g, x + 2, y + 17, 3, 8, C.bg);
-    fill(g, x + w - 5, y + 17, 3, 8, C.bg);
-  }
-  function monitor(g, x, y, c, lit, shift) {
-    box(g, x, y, 24, 14, C.bg, C.border);
-    fill(g, x + 2, y + 2, 20, 10, lit ? C.user : C.bg);
-    var len = [10, 14, 7];
-    for (var i = 0; i < 3; i++) fill(g, x + 4, y + 4 + i * 3, len[(i + shift) % 3], 1, lit ? c : C.muted);
-    fill(g, x + 10, y + 15, 4, 2, C.border);
-  }
-  function drawPot(g, x, y, level) {                      // glass pot; liquid = 1 - context usage
-    fill(g, x + 3, y - 2, 10, 2, C.muted);
-    box(g, x, y, 16, 20, C.muted, C.bg);
-    var h = Math.round(18 * level);
-    fill(g, x + 1, y + 20 - h, 14, h, C.sand);
-    fill(g, x + 16, y + 6, 2, 10, C.muted);
-  }
+/* Palette: every colour is a :root token from design/system.md, read when the page loads. The engine has no literal colour. */
+const TOK = name => getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
+const P = {
+	bg: TOK('bg'), panel: TOK('panel'), user: TOK('user'), sel: TOK('sel'), border: TOK('border'),
+	text: TOK('text'), muted: TOK('muted'), dim: TOK('dim'), gold: TOK('gold'), blue: TOK('blue'), green: TOK('green'),
+	sand: TOK('sand'), red: TOK('red'), pink: TOK('pink'), purple: TOK('pink'),
+	sky: TOK('blue'), sec: TOK('text'), softRose: TOK('pink'), deep: TOK('pink'), violet: TOK('pink'), steel: TOK('muted'),
+	floorA: TOK('user'), floorB: TOK('border'), seam: TOK('bg'), plum: TOK('user'), champagne: TOK('gold')
+};
+/* Nearest token, never a mix: a colour is either the first or the second token. */
+function goMix(a, b, t) { return t >= 0.5 ? b : a; }
+/* Shade and highlight are token pairs: each token maps to a darker and a lighter neighbour. */
+const SHADE_OF = {
+	[P.sand]: P.border, [P.gold]: P.sand, [P.text]: P.muted, [P.muted]: P.border, [P.blue]: P.muted,
+	[P.green]: P.muted, [P.pink]: P.muted, [P.red]: P.pink, [P.border]: P.user, [P.sel]: P.user,
+	[P.user]: P.bg, [P.panel]: P.bg, [P.bg]: P.bg
+};
+const HI_OF = {
+	[P.sand]: P.gold, [P.gold]: P.text, [P.text]: P.text, [P.muted]: P.text, [P.blue]: P.text, [P.green]: P.text,
+	[P.pink]: P.text, [P.red]: P.text, [P.border]: P.muted, [P.sel]: P.border, [P.user]: P.border,
+	[P.panel]: P.user, [P.bg]: P.user
+};
+const shade = c => SHADE_OF[c] || c;
+const hi = c => HI_OF[c] || c;
+const INK = P.bg;
+const SKIN = P.sand, SKIN_SH = P.border;
+const ORCH_COLOR = P.gold, ORCH_HAIR = P.bg;
+const STACHE = P.pink, STACHE_S = P.pink;
+const MONOCLE = P.bg, MONOCLE_H = P.user;
+const C = {
+	wood: P.sand, woodH: hi(P.sand), woodS: shade(P.sand),
+	marble: P.text, marbleS: P.muted,
+	steelH: hi(P.steel), steelS: shade(P.steel),
+	pink: P.pink, pinkS: P.deep, pinkH: P.violet,
+	leaf: P.green, leafS: shade(P.green), leafH: hi(P.green),
+	coffee: P.border, coffeeH: P.muted
+};
 
-  function paintRoom(g, v) {
-    // wall, baseboard, checker floor
-    fill(g, 0, 0, W, 96, C.user);
-    for (var wx = 0; wx < W; wx += 24) fill(g, wx, 0, 1, 94, C.sel);
-    fill(g, 0, 94, W, 3, C.border);
-    fill(g, 0, 97, W, H - 97, C.panel);
-    for (var r = 0, ty = 97; ty < H; r++, ty += 24) {
-      for (var tx = (r % 2) * 24; tx < W; tx += 48) fill(g, tx, ty, 24, 24, C.bg);
-    }
-    // whiteboard: one line appears per step while the orchestrator writes
-    box(g, 204, 24, 96, 56, C.border, C.text);
-    fill(g, 204, 80, 96, 3, C.border);
-    var rows = [[30, 36, C.pink], [38, 52, C.green], [46, 30, C.blue], [54, 44, C.muted]];
-    for (var i = 0; i < rows.length; i++) {
-      fill(g, 212, rows[i][0] - 1, 4, 4, C.bg);
-      if (i < v.wb) fill(g, 220, rows[i][0], rows[i][1], 2, rows[i][2]);
-    }
-    // wall props: music radio on a shelf, MCP rack (LEDs light on tool runs), memory cabinet
-    fill(g, 88, 60, 40, 3, C.border);
-    box(g, 96, 46, 24, 14, C.bg, C.border);
-    fill(g, 99, 49, 8, 8, C.bg); fill(g, 101, 51, 4, 4, C.pink);
-    fill(g, 124, 36, 2, 9, C.pink); fill(g, 121, 42, 3, 3, C.pink);
-    box(g, 134, 20, 26, 40, C.bg, C.border);
-    for (var k = 0; k < 4; k++) {
-      var on = v.leds >= 0 && (v.leds + k) % 3 === 0;
-      fill(g, 138, 26 + k * 9, 3, 3, on ? C.green : C.sel);
-      fill(g, 144, 26 + k * 9, 12, 3, C.bg);
-    }
-    box(g, 12, 30, 24, 48, C.bg, C.border);
-    fill(g, 14, 46, 20, 1, C.bg); fill(g, 14, 62, 20, 1, C.bg);
-    fill(g, 30, 36, 2, 4, C.gold); fill(g, 30, 52, 2, 4, C.gold);
-    // coffee counter: pot level and the ask_user bell
-    fill(g, 400, 76, 76, 4, C.border);
-    fill(g, 402, 80, 72, 16, C.panel);
-    drawPot(g, 410, 52, 0.8);
-    fill(g, 434, 62, 2, 4, C.gold); fill(g, 436, 66, 10, 8, C.gold); fill(g, 434, 74, 14, 2, C.gold);
-    // design easel, off the lounge floor
-    fill(g, 446, 190, 2, 26, C.gold); fill(g, 462, 190, 2, 26, C.gold);
-    box(g, 444, 174, 22, 16, C.bg, C.text);
-    fill(g, 448, 178, 8, 2, C.pink); fill(g, 452, 184, 10, 2, C.blue);
+/* Sprite box: SPRITE.w x SPRITE.h px, feet on the anchor row, hats extend above it. Head maps are 24x14 letter grids.
+   K ink, H hair, h hair shade, l hair light, S skin, s skin shade, E eye, W glint, C cheek, M mouth.
+   Front and back heads are drawn half-width and mirrored so both sides always match. */
+const SPRITE = { w: 24, h: 36, head: 14 };
+const mirror = rows => rows.map(r => r + [...r].reverse().join(''));
+const HEAD_DOWN = mirror([
+	'......KKKKKK',
+	'...KKHHHHHHH',
+	'..KHHlHHHHHH',
+	'.KHHHHHHHHHH',
+	'.KHHHHHHSSSS',
+	'.KHSSSSSSSSS',
+	'..KSShhSSSSS',
+	'..KSSWESSSSS',
+	'..KSSEESSSSS',
+	'..KCSSSSSSSs',
+	'..KCSSSSSSSS',
+	'...KSSSSSSMM',
+	'...KSSSSSSSs',
+	'....KKKKKKKK'
+]);
+const HEAD_UP = mirror([
+	'......KKKKKK',
+	'...KKHHHHHHH',
+	'..KHHlHHHHHH',
+	'.KHHlHHHHHHH',
+	'.KHHHHHHHHHH',
+	'.KHHHHHHHHHH',
+	'.KHHHHHHHHHH',
+	'.KHHHHHHHHHH',
+	'..KHHHHHHHHH',
+	'..KHHHHHHHHH',
+	'...KhhhhhhhH',
+	'....KHHHHHHH',
+	'....KHHHHHHh',
+	'....KKKKKKKK'
+]);
+/* Side view faces left; flipped at draw time for the right. */
+const HEAD_SIDE = [
+	'........KKKKKKKK........',
+	'.......KHHHHHHHHK.......',
+	'......KHHlHHHHHHHHK.....',
+	'.....KHHHHHHHHHHHHK.....',
+	'....KHHHHHHHHHHHHHHK....',
+	'...KHHSSSSSSHHHHHHHK....',
+	'...KSSSSSSSSSHHHHHHK....',
+	'...KSSEWSSSSSHHHHHHK....',
+	'...KSSESSSSSSHHHHHHK....',
+	'...KsSSSSSSSSHHHHHHK....',
+	'...KSSSSSSSSSHHHHHHK....',
+	'....KSMSSSSSSHHHHHHK....',
+	'....KSSSSSSSSSSK........',
+	'......KKKKKKKKKK........'
+];
+const HEAD_MAPS = { down: HEAD_DOWN, up: HEAD_UP, side: HEAD_SIDE };
+const LEG = P.border, LEG_H = P.sel;
 
-    // desks with no task stay empty; idle roles wait at the lounge by the counter
-    desk(g, 40, 168, 72); desk(g, 150, 168, 72); desk(g, 250, 168, 72);
-    person(g, 392, 104, EXPLORE, { blink: v.eBlink, sip: v.eSip });
-    person(g, 412, 104, WORKER, { blink: v.wBlink, sip: v.wSip });
-    // verify: lounge, walking to its desk, or typing at it
-    box(g, v.vx + 14, v.vy + 14, 4, 6, C.bg, C.sand);     // clipboard travels with it
-    person(g, v.vx, v.vy, VERIFY, { walk: v.vpose === 'walk', legs: v.vlegs, typing: v.vpose === 'type', b: v.vb, blink: v.vBlink, sip: v.vSip });
-    desk(g, 352, 168, 72); monitor(g, 372, 152, C.pink, v.vpose === 'type', v.vb);
+const triangle = v => { const f = v - Math.floor(v); return f < 0.5 ? f * 2 : 2 - f * 2; };
+/* Stable hash of a task id: the same agent always gets the same look. */
+const strHash = s => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
 
-    // orchestrator: rests by the counter, walks to the whiteboard for tool runs
-    person(g, v.ox, v.oy, ORCH, { walk: v.opose === 'walk', legs: v.legs, write: v.opose === 'write', arm: v.arm, sip: v.opose === 'sip' });
-    orchestratorExtras(g, v.ox, v.oy);
+/**
+ * Creates the office on `canvas` and starts its frame loop.
+ * Hooks are optional; the terminal stage passes none.
+ */
+function createOfficeEngine(canvas, cfg, hooks = {}) {
+	const T = cfg.tile, COLS = cfg.cols, ROWS = cfg.rows, W = COLS * T, H = ROWS * T;
+	canvas.width = W; canvas.height = H;
+	const g = canvas.getContext('2d');
+	g.imageSmoothingEnabled = false;
+	/* Static floor, wall and fixed props are painted once into this layer. */
+	const bgLayer = document.createElement('canvas');
+	bgLayer.width = W; bgLayer.height = H;
+	const bg = bgLayer.getContext('2d');
 
-    // lounge chat: alternating bubbles above the speaker
-    if (v.bubble === 0) bubble(g, 393, 95, v.dots);
-    if (v.bubble === 1) bubble(g, 413, 95, v.dots);
-  }
+	const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); };
+	const B = (x, y, w, h, c) => { bg.fillStyle = c; bg.fillRect(Math.round(x), Math.round(y), w, h); };
+	const rnd = (a, b) => a + Math.random() * (b - a);
+	const pick = a => a[Math.floor(Math.random() * a.length)];
+	const hash = n => { n = Math.sin(n * 127.1) * 43758.5453; return n - Math.floor(n); };
 
-  // Keyframe at time t (seconds in a 32 s loop). Only visual fields go in v.
-  // fast = something moves or gestures (5 fps); chat bubbles tick slower (2 fps) and sleep between changes.
-  function snap(t) {
-    var f = Math.floor(t * 5), fast = false;
-    var v = { ox: 372, oy: 104, opose: 'rest', arm: 0, legs: 0, wb: 0, leds: -1 };
-    if (t >= 0.6 && t < 1.8) {                                  // orchestrator walks to the whiteboard
-      var a = Math.floor((t - 0.6) / 0.2);
-      v.ox = 372 - 12 * a; v.oy = 104 - 4 * a; v.opose = 'walk'; v.legs = a % 2; fast = true;
-    } else if (t >= 1.8 && t < 4.6) {                           // writes
-      v.ox = 300; v.oy = 80; v.opose = 'write'; v.arm = f % 2; fast = true;
-    } else if (t >= 4.6 && t < 5.8) {                           // walks back to the counter
-      var b = Math.floor((t - 4.6) / 0.2);
-      v.ox = 300 + 12 * b; v.oy = 80 + 4 * b; v.opose = 'walk'; v.legs = b % 2; fast = true;
-    } else if (t >= 5.8 && (t % 9.5) < 0.6) {                   // sips at the counter
-      v.opose = 'sip'; fast = true;
-    }
-    v.wb = t < 1.8 ? 0 : Math.min(4, Math.floor((t - 1.8) / 0.7));
-    v.leds = (t >= 0.6 && t < 5.8) ? f % 3 : -1;
+	/* Draw a pixel map: rows of palette letters, '.' is transparent. */
+	function sprite(rows, map, x, y, flip) {
+		for (let j = 0; j < rows.length; j++) {
+			const row = rows[j];
+			for (let i = 0; i < row.length; i++) {
+				const ch = row[i];
+				if (ch === '.' || !map[ch]) continue;
+				const px = flip ? x + row.length - 1 - i : x + i;
+				R(px, y + j, 1, 1, map[ch]);
+			}
+		}
+	}
 
-    // Verify claims its role: walks from the lounge to its desk, types, walks back
-    v.vx = 432; v.vy = 104; v.vpose = 'lounge'; v.vlegs = 0; v.vb = 0;
-    var s = -1;
-    if (t >= 6.0 && t < 8.6) s = Math.floor((t - 6.0) / 0.2);
-    else if (t >= 12.6 && t < 15.2) s = 12 - Math.floor((t - 12.6) / 0.2);
-    if (s >= 0) {                                               // 5 steps down, then 8 steps left to the desk
-      v.vx = s <= 4 ? 432 : 432 - 12 * (s - 4);
-      v.vy = s <= 4 ? 104 + 8 * s : 144;
-      v.vpose = 'walk'; v.vlegs = s % 2; fast = true;
-    } else if (t >= 8.6 && t < 12.6) {
-      v.vx = 336; v.vy = 144; v.vpose = 'type'; v.vb = f % 2; fast = true;
-    }
+	/* ---------- walkable grid ---------- */
+	const block = walkableGrid(cfg);
+	const tb = cfg.table, cf = cfg.coffee, wb = cfg.whiteboard;
 
-    // Idle gestures: blink and sip at their own rhythm
-    v.eBlink = (t % 7.3) < 0.2;  v.eSip = !v.eBlink && (t % 9.1) < 0.6;
-    v.wBlink = (t % 8.9) < 0.2;  v.wSip = !v.wBlink && (t % 11.3) < 0.6;
-    var atLounge = v.vpose === 'lounge' || v.vpose === 'type';
-    v.vBlink = atLounge && (t % 9.7) < 0.2;
-    v.vSip = v.vpose === 'lounge' && !v.vBlink && (t % 13.7) < 0.6;
-    if (v.eBlink || v.eSip || v.wBlink || v.wSip || v.vBlink || v.vSip) fast = true;
+	function path(fx, fy, tx, ty) {
+		const key = (x, y) => y * COLS + x, prev = new Map([[key(fx, fy), null]]), q = [[fx, fy]];
+		while (q.length) {
+			const [x, y] = q.shift();
+			if (x === tx && y === ty) break;
+			for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+				const nx = x + dx, ny = y + dy;
+				// A blocked lounge spot can be the target (a walker ends on it) but never a tile to pass through.
+				if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || (block[ny][nx] && !(nx === tx && ny === ty))) continue;
+				const k = key(nx, ny);
+				if (prev.has(k)) continue;
+				prev.set(k, [x, y]); q.push([nx, ny]);
+			}
+		}
+		if (!prev.has(key(tx, ty))) return [];
+		const res = []; let cur = [tx, ty];
+		while (cur) { res.unshift(cur); cur = prev.get(key(cur[0], cur[1])); }
+		return res;
+	}
 
-    // Lounge chat bursts: explore and worker trade bubbles every 2 s, dots tick at 2 fps
-    v.bubble = -1; v.dots = 0;
-    if ((t >= 16.0 && t < 22.0) || (t >= 25.0 && t < 29.0)) {
-      v.bubble = Math.floor((t - (t < 22.0 ? 16.0 : 25.0)) / 2) % 2;
-      v.dots = Math.floor(t * 2) % 3;
-    }
-    return { v: v, fast: fast };
-  }
+	/* Feet anchor: x is tile centre, y sits 4px above the tile bottom. */
+	const FX = tx => tx * T + T / 2, FY = ty => ty * T + T - 4;
 
-  var off = document.createElement('canvas'); off.width = W; off.height = H;
-  var og = off.getContext('2d');
-  function camFor() { return { x: 0, y: 0, w: W, h: H, s: 1 }; }   // band: whole room at 1x
-  function paint(v) {
-    paintRoom(og, v);
-    var cam = camFor(v);
-    OUT.width = cam.w * cam.s; OUT.height = cam.h * cam.s;
-    var g = OUT.getContext('2d'); g.imageSmoothingEnabled = false;
-    g.drawImage(off, cam.x, cam.y, cam.w, cam.h, 0, 0, OUT.width, OUT.height);
-  }
+	/* ---------- spots ---------- */
+	const deskSpot = d => ({ tx: d.x, ty: d.y + 1, px: FX(d.x + 1) - 4, py: FY(d.y + 1) - 2, face: 'up', sit: true });
+	const spots = {
+		/* One row below the wall props so a 48 px tall orchestrator does not cover the board or the pot. */
+		whiteboard: { tx: wb.x + 1, ty: 3, px: FX(wb.x + 2), py: FY(3), face: 'up' },
+		coffee: { tx: cf.x + 1, ty: cf.y + 2, face: 'up' },
+		front: { tx: cfg.front.x, ty: cfg.front.y, face: 'down' },
+		rest: { tx: cfg.orchStart.x, ty: cfg.orchStart.y, face: 'down' }
+	};
+	/* Waiting bench: queued residents stand on the row above the bench. Past the bench width they continue along that row, beside it, so they never stand on a desk seat. */
+	const benchSpot = i => ({ tx: cfg.bench.x + (i % (2 * cfg.bench.w)), ty: ROWS - 2, face: 'down' });
 
-  // Event-driven scheduler: 200 ms steps while something moves, otherwise sleep until the next changing frame.
-  var last = '', timer = 0, t0 = performance.now();
-  function untilChange(t) {
-    var here = JSON.stringify(snap(t).v);
-    for (var d = 0.05; d <= 8; d += 0.05) {
-      if (JSON.stringify(snap((t + d) % L).v) !== here) return Math.round(d * 1000);
-    }
-    return 1000;
-  }
-  function step() {
-    var t = ((performance.now() - t0) / 1000) % L;
-    var r = snap(t), key = JSON.stringify(r.v);
-    if (key !== last) { last = key; paint(r.v); }        // no paint when the frame is unchanged
-    timer = setTimeout(step, r.fast ? FRAME_MS : untilChange(t));
-  }
-  function pause() { clearTimeout(timer); timer = 0; }
-  function resume() { if (!timer) step(); }
 
-  if (reduced) {
-    paint(snap(21).v);                                    // one still frame, no timers
-  } else {
-    step();
-    document.addEventListener('visibilitychange', function () { if (document.hidden) pause(); else resume(); });
-    window.addEventListener('blur', pause);
-    window.addEventListener('focus', resume);
-    if ('IntersectionObserver' in window) {
-      new IntersectionObserver(function (es) { if (es[0].isIntersecting) resume(); else pause(); }).observe(OUT);
-    }
-  }
-})();
+	/* ---------- state ---------- */
+	const reducedQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+	let reduced = !!(reducedQuery && reducedQuery.matches);
+	let time = 0, intent = null, view = null, potShown = 1, potTarget = 1, brewingNow = false;
+	let wbLines = 2, wbChecks = 1, wbWriting = false, wbPartial = 1, wbHold = 0;
+	/* Which feature props are lit this frame, by feature name. */
+	let lit = {};
+	const orch = {
+		x: FX(cfg.orchStart.x), y: FY(cfg.orchStart.y), path: [], face: 'down', sit: false, moving: false,
+		mode: 'idle', wait: 0.5, bubble: null, step: 0, onArrive: null, target: null
+	};
+
+	function goTo(c, s, cb) {
+		const fx = Math.floor(c.x / T), fy = Math.max(2, Math.floor((c.y - 2) / T));
+		const pts = path(fx, fy, s.tx, s.ty).map(([x, y]) => ({ x: FX(x), y: FY(y) }));
+		if (pts.length) pts.shift();
+		pts.unshift({ x: FX(fx), y: FY(fy) });
+		if (!pts.length || pts[pts.length - 1].x !== FX(s.tx) || pts[pts.length - 1].y !== FY(s.ty)) pts.push({ x: FX(s.tx), y: FY(s.ty) });
+		if (s.px != null) pts.push({ x: s.px, y: s.py });
+		c.path = pts; c.sit = false; c.target = s; c.onArrive = cb || null;
+	}
+	function moveChar(c, dt) {
+		if (!c.path.length) { c.moving = false; return; }
+		const t = c.path[0], dx = t.x - c.x, dy = t.y - c.y, d = Math.hypot(dx, dy), sp = 72 * dt;
+		c.moving = true; c.step += dt * 8;
+		if (d > 0.5) { if (Math.abs(dx) > Math.abs(dy)) c.face = dx > 0 ? 'right' : 'left'; else c.face = dy > 0 ? 'down' : 'up'; }
+		if (d <= sp) {
+			c.x = t.x; c.y = t.y; c.path.shift();
+			if (!c.path.length) {
+				c.moving = false;
+				if (c.target) c.face = c.target.face || c.face;
+				const cb = c.onArrive; c.onArrive = null; cb && cb();
+			}
+		} else { c.x += dx / d * sp; c.y += dy / d * sp; }
+	}
+	/* Reduced motion: a state change still shows, it just does not walk. */
+	function placeAt(c, s) {
+		c.x = s.px ?? FX(s.tx); c.y = s.py ?? FY(s.ty); c.face = s.face; c.sit = !!s.sit;
+		c.path = []; c.onArrive = null; c.moving = false; c.target = s;
+	}
+
+	/* ---------- orchestrator behaviour ---------- */
+	function arrive(name) {
+		if (name === 'whiteboard') { orch.mode = 'plan'; wbWriting = true; wbPartial = reduced ? 1 : 0; }
+		else if (name === 'coffee') orch.mode = 'brew';
+		else if (name === 'front') orch.mode = 'front';
+	}
+	function applyIntent(name) {
+		intent = name;
+		orch.path = []; orch.onArrive = null; orch.target = null; wbWriting = false;
+		if (name === 'floor') {
+			if (reduced) { placeAt(orch, spots.rest); orch.mode = 'idle'; }
+			else { orch.mode = 'idle'; orch.wait = 0.4; }
+			return;
+		}
+		const spot = spots[name];
+		if (reduced) { placeAt(orch, spot); arrive(name); return; }
+		orch.mode = 'walk';
+		goTo(orch, spot, () => arrive(name));
+	}
+	function updateOrch(dt) {
+		if (orch.mode === 'plan') {
+			wbPartial = Math.min(1, wbPartial + dt * 0.7);
+			if (wbPartial >= 1) {
+				if (wbLines < 5) { wbLines++; wbChecks = wbLines - 1; wbPartial = 0; }
+				else if ((wbHold += dt) > 2) { wbLines = 1; wbChecks = 0; wbPartial = 0; wbHold = 0; }
+			}
+		} else if (orch.mode === 'idle' && !reduced) {
+			orch.wait -= dt;
+			/* Terminal design: the orchestrator never roams. It holds its spot between scripted intents. */
+		}
+	}
+
+	/* ---------- static background: wall, floor, props (painted once) ---------- */
+	function paintStatic() {
+		/* Wall band: crown molding, wallpaper with diamond damask, chair rail, wainscot. */
+		B(0, 0, W, 2 * T, P.bg);
+		B(0, 0, W, 6, P.border); B(0, 0, W, 1, P.deep); B(0, 6, W, 2, shade(P.border));
+		B(0, 8, W, 22, P.sel);
+		for (let y = 9; y < 30; y += 6) for (let x = (y % 12 ? 4 : 0); x < W; x += 8) B(x, y, 1, 1, goMix(P.sel, P.border, 0.5));
+		B(0, 30, W, 2, P.border); B(0, 32, W, 2, P.deep);
+		B(0, 34, W, 14, P.panel);
+		for (let x = 0; x < W; x += 12) { B(x, 36, 1, 10, P.border); B(x + 1, 36, 1, 10, P.bg); }
+		B(0, 46, W, 2, P.border);
+		/* Floor: staggered wood planks with grain and seams. */
+		for (let y = 2; y < ROWS; y++) {
+			const top = y * T;
+			for (let p = 0; p < 4; p++) {
+				const py = top + p * 6, off = ((y * 7 + p * 5) % 13) * 2;
+				for (let x = -off; x < W; x += 52) {
+					const base = ((Math.floor(x / 52) + p + y) % 3) ? P.floorA : P.floorB;
+					B(Math.max(0, x), py, Math.min(52, W - Math.max(0, x)) - (x < 0 ? -x : 0), 6, base);
+					B(Math.max(0, x), py + 5, Math.min(52, W - Math.max(0, x)), 1, P.seam);
+					const gx = Math.max(0, x) + 6 + ((p * 11) % 17);
+					if (gx < W) B(gx, py + 2, 10, 1, goMix(base, P.user, 0.25));
+					if (gx + 22 < W) B(gx + 22, py + 3, 6, 1, goMix(base, P.user, 0.2));
+				}
+			}
+			B(0, top + T - 2, W, 2, P.seam);
+		}
+		/* Baseboard along the bottom of the wall. */
+		B(0, 2 * T - 2, W, 2, P.panel);
+		/* Window: night city skyline with a moon. */
+		if (cfg.window) {
+			const wx = cfg.window.x * T + 3, ww = cfg.window.w * T - 6, wy = 8, wh = 22;
+			B(wx - 2, wy - 2, ww + 4, wh + 4, P.border);
+			B(wx, wy, ww, wh, P.bg);
+			for (let s = 0; s < 6; s++) B(wx, wy + s * 4, ww, 4, goMix(P.bg, P.user, s / 6));
+			B(wx + ww - 9, wy + 4, 5, 5, P.sec); B(wx + ww - 8, wy + 3, 3, 1, P.sec); B(wx + ww - 7, wy + 4, 2, 1, P.sec);
+			let sx = wx, k = 0;
+			while (sx < wx + ww) {
+				const bw = 4 + Math.floor(hash(k + 1) * 5), bh = 6 + Math.floor(hash(k + 7) * 12);
+				const col = k % 2 ? P.panel : P.sel;
+				B(sx, wy + wh - bh, Math.min(bw, wx + ww - sx), bh, col);
+				for (let wy2 = wy + wh - bh + 2; wy2 < wy + wh - 2; wy2 += 3) {
+					for (let wx2 = sx + 1; wx2 < sx + bw - 1; wx2 += 3) {
+						if (hash(wx2 * 3 + wy2 * 5 + k) > 0.55 && wx2 < wx + ww - 1) B(wx2, wy2, 1, 1, P.gold);
+					}
+				}
+				sx += bw; k++;
+			}
+			B(wx + Math.floor(ww / 2) - 1, wy, 2, wh, P.border);
+			B(wx, wy + Math.floor(wh / 2) - 1, ww, 2, P.border);
+			B(wx - 2, wy + wh + 2, ww + 4, 2, P.border);
+		}
+		/* Whiteboard frame (content is drawn live). */
+		{
+			const x = wb.x * T + 3, w = wb.w * T - 6;
+			B(x, 5, w, 26, P.steel); B(x + 2, 7, w - 4, 22, P.text);
+			B(x + 2, 7, w - 4, 1, P.sec);
+			B(x + 6, 31, w - 12, 2, P.border);
+		}
+		/* Clock on the wall. */
+		if (cfg.clock != null) {
+			const cx = cfg.clock * T + 12, cy = 18;
+			B(cx - 7, cy - 7, 14, 14, P.border); B(cx - 6, cy - 6, 12, 12, P.text); B(cx - 5, cy - 5, 10, 10, P.panel);
+			for (let a = 0; a < 12; a++) { const q = a / 12 * Math.PI * 2; B(cx + Math.round(Math.cos(q) * 4), cy + Math.round(Math.sin(q) * 4), 1, 1, P.gold); }
+		}
+		/* Bookshelf: three shelves, two rows of colored spines. */
+		if (cfg.shelf != null) {
+			const x = cfg.shelf * T + 2;
+			B(x, 6, 30, 26, P.border); B(x + 2, 8, 26, 22, P.bg);
+			[14, 22].forEach(y => B(x + 2, y, 26, 2, P.steel));
+			const books = [P.blue, P.red, P.green, P.gold, P.purple, P.sec, P.sand];
+			for (let r = 0; r < 3; r++) for (let b = 0; b < 6; b++) {
+				const bh = 5 + (b + r) % 3, col = books[(b * 2 + r * 3) % books.length];
+				B(x + 3 + b * 4, (r === 0 ? 9 : r === 1 ? 17 : 25) + (6 - bh), 3, bh, col);
+			}
+		}
+		/* Rug with border pattern and corner tassels. */
+		if (cfg.rug) {
+			const r = cfg.rug, x = r.x * T + 6, y = r.y * T + 6, w = r.w * T - 12, h = r.h * T - 12;
+			B(x, y, w, h, P.sel); B(x + 3, y + 3, w - 6, h - 6, goMix(P.sel, P.border, 0.4));
+			B(x + 6, y + 6, w - 12, h - 12, P.sel);
+			for (let i = 0; i < w - 12; i += 6) B(x + 6 + i, y + 6, 3, 1, P.border);
+			for (let i = 0; i < h - 12; i += 6) B(x + 6, y + 6 + i, 1, 3, P.border);
+			[[x + 1, y + 1], [x + w - 4, y + 1], [x + 1, y + h - 4], [x + w - 4, y + h - 4]].forEach(([a, b]) => { B(a, b, 3, 3, P.gold); B(a + 1, b + 1, 1, 1, P.text); });
+			B(x + w / 2 - 2, y + h / 2 - 2, 4, 4, P.deep);
+		}
+		/* Door and mat at the bottom edge. */
+		if (cfg.door) {
+			const d = cfg.door, dx = d.x * T, dy = (ROWS - 1) * T;
+			B(dx + 2, dy + 2, d.w * T - 4, T - 2, P.border);
+			B(dx + 4, dy + 4, d.w * T - 8, T - 4, P.steel);
+			B(dx + 4, dy + 4, d.w * T - 8, 2, C.steelH);
+			B(dx + Math.floor(d.w * T / 2) - 1, dy + 4, 2, T - 4, P.border);
+			B(dx + d.w * T - 10, dy + 13, 2, 3, P.gold);
+			B(dx + 2, dy + T - 6, d.w * T - 4, 4, P.deep);
+			B(dx + 4, dy + T - 5, d.w * T - 8, 2, P.violet);
+		}
+		/* Waiting bench under the door row: queued residents sit or stand here until a desk frees. */
+		{
+			const x = cfg.bench.x * T, y = (ROWS - 1) * T, w = cfg.bench.w * T;
+			B(x + 1, y + 10, w - 2, 4, C.woodH); B(x + 1, y + 10, w - 2, 1, P.gold);
+			B(x + 1, y + 14, w - 2, 2, C.woodS);
+			B(x + 2, y + 16, 2, 6, P.border); B(x + w - 4, y + 16, 2, 6, P.border);
+		}
+		/* Coffee counter: marble top, cabinets, toe kick. */
+		{
+			const x = cf.x * T, y = cf.y * T, w = cf.w * T;
+			B(x, y + 4, w, 4, C.marble); B(x, y + 4, w, 1, P.text); B(x + 4, y + 6, 10, 1, goMix(P.text, P.sec, 0.5));
+			B(x, y + 8, w, 16, P.border); B(x, y + 8, w, 1, C.steelH);
+			for (let i = 1; i < cf.w; i++) B(x + i * T, y + 9, 1, 14, P.sel);
+			for (let i = 0; i < cf.w; i++) { B(x + i * T + 9, y + 15, 6, 1, P.muted); B(x + i * T + 9, y + 14, 6, 1, P.steel); }
+			B(x, y + 22, w, 2, P.panel);
+			/* Sugar jar and cups on the marble (static). */
+			B(x + w - 14, y + 0, 9, 4, P.sec); B(x + w - 14, y + 0, 9, 1, P.text); B(x + w - 13, y - 2, 7, 2, P.border);
+			for (let i = 0; i < 3; i++) { B(x + w - 22 + i * 3, y + 1, 3, 3, P.text); B(x + w - 22 + i * 3, y + 1, 3, 1, P.violet); }
+		}
+		/* Wall-side coffee machine body (LED and drip are live). */
+		{
+			const x = cf.x * T + 3, y = cf.y * T - 16;
+			B(x, y, 15, 14, P.steel); B(x, y, 15, 2, C.steelH); B(x, y + 12, 15, 2, shade(P.steel));
+			B(x + 2, y + 3, 11, 5, P.bg); B(x + 2, y + 3, 11, 1, P.border);
+			B(x + 5, y + 10, 5, 2, P.border);
+		}
+	}
+
+	/* ---------- live room parts (drawn each frame) ---------- */
+	function drawWindowLights() {
+		if (!cfg.window) return;
+		const wx = cfg.window.x * T + 3, ww = cfg.window.w * T - 6;
+		for (let s = 0; s < 4; s++) {
+			const sx = wx + 2 + Math.floor(hash(s + 2) * (ww - 6)), sy = 12 + Math.floor(hash(s + 9) * 10);
+			if (!reduced && Math.floor(time * 1.3 + s * 2.7) % 5) R(sx, sy, 1, 1, P.sand);
+		}
+	}
+	function drawClockHands() {
+		if (cfg.clock == null) return;
+		const cx = cfg.clock * T + 12, cy = 18, a = time * 0.6;
+		R(cx + Math.round(Math.cos(a) * 3), cy + Math.round(Math.sin(a) * 3), 1, 1, P.gold);
+		R(cx, cy - 3, 1, 3, P.text); R(cx, cy, 1, 1, P.gold);
+	}
+	function drawWhiteboard() {
+		const x = wb.x * T + 5, w = wb.w * T - 10;
+		for (let i = 0; i < wbLines; i++) {
+			const y = 10 + i * 4;
+			if (y > 26) break;
+			const full = 12 + Math.floor(hash(i + 3) * (w - 26));
+			const len = (i === wbLines - 1 && wbWriting) ? Math.max(1, Math.floor(full * wbPartial)) : full;
+			R(x + 3, y, 3, 3, i < wbChecks ? P.green : P.steel);
+			if (i < wbChecks) R(x + 4, y + 1, 1, 1, P.bg);
+			R(x + 9, y + 1, len, 2, [P.blue, P.red, P.violet, P.blue, P.green][i % 5]);
+		}
+		R(x + 4, 27, 5, 2, P.red); R(x + 12, 27, 5, 2, P.blue); R(x + 20, 27, 3, 2, P.gold);
+	}
+
+	/* Screensaver: a small logo bouncing over the monitor. Static under reduced motion. */
+	function drawScreensaver(x, y, w, h, i) {
+		const v = reduced ? 0 : time * 0.12 + i * 0.37;
+		const px = Math.floor(triangle(v) * (w - 4)), py = Math.floor(triangle(v * 0.71 + 0.3) * (h - 3));
+		R(x + px, y + py, 4, 3, [P.purple, P.blue, P.sand, P.green][i % 4]);
+		R(x + px + 1, y + py + 1, 2, 1, P.bg);
+	}
+
+	function drawDesk(d, i) {
+		const x = d.x * T, y = d.y * T;
+		/* Desk top and drawer front. */
+		R(x + 1, y + 6, 46, 14, C.woodH); R(x + 1, y + 6, 46, 1, P.gold);
+		R(x + 1, y + 19, 46, 3, C.woodS);
+		R(x + 2, y + 22, 4, 2, P.border); R(x + 40, y + 22, 4, 2, P.border);
+		R(x + 36, y + 9, 8, 3, C.woodS); R(x + 37, y + 10, 6, 1, P.gold);
+		/* Monitor: bezel, screen (screensaver when empty, the agent's work while it runs), stand. */
+		const mx = x + 14, my = y - 14;
+		R(mx, my, 20, 16, P.border); R(mx, my, 20, 1, P.steel);
+		R(mx + 1, my + 1, 18, 13, P.bg);
+		if (deskWorking[i]) drawWorkingScreen(mx + 1, my + 1, deskWorking[i], i);
+		else drawScreensaver(mx + 1, my + 1, 18, 13, i);
+		R(mx + 8, my + 16, 4, 3, P.steel); R(mx + 5, my + 19, 10, 2, P.border);
+		/* Keyboard, mouse, folder, empty mug. */
+		R(x + 9, y + 9, 14, 4, P.steel); R(x + 9, y + 9, 14, 1, P.sec);
+		for (let k = 0; k < 4; k++) R(x + 10 + k * 3, y + 10, 2, 1, P.border);
+		R(x + 27, y + 9, 4, 5, P.sec); R(x + 27, y + 9, 4, 1, P.text);
+		R(x + 3, y + 8, 5, 6, P.muted); R(x + 3, y + 8, 5, 1, C.woodH);
+		R(x + 36, y + 9, 6, 6, P.text); R(x + 36, y + 9, 6, 1, P.sec); R(x + 42, y + 11, 2, 2, P.text);
+	}
+
+	/* Chairs are drawn CHAIR_LIFT px above their seat spot, so the seat cushion starts 2 px under the desk edge. */
+	const CHAIR_LIFT = 12;
+	/* Empty chair, sized for the 24 px sitter: the seat cushion and the backrest in front. The caller passes the lifted seat line. */
+	function drawChair(px, py, front) {
+		if (!front) { R(px - 8, py + 2, 16, 4, P.muted); R(px - 8, py + 2, 16, 1, P.steel); return; }
+		R(px - 7, py - 4, 14, 8, P.muted); R(px - 7, py - 4, 14, 1, P.steel); R(px - 7, py + 3, 14, 1, shade(P.muted));
+		R(px - 5, py - 2, 10, 5, P.border); R(px - 4, py - 1, 8, 3, P.sel);
+		R(px - 2, py + 4, 4, 3, P.border); R(px - 5, py + 7, 2, 1, P.bg); R(px + 3, py + 7, 2, 1, P.bg);
+	}
+
+	function drawTable() {
+		const x = tb.x * T, y = tb.y * T, w = tb.w * T, h = tb.h * T;
+		const topH = h - 12, edge = y + 4 + topH;
+		R(x + 2, y + 4, w - 4, topH, C.woodH); R(x + 2, y + 4, w - 4, 1, P.gold);
+		R(x + 2, edge, w - 4, 4, C.woodS); R(x + 2, edge + 4, w - 4, 2, P.border);
+		R(x + 4, y + h - 2, 3, 2, P.bg); R(x + w - 7, y + h - 2, 3, 2, P.bg);
+		/* Laptop (closed in T2: no sync meeting yet), papers, vase with flowers. */
+		const lx = x + 6, ly = y + 5, lh = Math.max(5, topH - 5);
+		R(lx, ly, 14, lh, P.steel); R(lx + 1, ly + 1, 12, lh - 2, P.bg);
+		R(lx - 2, ly + lh - 1, 18, 2, P.sec);
+		R(x + 26, y + 6, 8, 5, P.text); R(x + 26, y + 6, 8, 1, P.sec);
+		R(x + 28, y + 8, 4, 1, P.steel);
+		const vx = x + w - 16, vy = y + 4;
+		R(vx, vy + 8, 8, 8, C.pinkS); R(vx + 1, vy + 8, 6, 1, C.pink); R(vx - 1, vy + 14, 10, 2, P.deep);
+		R(vx + 3, vy + 2, 1, 6, C.leafS); R(vx + 1, vy - 1, 3, 3, C.pink); R(vx + 5, vy + 1, 3, 2, P.violet);
+		R(vx - 3, vy + 3, 3, 3, C.leaf); R(vx + 7, vy + 4, 3, 3, C.leaf);
+	}
+
+	/* The pot level follows the eased fill; the LED is red while brewing. */
+	function drawCoffee() {
+		const x = cf.x * T, y = cf.y * T, level = potShown;
+		const mx = x + 3, my = y - 16;
+		R(mx + 2, my + 4, 3, 2, brewingNow ? P.red : P.green);
+		if (brewingNow) { const dy = Math.floor(time * 12) % 5; R(mx + 7, my + 14 + dy, 1, 1, C.coffeeH); }
+		const px = x + 32, py = y - 12;
+		R(px + 1, py - 2, 8, 2, P.border); R(px + 3, py - 3, 4, 1, P.steel);
+		R(px, py, 10, 16, P.steel); R(px, py, 10, 1, P.sec);
+		R(px + 1, py + 1, 8, 14, P.bg);
+		const fh = Math.round(13 * Math.max(0, Math.min(1, level)));
+		if (fh > 0) {
+			R(px + 1, py + 15 - fh, 8, fh, C.coffee);
+			R(px + 1, py + 15 - fh, 8, 1, C.coffeeH);
+			if (fh > 4) R(px + 2, py + 15 - fh + 2, 1, fh - 3, goMix(C.coffee, P.text, 0.3));
+		}
+		R(px + 10, py + 4, 3, 7, P.steel); R(px + 11, py + 6, 1, 3, P.bg);
+		R(px + 4, py + 16, 2, 1, P.border);
+	}
+
+	function drawPlant(p) {
+		const x = p.x * T, y = p.y * T;
+		/* Big leafy plant in a pink pot. */
+		R(x + 5, y + 14, 14, 9, C.pinkS); R(x + 5, y + 14, 14, 1, C.pink); R(x + 4, y + 13, 16, 2, C.pink);
+		R(x + 6, y + 21, 12, 1, P.border); R(x + 8, y + 13, 8, 1, P.border);
+		const leaves = [[1, 4, 6, 7], [16, 5, 6, 7], [4, -1, 6, 8], [13, -1, 6, 8], [8, -4, 8, 9], [9, 0, 6, 6]];
+		leaves.forEach(([lx, ly, lw, lh], i) => {
+			R(x + lx, y + ly, lw, lh, i % 2 ? C.leaf : C.leafS);
+			R(x + lx + 1, y + ly + 1, lw - 3, 1, C.leafH);
+			R(x + lx + Math.floor(lw / 2), y + ly + 2, 1, lh - 3, C.leafS);
+		});
+	}
+
+	/* ---------- feature props (S8): each one is drawn inside its footprint and lights while its feature is active ----------
+	   Under reduced motion an active prop shows its static "on" state; nothing moves. */
+	const PAINTS = [P.purple, P.blue, P.gold, P.green, P.deep, P.sand];
+	const CORK = goMix(P.sand, P.plum, 0.35);
+	const MAP = goMix(P.sand, P.text, 0.45);
+	const PIGEON = ['....KKKK....', '...KggggK...', '..KgggEgK...', '.KllgggggggK', 'KggggggggggK', 'KsggggggggK.', '.KssssssK...', '..KKKKKK....'];
+	const PIGEON_MAP = { K: INK, g: P.steel, l: P.sec, s: shade(P.steel), E: P.gold };
+
+	/* A filled disc of radius r centred on (cx, cy), one rectangle per row. */
+	function disc(cx, cy, r, c) {
+		for (let j = -r; j <= r; j++) { const half = Math.round(Math.sqrt(r * r - j * j)); R(cx - half, cy + j, half * 2, 1, c); }
+	}
+	/* A 1 px line from (x1, y1) to (x2, y2). */
+	function line(x1, y1, x2, y2, c) {
+		const n = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) || 1;
+		for (let k = 0; k <= n; k++) R(x1 + Math.round((x2 - x1) * k / n), y1 + Math.round((y2 - y1) * k / n), 1, 1, c);
+	}
+
+	/* Music: a turntable on a cabinet. The record turns and a glint sweeps while music plays; a speaker rim lights and notes rise. */
+	function drawMusic(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 3, y + 26, 42, 20, C.wood); R(x + 3, y + 26, 42, 1, C.woodH); R(x + 3, y + 45, 42, 1, C.woodS);
+		R(x + 4, y + 46, 4, 2, P.border); R(x + 40, y + 46, 4, 2, P.border);
+		const cx = x + 14, cy = y + 30;
+		disc(cx, cy, 8, P.steel); disc(cx, cy, 7, P.bg); disc(cx, cy, 3, P.gold); R(cx, cy, 1, 1, P.text);
+		const a = on && !reduced ? time * 4 : 0;
+		R(cx + Math.round(Math.cos(a) * 5), cy + Math.round(Math.sin(a) * 5), 1, 1, P.sky);
+		line(x + 25, y + 24, x + 20, y + 28, P.steel);
+		R(x + 27, y + 34, 14, 10, P.bg); R(x + 27, y + 34, 14, 1, on ? P.gold : P.steel);
+		for (let k = 0; k < 4; k++) R(x + 29, y + 36 + k * 2, 10, 1, P.border);
+		R(x + 38, y + 28, 2, 2, on ? P.green : P.dim);
+		if (on) for (let i = 0; i < 3; i++) {
+			const nx = x + 19 + i * 5, ny = reduced ? y + 8 + i * 4 : y + 18 - ((time * 0.9 + i / 3) % 1) * 14;
+			const c = i % 2 ? P.violet : P.gold;
+			R(nx + 2, ny, 1, 4, c); R(nx, ny + 3, 2, 2, c); R(nx + 3, ny, 2, 1, c);
+		}
+	}
+
+	/* Design: an easel with a canvas. While gentle_design runs the strokes are painted one after another; a finished canvas holds. */
+	function drawDesign(p, on) {
+		const x = p.x * T, y = p.y * T;
+		line(x + 12, y + 46, x + 24, y + 12, C.woodS); line(x + 36, y + 46, x + 24, y + 12, C.woodS);
+		R(x + 16, y + 38, 16, 2, C.wood);
+		R(x + 7, y + 3, 34, 29, C.woodS); R(x + 9, y + 5, 30, 25, P.text);
+		R(x + 9, y + 31, 30, 2, C.wood);
+		R(x + 13, y + 32, 3, 2, P.purple); R(x + 18, y + 32, 3, 2, P.blue); R(x + 23, y + 32, 3, 2, P.gold);
+		const strokes = 6, progress = on ? (reduced ? strokes : ((time * 0.5) % 1) * strokes) : 0;
+		for (let k = 0; k < strokes; k++) {
+			const f = Math.min(1, Math.max(0, progress - k));
+			if (f <= 0) continue;
+			const len = Math.max(1, Math.round((6 + Math.floor(hash(k + 9) * 10)) * f));
+			R(x + 11 + Math.floor(hash(k + 1) * 12), y + 8 + k * 3, len, 2, PAINTS[k % PAINTS.length]);
+		}
+	}
+
+	/* Memory: a filing cabinet. The second drawer slides out while a mem_* tool runs, with paper showing at its top. */
+	function drawMemory(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 1, y + 1, 22, 46, P.border); R(x + 1, y + 1, 22, 1, P.steel);
+		const open = on ? (reduced ? 3 : 2 + Math.round(triangle(time * 0.7))) : 0;
+		for (let d = 0; d < 4; d++) {
+			const top = y + 3 + d * 11, out = d === 1 ? open : 0, fy = top + out;
+			if (out) { R(x + 3, top, 18, 2, P.bg); R(x + 5, top - 2, 9, 2, P.text); R(x + 10, top - 3, 7, 2, P.sec); }
+			R(x + 3, fy, 18, 9, P.steel); R(x + 3, fy, 18, 1, P.sec); R(x + 3, fy + 8, 18, 1, shade(P.steel));
+			R(x + 9, fy + 3, 6, 1, P.gold); R(x + 6, fy + 6, 12, 1, P.muted);
+		}
+	}
+
+	/* Ask: a side table with a brass desk bell. While an ask_user prompt is open the bell shakes and rings out on both sides. */
+	function drawAsk(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 3, y + 28, 18, 3, C.woodH); R(x + 3, y + 28, 18, 1, P.gold); R(x + 3, y + 31, 18, 1, C.woodS);
+		R(x + 4, y + 32, 2, 14, C.woodS); R(x + 18, y + 32, 2, 14, C.woodS);
+		const bx = x + 12 + (on && !reduced && Math.floor(time * 16) % 2 ? 1 : 0);
+		R(bx - 1, y + 16, 2, 2, P.gold); R(bx - 2, y + 18, 4, 2, P.gold); R(bx - 4, y + 20, 8, 2, P.gold); R(bx - 5, y + 22, 10, 4, P.gold);
+		R(bx - 3, y + 21, 2, 2, hi(P.gold)); R(bx - 6, y + 26, 12, 2, shade(P.gold));
+		if (on) { R(x + 2, y + 19, 1, 4, P.violet); R(x + 1, y + 20, 1, 2, P.violet); R(x + 21, y + 19, 1, 4, P.violet); R(x + 22, y + 20, 1, 2, P.violet); }
+	}
+
+	/* Todo: a corkboard of sticky notes. Each time the todo list updates a note gets a check; idle keeps the board as it was. */
+	function drawTodo(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 8, y + 34, 3, 13, C.woodS); R(x + 37, y + 34, 3, 13, C.woodS);
+		R(x + 2, y + 2, 44, 33, C.woodS); R(x + 4, y + 4, 40, 29, CORK);
+		const notes = [[6, 6, P.gold], [18, 5, P.purple], [30, 7, P.green], [9, 18, P.blue], [21, 19, P.violet], [33, 17, P.gold]];
+		const checked = on ? (reduced ? 4 : Math.floor(time * 1.5) % (notes.length + 1)) : 2;
+		notes.forEach(([nx, ny, c], i) => {
+			R(x + nx, y + ny, 8, 7, c); R(x + nx, y + ny + 6, 8, 1, shade(c));
+			R(x + nx + 3, y + ny - 1, 2, 2, P.red);
+			if (i < checked) { line(x + nx + 2, y + ny + 3, x + nx + 3, y + ny + 4, P.bg); line(x + nx + 3, y + ny + 4, x + nx + 5, y + ny + 2, P.bg); }
+		});
+	}
+
+	/* Web: a pigeon on a perch. While web_search or fetch_content runs it hops and flaps; idle it sits. */
+	function drawPigeon(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 10, y + 21, 4, 27, C.woodS); R(x + 4, y + 20, 16, 2, C.woodH); R(x + 4, y + 22, 16, 1, C.woodS);
+		const hop = on && !reduced ? Math.round(triangle(time * 0.9) * 4) : 0, ox = x + 4, oy = y + 12 - hop;
+		sprite(PIGEON, PIGEON_MAP, ox, oy, false);
+		R(ox + 10, oy + 3, 2, 1, P.sand);
+		if (on && !reduced && Math.floor(time * 6) % 2) R(ox + 2, oy - 1, 5, 2, PIGEON_MAP.s);
+		else if (on) R(ox + 2, oy + 3, 5, 2, PIGEON_MAP.s);
+	}
+
+	/* Codegraph: a map board on a stand with pins. The pins light up while codegraph runs; idle they are grey. */
+	function drawCodegraph(p, on) {
+		const x = p.x * T, y = p.y * T;
+		R(x + 6, y + 34, 3, 13, C.woodS); R(x + 39, y + 34, 3, 13, C.woodS);
+		R(x + 2, y + 2, 44, 33, P.border); R(x + 4, y + 4, 40, 29, MAP);
+		line(x + 6, y + 10, x + 42, y + 10, goMix(MAP, P.border, 0.5));
+		line(x + 14, y + 6, x + 14, y + 30, goMix(MAP, P.border, 0.5));
+		line(x + 30, y + 6, x + 30, y + 30, goMix(MAP, P.border, 0.5));
+		for (let k = 0; k < 36; k++) R(x + 5 + k, y + 22 + Math.round(Math.sin(k / 4) * 2), 1, 2, P.blue);
+		[[10, 8], [22, 16], [34, 9], [16, 25], [38, 24]].forEach(([px, py], i) => {
+			const lit = on && (reduced || Math.floor(time * 4 + i * 1.7) % 5 !== 0);
+			R(x + px - 1, y + py + 2, 1, 2, P.border);
+			R(x + px - 1, y + py - 1, 3, 3, lit ? (i % 2 ? P.gold : P.red) : P.steel);
+		});
+	}
+
+	/* MCP: the rack. Its LEDs sit dim at rest and blink while mcp or codemode runs (a fixed pattern under reduced motion). */
+	function drawRack(on) {
+		const x = cfg.rack.x * T, y = cfg.rack.y * T;
+		R(x + 2, y - 6, 20, 46, P.border); R(x + 2, y - 6, 20, 1, P.steel);
+		for (let i = 0; i < 7; i++) {
+			const yy = y - 3 + i * 6;
+			R(x + 4, yy, 16, 4, P.sel); R(x + 4, yy, 16, 1, P.border);
+			const blink = on && (reduced ? i % 2 === 0 : hash(i + Math.floor(time * 4) * 7) > 0.35);
+			R(x + 6, yy + 2, 1, 1, !on ? P.dim : blink ? P.green : P.bg);
+			R(x + 9, yy + 2, 1, 1, !on ? P.dim : i % 2 ? P.blue : P.gold);
+			R(x + 12, yy + 1, 6, 2, P.bg);
+		}
+	}
+
+	const PROP_DRAWERS = {
+		music: drawMusic, design: drawDesign, memory: drawMemory, ask: drawAsk,
+		todo: drawTodo, web: drawPigeon, codegraph: drawCodegraph, mcp: (p, on) => drawRack(on)
+	};
+
+	/* ---------- figures: one body template for the orchestrator and every resident ---------- */
+	/* Sprite box is 24x36 with the feet on the last row (oy + 35). Rows: head 0-13, neck 14, torso 15-25, legs 26-33, shoes 34-35. */
+	/* `f` = { color, walk, sw, sit }. Seated figures show thighs instead of legs; `sw` moves the hands while typing or walking. */
+	function drawFigure(ox, oy, f) {
+		const s = f.color, sh = shade(s), hl = hi(s);
+		/* Neck: the head map covers its top row. */
+		R(ox + 9, oy + 14, 6, 1, SKIN_SH);
+		/* Torso with ink outline, shaded flank and a chest highlight. */
+		R(ox + 5, oy + 15, 1, 11, INK); R(ox + 18, oy + 15, 1, 11, INK);
+		R(ox + 6, oy + 15, 12, 11, s); R(ox + 6, oy + 15, 1, 11, sh); R(ox + 17, oy + 15, 1, 11, sh);
+		R(ox + 8, oy + 15, 2, 5, hl);
+		/* Arms: sleeves to row 23, hands below with a knuckle shadow. Seated hands rest higher, on the keyboard. */
+		R(ox + 2, oy + 15, 1, 9, INK); R(ox + 21, oy + 15, 1, 9, INK);
+		R(ox + 3, oy + 15, 2, 9, s); R(ox + 19, oy + 15, 2, 9, s);
+		R(ox + 3, oy + 15, 1, 9, sh); R(ox + 20, oy + 15, 1, 9, sh);
+		const base = f.sit ? 22 : 24, sw = f.sw || 0;
+		R(ox + 3, oy + base + sw, 2, 2, SKIN); R(ox + 19, oy + base - sw, 2, 2, SKIN);
+		R(ox + 3, oy + base + sw + 1, 2, 1, SKIN_SH); R(ox + 19, oy + base - sw + 1, 2, 1, SKIN_SH);
+		if (f.sit) { R(ox + 6, oy + 26, 12, 4, LEG); R(ox + 6, oy + 26, 12, 1, LEG_H); return; }
+		/* Legs and shoes; a stepping leg lifts one pixel. */
+		const lOff = f.walk === 1 ? 1 : 0, rOff = f.walk === 3 ? 1 : 0;
+		R(ox + 7, oy + 26, 4, 8 - lOff, LEG); R(ox + 13, oy + 26, 4, 8 - rOff, LEG);
+		R(ox + 7, oy + 26, 1, 8 - lOff, LEG_H); R(ox + 13, oy + 26, 1, 8 - rOff, LEG_H);
+		R(ox + 6, oy + 34 - lOff, 5, 2, INK); R(ox + 13, oy + 34 - rOff, 5, 2, INK);
+		R(ox + 7, oy + 34 - lOff, 2, 1, P.steel); R(ox + 14, oy + 34 - rOff, 2, 1, P.steel);
+	}
+
+	/* ---------- orchestrator sprite: top hat with a fuchsia rose, fuchsia handlebar mustache, black monocle, champagne suit ---------- */
+
+	function drawOrchHead(ox, oy, fam, flip) {
+		const fx = (x, w) => (flip ? ox + 23 - x - (w || 1) + 1 : ox + x);
+		const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
+		/* Top hat: dark crown with a gold band, a brim wider than the head, and a fuchsia rose on the crown. */
+		hX(6, 12, -11, 7, P.bg); hX(7, 10, -11, 1, P.border); hX(15, 3, -9, 5, shade(P.bg));
+		hX(6, 12, -4, 1, P.gold); hX(6, 12, -3, 1, shade(P.gold));
+		hX(3, 18, -2, 1, P.border); hX(3, 18, -1, 1, P.bg);
+		hX(11, 1, -7, 2, C.leafS); hX(10, 1, -6, 1, C.leafS);
+		hX(13, 3, -11, 1, STACHE); hX(12, 5, -10, 3, STACHE); hX(13, 3, -7, 1, STACHE);
+		hX(13, 2, -9, 1, STACHE_S); hX(15, 1, -10, 2, STACHE_S); hX(14, 1, -8, 1, STACHE_S); hX(13, 1, -11, 1, P.violet);
+		if (fam === 'up') {
+			/* Back view: only the handlebar tips show past the head. */
+			hX(0, 2, 9, 2, STACHE); hX(22, 2, 9, 2, STACHE); hX(0, 1, 8, 1, STACHE_S); hX(23, 1, 8, 1, STACHE_S);
+			return;
+		}
+		if (fam === 'side') {
+			/* Chain first, so the mustache covers its top. Monocle ring with a glinting lens on the visible eye. */
+			hX(8, 1, 10, 1, MONOCLE); hX(8, 1, 11, 1, MONOCLE_H); hX(9, 1, 12, 1, MONOCLE);
+			hX(6, 2, 6, 1, MONOCLE); hX(5, 1, 7, 2, MONOCLE); hX(8, 1, 7, 2, MONOCLE); hX(6, 2, 9, 1, MONOCLE);
+			hX(6, 2, 7, 2, P.sky); hX(6, 1, 7, 1, P.text);
+			/* Handlebar tips poke out in front of the face. */
+			hX(3, 5, 10, 2, STACHE); hX(2, 2, 9, 1, STACHE); hX(2, 1, 8, 1, STACHE_S); hX(3, 5, 11, 1, STACHE_S);
+		} else {
+			/* Chain hangs from the monocle; the mustache covers its upper links. */
+			hX(19, 1, 10, 2, MONOCLE); hX(19, 1, 12, 1, MONOCLE_H); hX(19, 1, 13, 1, MONOCLE);
+			/* Monocle ring with a glinting lens over the right eye. */
+			hX(17, 2, 6, 1, MONOCLE); hX(16, 1, 7, 2, MONOCLE); hX(19, 1, 7, 2, MONOCLE); hX(17, 2, 9, 1, MONOCLE);
+			hX(17, 2, 7, 2, P.sky); hX(17, 1, 7, 1, P.text);
+			/* Handlebar mustache: wider than the face, curled tips, shaded underside. */
+			hX(2, 20, 10, 2, STACHE); hX(3, 18, 11, 1, STACHE_S);
+			hX(0, 2, 9, 2, STACHE); hX(22, 2, 9, 2, STACHE); hX(0, 1, 9, 1, STACHE_S); hX(23, 1, 9, 1, STACHE_S);
+		}
+	}
+
+	/* Champagne vest with a white shirt front, gold buttons and a purple bow tie. */
+	function drawOrchTie(ox, oy) {
+		R(ox + 9, oy + 15, 6, 1, P.purple); R(ox + 10, oy + 16, 4, 1, P.deep);
+		R(ox + 10, oy + 17, 4, 8, P.text);
+		R(ox + 11, oy + 20, 2, 1, P.gold); R(ox + 11, oy + 23, 2, 1, P.gold);
+	}
+
+	function headFor(c) {
+		if (c.face === 'up') return { rows: HEAD_UP, flip: false, fam: 'up' };
+		if (c.face === 'left') return { rows: HEAD_SIDE, flip: false, fam: 'side' };
+		if (c.face === 'right') return { rows: HEAD_SIDE, flip: true, fam: 'side' };
+		return { rows: HEAD_DOWN, flip: false, fam: 'down' };
+	}
+
+	function drawOrchestrator(c) {
+		const fx = Math.round(c.x), fy = Math.round(c.y);
+		const walk = c.moving ? Math.floor(c.step) % 4 : 0, bob = c.moving && walk % 2 ? 1 : 0;
+		const ox = fx - 12, oy = fy - 35 - bob;
+		const sw = c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
+		g.globalAlpha = 0.35; R(fx - 9, fy - 1, 18, 2, INK); g.globalAlpha = 1;
+		const { rows, flip, fam } = headFor(c);
+		drawFigure(ox, oy, { color: ORCH_COLOR, walk, sw, sit: false });
+		const map = { K: INK, H: ORCH_HAIR, h: shade(ORCH_HAIR), l: hi(ORCH_HAIR), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep };
+		sprite(rows, map, ox, oy, flip);
+		const blink = !reduced && !c.moving && Math.floor(time) % 11 === 5 && time % 1 < 0.6;
+		if (blink && fam === 'down') { R(ox + 5, oy + 7, 2, 2, SKIN); R(ox + 5, oy + 8, 2, 1, INK); }
+		drawOrchHead(ox, oy, fam, flip);
+		drawOrchTie(ox, oy);
+	}
+
+	/* Speech bubble, 18x14, with a 10x8 icon. Drawn in the final pass. */
+	function drawBubble(x, y, icon) {
+		R(x, y, 18, 14, INK); R(x + 1, y + 1, 16, 11, P.text); R(x + 1, y + 1, 16, 1, P.sec);
+		R(x + 7, y + 12, 3, 2, INK); R(x + 8, y + 14, 1, 1, INK); R(x + 8, y + 12, 1, 1, P.text);
+		const ix = x + 4, iy = y + 3;
+		if (icon === 'dots') { const n = 1 + Math.floor(time * 3) % 3; for (let i = 0; i < n; i++) R(ix + 1 + i * 3, iy + 2, 2, 2, P.steel); }
+		else if (icon === 'cup') { R(ix, iy + 2, 6, 4, P.sand); R(ix, iy + 2, 6, 1, P.gold); R(ix + 6, iy + 3, 2, 2, P.sand); R(ix + 1, iy, 1, 2, P.steel); R(ix + 3, iy, 1, 2, P.steel); }
+		else if (icon === 'idea') { R(ix + 2, iy, 4, 4, P.gold); R(ix + 3, iy + 4, 2, 2, P.steel); }
+		else if (icon === 'wrench') { R(ix + 4, iy, 3, 2, P.steel); R(ix + 5, iy, 1, 1, P.bg); R(ix + 3, iy + 2, 2, 2, P.steel); R(ix + 2, iy + 4, 2, 2, P.steel); R(ix + 1, iy + 5, 2, 1, P.sand); }
+		else if (icon === 'question') { R(ix + 1, iy, 4, 1, P.purple); R(ix + 4, iy + 1, 1, 2, P.purple); R(ix + 2, iy + 3, 2, 1, P.purple); R(ix + 2, iy + 5, 1, 1, P.purple); }
+		else if (icon === 'check') { R(ix + 1, iy + 4, 2, 2, P.green); R(ix + 3, iy + 6, 2, 2, P.green); R(ix + 5, iy + 4, 2, 2, P.green); R(ix + 7, iy + 2, 2, 2, P.green); }
+		else if (icon === 'bang') { R(ix + 4, iy, 2, 5, P.red); R(ix + 4, iy + 7, 2, 2, P.red); }
+	}
+
+	function drawOrchBubble() {
+		if (!orch.bubble) return;
+		drawBubble(Math.round(orch.x) - 9, Math.round(orch.y) - 35 - 27, orch.bubble.icon);
+	}
+
+	/* ---------- residents: one sprite per resident subagent (S7, T3) ---------- */
+	/* Sprites follow the approved design (design/agent-office/01-overworld-hq.html: drawBody, drawKit), redrawn at 24x36 (T9). */
+	const LEAVE_DELAY = 1.6;
+	const residents = new Map();
+	let deskWorking = cfg.desks.map(() => null);
+	/* Explore: powder blue, safari hat, binoculars. Worker: mint or sky, hard hat, tool belt. Verify: pink, lab coat, glasses, clipboard. */
+	const lookFor = a => {
+		if (a.role === 'explore') return { color: P.blue, hair: P.gold, kit: 'explore' };
+		if (a.role === 'verify') return { color: P.purple, hair: P.border, kit: 'verify' };
+		// A worker that takes the lounge's staff member keeps the staff look, so it reads as the same person (S16).
+		return a.claimed || strHash(a.id) % 2 === 0 ? { color: P.green, hair: P.purple, kit: 'worker' } : { color: P.sky, hair: P.steel, kit: 'worker' };
+	};
+	const seatSpot = seat => (seat.zone === 'desk' ? deskSpot(cfg.desks[seat.index]) : benchSpot(seat.index));
+	const loungeSpot = role => ({ tx: cfg.lounge[role].x, ty: cfg.lounge[role].y, face: cfg.lounge[role].face });
+	const sameSeat = (a, b) => !!a && !!b && a.zone === b.zone && a.index === b.index;
+	/* Reduced motion: an agent snaps to its seat. Otherwise it walks there. */
+	function walkTo(c, s) {
+		if (reduced) return placeAt(c, s);
+		goTo(c, s, () => { c.sit = !!s.sit; });
+	}
+	function bubbleFor(a) {
+		if (a.status === 'waiting') return { icon: 'question', t: Infinity };
+		if (a.seat.zone === 'bench' && a.status === 'queued') return { icon: 'dots', t: Infinity };
+		return null;
+	}
+	function startLeaving(c, status) {
+		c.leaving = true; c.exiting = false; c.typing = false;
+		c.leaveAt = time + LEAVE_DELAY;
+		c.bubble = { icon: status === 'completed' ? 'check' : 'bang', t: Infinity };
+	}
+	function startExit(c) {
+		c.exiting = true; c.bubble = null; c.sit = false;
+		/* A claimant walks back to its lounge spot (S16); anyone else leaves by the door. */
+		const exit = c.claimed && cfg.lounge[c.role] ? loungeSpot(c.role) : { tx: cfg.door.x, ty: ROWS - 1, face: 'down' };
+		if (reduced) { placeAt(c, exit); depart(c); return; }
+		goTo(c, exit, () => depart(c));
+	}
+	function depart(c) {
+		residents.delete(c.id);
+		hooks.onDeparted && hooks.onDeparted(c.id);
+	}
+	/* Mirrors the scene: new agents walk in (restored ones appear at once), seat changes walk, finished agents leave. */
+	function syncResidents(agents) {
+		const seen = new Set();
+		for (const a of agents) {
+			seen.add(a.id);
+			let c = residents.get(a.id);
+			// A resident that takes its role's staff member starts again from the lounge (S16); the bench figure it replaces is dropped.
+			if (c && a.claimed && !c.claimed && !c.leaving) { residents.delete(a.id); c = undefined; }
+			if (!c) {
+				c = { id: a.id, role: a.role, claimed: !!a.claimed, seat: null, x: 0, y: 0, path: [], face: 'down', sit: false, moving: false, step: 0, target: null, onArrive: null, bubble: null, typing: false, leaving: false, exiting: false, leaveAt: 0, ...lookFor(a) };
+				residents.set(a.id, c);
+				if (a.instant || reduced) placeAt(c, seatSpot(a.seat));
+				else {
+					// A claimant walks from its role's lounge spot; any other agent walks in from the door.
+					const start = a.claimed && cfg.lounge[a.role] ? loungeSpot(a.role) : { tx: cfg.door.x, ty: ROWS - 1 };
+					c.x = FX(start.tx); c.y = FY(start.ty); walkTo(c, seatSpot(a.seat));
+				}
+			} else if (!c.leaving && !sameSeat(c.seat, a.seat)) {
+				walkTo(c, seatSpot(a.seat));
+			}
+			c.seat = a.seat; c.claimed = !!a.claimed;
+			Object.assign(c, lookFor(a));
+			if (a.leaving && !c.leaving) startLeaving(c, a.status);
+			if (!c.leaving) c.bubble = bubbleFor(a);
+			c.typing = !c.leaving && a.seat.zone === 'desk' && a.status === 'running';
+		}
+		// A finished agent walks out on its own and reports `departed`; anything else the scene dropped leaves at once.
+		for (const [id, c] of residents) if (!seen.has(id) && !c.leaving) residents.delete(id);
+	}
+	function updateResidents(dt) {
+		for (const c of [...residents.values()]) {
+			moveChar(c, dt);
+			if (c.leaving && !c.exiting && time >= c.leaveAt) startExit(c);
+		}
+	}
+	/* Role props over the head and body: hat, gear, glasses, coat. Headwear gets a 1 px ink edge so it reads on the desk tops. */
+	function drawKit(c, ox, oy, fam, flip) {
+		const fx = (x, w) => (flip ? ox + 23 - x - (w || 1) + 1 : ox + x);
+		const hX = (x, w, y, h, col) => R(fx(x, w), oy + y, w, h, col);
+		const edge = (x, w, y, h) => R(fx(x, w) - 1, oy + y - 1, w + 2, h + 2, INK);
+		if (c.kit === 'explore') {
+			/* Safari hat: sand crown with a gold band and a wide brim. Binoculars hang from a strap on the chest. */
+			edge(6, 12, -8, 5); edge(2, 20, -3, 2);
+			hX(6, 12, -8, 4, P.sand); hX(6, 12, -8, 1, hi(P.sand)); hX(15, 3, -7, 3, shade(P.sand));
+			hX(6, 12, -4, 1, P.gold);
+			hX(2, 20, -3, 2, P.sand); hX(2, 20, -3, 1, hi(P.sand)); hX(2, 20, -2, 1, shade(P.sand));
+			if (fam !== 'side') {
+				hX(11, 2, 17, 1, P.sec);
+				hX(8, 3, 18, 3, P.steel); hX(13, 3, 18, 3, P.steel);
+				hX(9, 1, 19, 1, P.bg); hX(14, 1, 19, 1, P.bg);
+			}
+		}
+		if (c.kit === 'worker') {
+			/* Hard hat: gold dome with a shine and a brim. Tool belt with a buckle and a hanging wrench. */
+			edge(5, 14, -6, 4); edge(2, 20, -2, 2);
+			hX(5, 14, -6, 4, P.gold); hX(7, 4, -6, 1, hi(P.gold)); hX(15, 4, -5, 3, shade(P.gold));
+			hX(2, 20, -2, 2, P.gold); hX(2, 20, -2, 1, hi(P.gold)); hX(2, 20, -1, 1, shade(P.gold));
+			hX(6, 12, 25, 1, P.border); hX(11, 2, 25, 1, P.gold);
+			hX(15, 2, 25, 1, P.steel); hX(16, 1, 26, 2, P.steel);
+		}
+		if (c.kit === 'verify') {
+			/* Lab coat over the torso and sleeves, lapels, glasses with glinting lenses, clipboard in the right hand. */
+			hX(6, 12, 15, 11, P.text); hX(6, 1, 15, 11, P.sec); hX(17, 1, 15, 11, P.sec);
+			hX(9, 1, 15, 4, P.sec); hX(14, 1, 15, 4, P.sec);
+			hX(3, 2, 15, 9, P.text); hX(19, 2, 15, 9, P.text);
+			if (fam !== 'side') {
+				hX(4, 4, 6, 4, P.border); hX(5, 2, 7, 2, P.sky);
+				hX(16, 4, 6, 4, P.border); hX(17, 2, 7, 2, P.sky);
+				hX(8, 8, 7, 1, P.border);
+			} else {
+				hX(5, 4, 6, 4, P.border); hX(6, 2, 7, 2, P.sky);
+			}
+			hX(20, 4, 19, 6, P.sand); hX(21, 2, 20, 4, P.text);
+			hX(21, 1, 21, 1, P.green); hX(21, 1, 23, 1, P.blue); hX(20, 4, 19, 1, P.steel);
+		}
+	}
+	function drawResident(c) {
+		const fx = Math.round(c.x), fy = Math.round(c.y);
+		const walk = c.moving ? Math.floor(c.step) % 4 : 0, bob = c.moving && walk % 2 ? 1 : 0;
+		const ox = fx - 12, oy = fy - 35 - bob;
+		const typingSwing = reduced ? 0 : (Math.floor(time * 6) % 2 ? 1 : -1);
+		/* A sip lifts the right hand to the mug. */
+		const sw = c.sipping ? 3 : c.typing && c.sit ? typingSwing : c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
+		g.globalAlpha = 0.35; R(fx - 9, fy - 1, 18, 2, INK); g.globalAlpha = 1;
+		const { rows, flip, fam } = headFor(c);
+		drawFigure(ox, oy, { color: c.color, walk, sw, sit: c.sit });
+		sprite(rows, { K: INK, H: c.hair, h: shade(c.hair), l: hi(c.hair), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep }, ox, oy, flip);
+		drawKit(c, ox, oy, fam, flip);
+		if (c.sipping) { R(ox + 20, oy + 18, 4, 4, P.sand); R(ox + 20, oy + 18, 4, 1, P.gold); }
+	}
+	/* Desk monitor while its agent runs: a small code screen in the agent's colour, flickering like typing. */
+	function drawWorkingScreen(x, y, color, i) {
+		R(x, y, 18, 13, P.bg);
+		const tick = reduced ? 0 : Math.floor(time * 3);
+		for (let k = 0; k < 5; k++) R(x + 2, y + 2 + k * 2, 4 + Math.floor(hash(i * 13 + k * 7 + tick + k) * 10), 1, k === 0 ? color : P.steel);
+		if (tick % 2 === 0) R(x + 2, y + 12, 3, 1, color);
+	}
+
+	/* ---------- lounge staff (S16): one idle staff member per role chats by the coffee counter ---------- */
+	/* A staff member is drawn in its resident look while its role is unclaimed. Chat and sips are clock functions, so they hold no state. */
+	const CHAT_EVERY = 3, CHAT_FOR = 2.2;
+	const SIP_EVERY = 9, SIP_FOR = 0.9;
+	const SIP_OFFSET = { explore: 1.5, worker: 4.5, verify: 7 };
+	const staffFigures = Object.keys(cfg.lounge).map(role => {
+		const spot = cfg.lounge[role], id = `staff-${role}`;
+		return { id, role, x: FX(spot.x), y: FY(spot.y), face: spot.face, moving: false, sit: false, typing: false, sipping: false, step: 0, ...lookFor({ id, role, claimed: true }) };
+	});
+	/* The staff members the scene reports present this frame. */
+	let presentStaff = [];
+	/* A sip raises the mug for SIP_FOR seconds every SIP_EVERY; none under reduced motion. */
+	function updateStaff() {
+		for (const f of staffFigures) f.sipping = !reduced && ((time + SIP_OFFSET[f.role]) % SIP_EVERY) < SIP_FOR;
+	}
+	/* One speech bubble at a time, passed round the staff in turn. None under reduced motion. */
+	function chattingStaff() {
+		if (reduced || presentStaff.length === 0 || time % CHAT_EVERY >= CHAT_FOR) return null;
+		return presentStaff[Math.floor(time / CHAT_EVERY) % presentStaff.length];
+	}
+
+	/* ---------- scene input and frame update ---------- */
+	function setScene(next) {
+		view = next;
+		if (next.intent !== intent) applyIntent(next.intent);
+		orch.bubble = next.bubble ? { icon: next.bubble, t: Infinity } : null;
+		potTarget = next.potLevel;
+		syncResidents(next.agents || []);
+		const present = new Set((next.staff || []).filter(s => s.present).map(s => s.role));
+		presentStaff = staffFigures.filter(f => present.has(f.role));
+		deskWorking = cfg.desks.map((_, i) => {
+			const owner = (next.agents || []).find(a => a.seat && a.seat.zone === 'desk' && a.seat.index === i && a.status === 'running' && !a.leaving);
+			return owner ? lookFor(owner).color : null;
+		});
+	}
+
+	/* Same rule as scene-reducer featureActive(): a tool is running, or the feature is inside its linger. Read every frame so a prop goes idle on time. */
+	function updateLit() {
+		const wall = Date.now();
+		for (const p of FEATURE_PROPS) {
+			const entry = view && view.features ? view.features[p.feature] : undefined;
+			lit[p.feature] = !!entry && (!!entry.running || wall < entry.until);
+		}
+	}
+
+	function update(dt) {
+		updateLit();
+		moveChar(orch, dt);
+		if (orch.bubble) { orch.bubble.t -= dt; if (orch.bubble.t <= 0) orch.bubble = null; }
+		updateOrch(dt);
+		updateResidents(dt);
+		updateStaff();
+		potShown += (potTarget - potShown) * Math.min(1, dt * 1.2);
+		brewingNow = !!(view && view.brewing) && orch.mode === 'brew';
+	}
+
+	function draw() {
+		g.drawImage(bgLayer, 0, 0);
+		drawWindowLights();
+		drawClockHands();
+		drawWhiteboard();
+		const list = [];
+		cfg.desks.forEach((d, i) => {
+			const s = deskSpot(d), chairY = s.py - CHAIR_LIFT;
+			list.push({ k: (d.y + 1) * T - 1, f: () => drawDesk(d, i) });
+			/* Both chair halves sort before the resident on the seat, so a seated figure covers its chair. */
+			list.push({ k: s.py - 0.6, f: () => drawChair(s.px, chairY, false) });
+			list.push({ k: s.py - 0.5, f: () => drawChair(s.px, chairY, true) });
+		});
+		list.push({ k: (tb.y + tb.h) * T - 1, f: drawTable });
+		list.push({ k: (cf.y + 1) * T - 1, f: drawCoffee });
+		cfg.plants.forEach(p => list.push({ k: (p.y + 1) * T - 1, f: () => drawPlant(p) }));
+		FEATURE_PROPS.forEach(p => list.push({ k: (p.y + p.h) * T - 1, f: () => PROP_DRAWERS[p.feature](p, lit[p.feature]) }));
+		list.push({ k: orch.y, f: () => drawOrchestrator(orch) });
+		residents.forEach(c => list.push({ k: c.y, f: () => drawResident(c) }));
+		presentStaff.forEach(f => list.push({ k: f.y, f: () => drawResident(f) }));
+		list.sort((p, q) => p.k - q.k).forEach(o => o.f());
+		drawOrchBubble();
+		/* A seated resident's bubble rises above its desk monitor. A standing one (bench queue) sits just over its head, clear of the desk chairs. */
+		residents.forEach(c => { if (c.bubble) drawBubble(Math.round(c.x) - 9, Math.round(c.y) - 35 - (c.sit ? 36 : 14), c.bubble.icon); });
+		const speaker = chattingStaff();
+		if (speaker) drawBubble(Math.round(speaker.x) - 9, Math.round(speaker.y) - 35 - 14, 'dots');
+	}
+
+	/* ---------- terminal driver ---------- */
+	/* The page owns the clock. step() moves the room; advance() also repaints, and only when the visible pose changed. */
+	let lastKey = '';
+	function poseKey() {
+		const chat = chattingStaff();
+		const parts = [Math.round(orch.x), Math.round(orch.y), orch.face, orch.moving, Math.floor(orch.step) % 4, orch.mode, orch.bubble ? orch.bubble.icon : '', brewingNow, Math.round(potShown * 100), wbLines, wbChecks, Math.round(wbPartial * 10), Math.floor(time) % 11 === 5, deskWorking.join(','), chat ? chat.id : ''];
+		for (const c of residents.values()) parts.push(c.id, Math.round(c.x), Math.round(c.y), c.face, c.moving, Math.floor(c.step) % 4, c.sit, c.leaving, c.bubble ? c.bubble.icon : '');
+		for (const f of presentStaff) parts.push(f.id, Math.round(f.x), Math.round(f.y), f.sipping);
+		for (const p of FEATURE_PROPS) parts.push(!!lit[p.feature]);
+		return parts.join('|');
+	}
+	/* Someone walks, types, writes or a prop is lit: the page steps at 5 fps. Otherwise it wakes twice a second for the idle gestures. */
+	function busy() {
+		if (orch.moving || orch.mode === 'plan' || brewingNow) return true;
+		for (const c of residents.values()) if (c.moving || c.typing || c.leaving) return true;
+		return FEATURE_PROPS.some(p => lit[p.feature]);
+	}
+	/* Seconds until the next idle gesture starts or stops: a sip, a chat turn or a blink. The page sleeps until then, so an idle room holds no fixed timer. */
+	function idleWait() {
+		let d = Infinity;
+		for (const f of staffFigures) { const ph = (time + SIP_OFFSET[f.role]) % SIP_EVERY; d = Math.min(d, SIP_EVERY - ph, ph < SIP_FOR ? SIP_FOR - ph : Infinity); }
+		const ch = time % CHAT_EVERY; d = Math.min(d, CHAT_EVERY - ch, ch < CHAT_FOR ? CHAT_FOR - ch : Infinity);
+		const fr = time % 1; d = Math.min(d, 1 - fr, fr < 0.6 ? 0.6 - fr : Infinity);
+		return d;
+	}
+	function step(dt) { time += dt; update(dt); }
+	function advance(dt) {
+		step(dt);
+		const k = poseKey();
+		if (k !== lastKey) { lastKey = k; draw(); }
+	}
+	function paintNow() { lastKey = poseKey(); draw(); }
+
+	paintStatic();
+	applyIntent('floor');
+	return { setScene, step, advance, paintNow, busy, idleWait };
+}
+
+/* Terminal stage, design 02: a scripted run of the real office engine above, and the game-panel UI around it. */
+const LOOP = 80;
+const ROLES = ['explore', 'worker', 'verify'];
+/* A claimed subagent takes its role's staff member: the staff hides and the claimant walks out from the lounge. */
+const crew = (role, where, status) => ({ id: 'gentle-ai-' + role, role, claimed: true, seat: where, status: status || 'running' });
+const walkOut = role => ({ ...crew(role, { zone: 'desk', index: 0 }, 'completed'), leaving: true });
+const guest = (id, where, status, extra) => ({ id, role: 'worker', seat: where, status, instant: false, ...(extra || {}) });
+const desk = index => ({ zone: 'desk', index });
+const lounge = index => ({ zone: 'lounge', index });
+const staffOut = (...hidden) => ROLES.map(role => ({ role, present: !hidden.includes(role) }));
+
+const BASE = {
+	intent: 'coffee', bubble: null, potLevel: 0.8, brewing: false, features: {}, ask: null,
+	cost: '$0.012', usage: 18,
+	narr: ['orchestrator', 'sipping at the counter. Explore and Worker are on break by the coffee machine.'],
+	party: { orch: 'at the counter', explore: 'on break', worker: 'on break', verify: 'on break' },
+	agents: [], staff: staffOut()
+};
+const scene = o => ({ ...BASE, ...o, party: { ...BASE.party, ...(o.party || {}) } });
+
+/* Timeline in seconds. Each entry is the full scene from its start until the next one.
+   A walk takes about 4 to 8 s, so an intent is sent before the event that needs it: the ask opens once the orchestrator is at the front. */
+const W_OUT = staffOut('worker'), V_OUT = staffOut('verify'), E_OUT = staffOut('explore');
+const KEYS = [
+	[0, scene({})],
+	[4, scene({ intent: 'whiteboard', bubble: 'idea', narr: ['orchestrator', 'planning the explore task on the whiteboard.'], party: { orch: 'planning' } })],
+	[7, scene({ intent: 'whiteboard', bubble: 'wrench', features: { mcp: { running: true, until: 0 } }, agents: [crew('explore', desk(0))], staff: E_OUT, cost: '$0.024', usage: 21, narr: ['orchestrator', 'gentle-ai-explore takes desk 1 and searches the code.'], party: { orch: 'writing on the whiteboard', explore: 'running · desk 1' } })],
+	[20, scene({ intent: 'whiteboard', bubble: 'check', agents: [walkOut('explore')], staff: E_OUT, cost: '$0.041', usage: 24, narr: ['orchestrator', 'Explore finished in 17s and walks back to its spot by the counter.'], party: { orch: 'plan ready', explore: 'done · walking back' } })],
+	[24, scene({ bubble: 'cup', potLevel: 0.62, agents: [walkOut('explore')], staff: E_OUT, cost: '$0.041', usage: 24, narr: ['orchestrator', 'context is at 38%, so the coffee pot is half empty.'], party: { explore: 'done · walking back' } })],
+	[30, scene({ potLevel: 0.62, cost: '$0.041', usage: 24, narr: ['orchestrator', 'Explore is back on break. Worker is next in line.'] })],
+	[36, scene({ intent: 'front', potLevel: 0.62, agents: [crew('worker', desk(1))], staff: W_OUT, cost: '$0.058', usage: 27, narr: ['orchestrator', 'gentle-ai-worker takes desk 2 and edits web/office.css.'], party: { orch: 'walking to the front', worker: 'running · desk 2' } })],
+	[44, scene({ intent: 'front', bubble: 'question', potLevel: 0.62, features: { ask: { running: true, until: 0 } }, agents: [crew('worker', desk(1))], staff: W_OUT, ask: { question: 'Which branch should the worker use for the CSS change?', options: ['feat/gentle-office (current)', 'main'] }, cost: '$0.058', usage: 27, narr: ['ask_user', 'Which branch should the worker use for the CSS change?'], party: { orch: 'waiting for your answer', worker: 'running · desk 2' } })],
+	[50, scene({ potLevel: 0.62, agents: [walkOut('worker')], staff: W_OUT, cost: '$0.071', usage: 29, narr: ['orchestrator', 'ask closed. Worker is done and walks back to its spot.'], party: { orch: 'walking back to the counter', worker: 'done · walking back' } })],
+	[52, scene({ potLevel: 0.62, agents: [walkOut('worker'), guest('extra-worker', desk(3), 'running')], staff: W_OUT, cost: '$0.071', usage: 29, narr: ['orchestrator', 'a second worker walks in from the door to desk 4.'], party: { worker: 'done · walking back' } })],
+	[58, scene({ potLevel: 0.62, agents: [guest('extra-worker', desk(3), 'running')], cost: '$0.083', usage: 30, narr: ['orchestrator', 'Worker is back on break. Desk 4 is still running.'], party: { worker: 'running · desk 4' } })],
+	[60, scene({ potLevel: 0.62, agents: [guest('extra-worker', desk(3), 'completed', { leaving: true })], cost: '$0.083', usage: 30, narr: ['orchestrator', 'second worker finished and walks out the door.'], party: { worker: 'on break' } })],
+	[62, scene({ potLevel: 0.62, staff: V_OUT, agents: [crew('verify', desk(2))], cost: '$0.094', usage: 31, narr: ['orchestrator', 'gentle-ai-verify takes desk 3 and reviews the diff.'], party: { verify: 'running · desk 3' } })],
+	[72, scene({ potLevel: 0.62, staff: V_OUT, agents: [walkOut('verify')], cost: '$0.101', usage: 31, narr: ['orchestrator', 'verify passed and walks back to its spot.'], party: { verify: 'done · walking back' } })],
+	[78, scene({ potLevel: 0.62, cost: '$0.101', usage: 31, narr: ['orchestrator', 'coffee break. Waiting for your next prompt.'] })]
+];
+
+const $ = id => document.getElementById(id);
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* Pixel avatars: the engine's own head map, with a hat per role. */
+function drawFace(cv, kind) {
+	const x = cv.getContext('2d');
+	x.imageSmoothingEnabled = false;
+	const hair = { orch: P.bg, explore: P.gold, worker: P.green, verify: P.border }[kind];
+	const map = { K: INK, H: hair, h: shade(hair), l: hi(hair), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep };
+	const put = (c, px, py, w, h) => { x.fillStyle = c; x.fillRect(px, py, w, h); };
+	HEAD_MAPS.down.forEach((row, j) => [...row].forEach((ch, i) => { if (map[ch]) put(map[ch], i, 8 + j, 1, 1); }));
+	if (kind === 'orch') { put(P.bg, 7, 0, 10, 6); put(P.gold, 7, 4, 10, 2); put(P.bg, 3, 6, 18, 2); put(P.pink, 14, 1, 3, 3); }
+	if (kind === 'explore') { put(P.sand, 6, 3, 12, 4); put(P.gold, 6, 6, 12, 1); put(P.sand, 2, 6, 20, 2); }
+	if (kind === 'worker') { put(P.gold, 5, 3, 14, 5); put(P.text, 7, 4, 3, 1); put(P.gold, 3, 7, 18, 2); }
+	if (kind === 'verify') { put(P.border, 5, 7, 14, 2); }
+}
+document.querySelectorAll('canvas[data-face]').forEach(cv => drawFace(cv, cv.dataset.face));
+
+/* The HUD, caption, party and ask dialog follow the same scene the engine gets. */
+function renderUi(s) {
+	const filled = Math.round(s.potLevel * 10);
+	document.querySelectorAll('#coffee-bar .seg').forEach((seg, i) => seg.classList.toggle('on', i < filled));
+	$('coffee-pct').textContent = Math.round(s.potLevel * 100) + '%';
+	$('ctx').textContent = 'ctx ' + Math.round((1 - s.potLevel) * 100) + '%';
+	$('cost').textContent = s.cost;
+	$('usage').textContent = s.usage + '%';
+	document.querySelectorAll('.party .row').forEach(li => {
+		const state = s.party[li.dataset.row];
+		li.querySelector('.state').textContent = state;
+		li.classList.toggle('on', !/on break|at the counter/.test(state));
+	});
+	$('narr-who').textContent = s.narr[0];
+	$('narr-text').textContent = s.narr[1];
+	$('ask').hidden = !s.ask;
+	if (s.ask) {
+		$('ask-q').textContent = s.ask.question;
+		$('ask-opts').replaceChildren(...s.ask.options.map(o => { const li = document.createElement('li'); li.textContent = o; return li; }));
+	}
+}
+
+const engine = createOfficeEngine($('room'), OFFICE_CONFIG, {});
+
+/* The demo clock. t only moves while the loop runs, so a paused window keeps its moment. */
+let t = 0, shown = -1, timer = 0, running = false;
+function sceneIndex() {
+	let k = 0;
+	KEYS.forEach(([start], i) => { if (t % LOOP >= start) k = i; });
+	return k;
+}
+function apply() {
+	const k = sceneIndex();
+	if (k === shown) return;
+	shown = k;
+	engine.setScene(KEYS[k][1]);
+	renderUi(KEYS[k][1]);
+}
+/* Pre-roll the room to a moment without painting, so a pinned #t= starts with people where they should be. */
+function preroll(to) {
+	while (t < to - 1e-6) {
+		const dt = Math.min(0.2, to - t);
+		t += dt;
+		apply();
+		engine.step(dt);
+	}
+}
+
+/* Steps of 200 ms while someone acts. Otherwise the page sleeps until the next idle gesture or scene step. Each step repaints only if the pose changed. */
+function keyWait() {
+	const now = t % LOOP;
+	const later = KEYS.map(([start]) => start).filter(start => start > now + 1e-6);
+	return (later.length ? Math.min(...later) : LOOP) - now;
+}
+function tick() {
+	timer = 0;
+	if (!running) return;
+	const acting = engine.busy();
+	const dt = acting ? 0.2 : Math.max(0.05, Math.min(engine.idleWait(), keyWait()));
+	t += dt;
+	apply();
+	engine.advance(dt);
+	timer = setTimeout(tick, dt * 1000);
+}
+function start() {
+	if (running || reducedMotion) return;
+	running = true;
+	tick();
+}
+function stop() {
+	running = false;
+	clearTimeout(timer);
+	timer = 0;
+}
+
+const hashAt = /t=([\d.]+)/.exec(location.hash);
+const startAt = Math.min(LOOP, Math.max(0, hashAt ? parseFloat(hashAt[1]) : (reducedMotion ? 12 : 0)));
+preroll(startAt);
+apply();
+engine.paintNow();
+if (!reducedMotion) {
+	start();
+	document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+	window.addEventListener('blur', stop);
+	window.addEventListener('focus', start);
+	new IntersectionObserver(es => (es[0].isIntersecting ? start() : stop())).observe($('room'));
+}
 </script>
 </body>
 </html>
