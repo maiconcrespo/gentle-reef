@@ -24,7 +24,8 @@ function chunk(type: string, data: Buffer): Buffer {
 
 /**
  * Encodes 8-bit RGBA pixels as a PNG with Node's own zlib, so the terminal stage needs no native image dependency.
- * Kitty graphics in pi-tui accept PNG only (`encodeKitty` sends f=100).
+ * Kitty graphics in pi-tui accept PNG only (`encodeKitty` sends f=100). Level 1 deflate: frames are redrawn a few times a
+ * second while someone acts, and flat pixel art compresses well even at the fastest level.
  */
 export function encodePng(rgba: Uint8Array, width: number, height: number): Buffer {
 	if (rgba.length !== width * height * 4) throw new Error(`expected ${width * height * 4} RGBA bytes for ${width}x${height}, got ${rgba.length}`);
@@ -35,5 +36,5 @@ export function encodePng(rgba: Uint8Array, width: number, height: number): Buff
 	const stride = width * 4;
 	const rows = Buffer.alloc((stride + 1) * height);
 	for (let y = 0; y < height; y++) rows.set(rgba.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
-	return Buffer.concat([SIGNATURE, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
+	return Buffer.concat([SIGNATURE, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(rows, { level: 1 })), chunk("IEND", Buffer.alloc(0))]);
 }
