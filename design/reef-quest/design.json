@@ -1,0 +1,20 @@
+{
+  "title": "Reef Quest: gentle-shell as a handheld game in the terminal",
+  "brief": "gentle-shell in Ghostty (1920x920) as a GBA-style game in the Gentleman-Cute palette: the orchestrator (top hat with rose, fuchsia mustache, monocle) talks to the user in a Pokemon text box with its portrait; its thoughts are shown or hidden by the user's choice (alt+t); status becomes a Zelda HUD (coffee cups for context, gems for cost, model and profile as equipped B/A items, project and branch as the area name); subagents are party slots, the todo list is the current quest, tool calls are battle text, and a start menu (alt+m) holds journal, map (status), save (Engram) and options. The room is the real engine and reducer from web/, story camera at 2x.",
+  "artboards": [
+    {
+      "file": "01-reef-quest.html",
+      "title": "Reef Quest",
+      "tradeoff": "Most immersive: one game screen with the orchestrator speaking to you and status as HUD; the scrolling chat history moves to JOURNAL, so reading long tool output takes a menu step; scaled to fit any window",
+      "width": 1920,
+      "height": 920
+    },
+    {
+      "file": "02-gentle-hq.html",
+      "title": "Gentle HQ (new scene)",
+      "tradeoff": "A new office where every object is a gentle-shell feature, plus the live session around it: chat column, streaming thoughts (alt+t), notice toasts, a confirm dialog and a readable TODO; most complete, but the dialog covers the front of the room while it is open",
+      "width": 1920,
+      "height": 920
+    }
+  ]
+}
