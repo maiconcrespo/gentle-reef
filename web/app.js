@@ -80,6 +80,8 @@ const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {
 	onPot: ({ level, brewing, time }) => drawPot(potCtx, level, time, brewing),
 	// An agent has walked out of the door: its seat frees up for the next one in the bench.
 	onDeparted: (id) => dispatch({ type: "departed", id }),
+	// Both review inspectors have walked out: the review is over on screen.
+	onReviewGone: () => dispatch({ type: "review-gone" }),
 });
 
 // Layout: "full" is the desk window, "dock" the narrow pane (design/agent-office/02-dock-pane.html), "story" the close-up
