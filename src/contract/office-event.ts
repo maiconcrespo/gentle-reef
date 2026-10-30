@@ -87,6 +87,19 @@ export type AskEvent =
 	| { readonly v: typeof OFFICE_EVENT_VERSION; readonly type: "ask"; readonly phase: "open"; readonly questions: readonly AskQuestion[] }
 	| { readonly v: typeof OFFICE_EVENT_VERSION; readonly type: "ask"; readonly phase: "close" };
 
+export type ReviewVerdict = "approved" | "correction" | "failed";
+
+/**
+ * The native review lifecycle, from the `gentle_review*` tool calls (S3). Additive: no existing event changes shape.
+ * `arrive` on a review start or inspect call (`names` are the lenses the start asked for, when known), `inspect` while
+ * reviewer lenses run, `verdict` when a capture ends, `acknowledged` when an approved review is signed off.
+ */
+export type ReviewEvent =
+	| { readonly v: typeof OFFICE_EVENT_VERSION; readonly type: "review"; readonly phase: "arrive"; readonly names?: readonly string[] }
+	| { readonly v: typeof OFFICE_EVENT_VERSION; readonly type: "review"; readonly phase: "inspect"; readonly count: number }
+	| { readonly v: typeof OFFICE_EVENT_VERSION; readonly type: "review"; readonly phase: "verdict"; readonly verdict: ReviewVerdict }
+	| { readonly v: typeof OFFICE_EVENT_VERSION; readonly type: "review"; readonly phase: "acknowledged" };
+
 export type OfficeEvent =
 	| AskEvent
 	| OrchestratorEvent
@@ -94,4 +107,5 @@ export type OfficeEvent =
 	| SubagentEvent
 	| ContextEvent
 	| CompactionEvent
-	| FeatureEvent;
+	| FeatureEvent
+	| ReviewEvent;

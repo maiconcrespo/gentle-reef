@@ -117,3 +117,81 @@ describe("piEventToOffice", () => {
 		assert.equal(piEventToOffice({ type: "tool_execution_end", toolName: "bash", isError: false }).some(event => event.type === "ask"), false);
 	});
 });
+
+describe("review inspectors: native review tool calls (T1, S3)", () => {
+	const reviewOf = (out: readonly { type: string }[]) => out.filter(event => event.type === "review");
+	const start = (toolName: string, args: unknown) => piEventToOffice({ type: "tool_execution_start", toolName, args } as PiEvent);
+	const end = (toolName: string, result: unknown, isError = false) => piEventToOffice({ type: "tool_execution_end", toolName, isError, result } as PiEvent);
+	const text = (value: string) => ({ content: [{ type: "text", text: value }] });
+
+	it("arrives at a gentle_review start or inspect call", () => {
+		assert.deepEqual(reviewOf(start("gentle_review", { operation: "start" })), [{ v: 1, type: "review", phase: "arrive" }]);
+		assert.deepEqual(reviewOf(start("gentle_review", { operation: "inspect" })), [{ v: 1, type: "review", phase: "arrive" }]);
+	});
+
+	it("emits nothing for other gentle_review operations at start", () => {
+		assert.deepEqual(reviewOf(start("gentle_review", { operation: "status" })), []);
+		assert.deepEqual(reviewOf(start("gentle_review", { operation: "assess" })), []);
+		assert.deepEqual(reviewOf(start("gentle_review", { operation: "acknowledge-approved" })), []);
+		assert.deepEqual(reviewOf(start("gentle_review", undefined)), []);
+	});
+
+	it("names the lenses a start call asks for: known names only, in order, from a JSON string or an object", () => {
+		const fromString = start("gentle_review", { operation: "start", input: JSON.stringify({ mode: "ordinary", lenses: ["reliability", "made-up", "risk"], lensesReason: "x" }) });
+		assert.deepEqual(reviewOf(fromString), [{ v: 1, type: "review", phase: "arrive", names: ["reliability", "risk"] }]);
+		const fromObject = start("gentle_review", { operation: "start", input: { lenses: ["risk"] } });
+		assert.deepEqual(reviewOf(fromObject), [{ v: 1, type: "review", phase: "arrive", names: ["risk"] }]);
+		assert.deepEqual(reviewOf(start("gentle_review", { operation: "start", input: "{not json" })), [{ v: 1, type: "review", phase: "arrive" }]);
+	});
+
+	it("shows inspectors only for a capture that runs: the forecast call (no acknowledgement) runs nothing", () => {
+		assert.deepEqual(reviewOf(start("gentle_review_capture", { lineageId: "l" })), []);
+		assert.deepEqual(reviewOf(start("gentle_review_capture", { lineageId: "l", reviewerRunAcknowledged: false })), []);
+		assert.deepEqual(reviewOf(start("gentle_review_capture", { lineageId: "l", reviewerRunAcknowledged: true })), [{ v: 1, type: "review", phase: "inspect", count: 1 }]);
+	});
+
+	it("counts the lenses of an acknowledged group capture, bounded to four, and needs at least one binding", () => {
+		const bindings = (n: number) => Array.from({ length: n }, (_, i) => `binding-${i}`);
+		assert.deepEqual(reviewOf(start("gentle_review_capture_group", { lineageId: "l", collectBindings: bindings(3), reviewerRunAcknowledged: true })), [{ v: 1, type: "review", phase: "inspect", count: 3 }]);
+		assert.deepEqual(reviewOf(start("gentle_review_capture_group", { lineageId: "l", collectBindings: bindings(9), reviewerRunAcknowledged: true })), [{ v: 1, type: "review", phase: "inspect", count: 4 }]);
+		assert.deepEqual(reviewOf(start("gentle_review_capture_group", { lineageId: "l", collectBindings: bindings(3) })), []);
+		assert.deepEqual(reviewOf(start("gentle_review_capture_group", { lineageId: "l", collectBindings: [], reviewerRunAcknowledged: true })), []);
+	});
+
+	it("reads the verdict of a capture: approved, correction_required, or failed on error", () => {
+		assert.deepEqual(reviewOf(end("gentle_review_capture", text('{"state":"approved"}'))), [{ v: 1, type: "review", phase: "verdict", verdict: "approved" }]);
+		assert.deepEqual(reviewOf(end("gentle_review_capture_group", text('{"state": "approved"}'))), [{ v: 1, type: "review", phase: "verdict", verdict: "approved" }]);
+		assert.deepEqual(reviewOf(end("gentle_review_capture_group", text('{"state":"correction_required"}'))), [{ v: 1, type: "review", phase: "verdict", verdict: "correction" }]);
+		assert.deepEqual(reviewOf(end("gentle_review_capture", text("boom"), true)), [{ v: 1, type: "review", phase: "verdict", verdict: "failed" }]);
+	});
+
+	it("reads the verdict from the result details too, not only from the text", () => {
+		assert.deepEqual(reviewOf(end("gentle_review_capture", { details: { closure: { state: "approved" } }, "state": "approved" })), [{ v: 1, type: "review", phase: "verdict", verdict: "approved" }]);
+	});
+
+	it("does not read a forecast as a verdict, even when it mentions an approved state", () => {
+		assert.deepEqual(reviewOf(end("gentle_review_capture", text('{"outcome":"reviewer-model-run-forecast","state":"approved"}'))), []);
+		assert.deepEqual(reviewOf(end("gentle_review_capture", text("reviewer-model-run-forecast"), true)), []);
+	});
+
+	it("emits no verdict for an unrecognised capture result, and never throws on odd shapes", () => {
+		const circular: Record<string, unknown> = {};
+		circular.self = circular;
+		const shapes: unknown[] = [undefined, null, 42, circular, { details: circular }, text("x".repeat(100_000)), { content: "nope" }];
+		for (const result of shapes) assert.doesNotThrow(() => end("gentle_review_capture", result));
+		assert.deepEqual(reviewOf(end("gentle_review_capture", circular)), []);
+		assert.deepEqual(reviewOf(end("gentle_review_capture", text("x".repeat(100_000)))), []);
+	});
+
+	it("acknowledges an approved review when the acknowledgement result completes, and only then", () => {
+		assert.deepEqual(reviewOf(end("gentle_review", text('{"outcome":"native-approved-acknowledgement-completed"}'))), [{ v: 1, type: "review", phase: "acknowledged" }]);
+		assert.deepEqual(reviewOf(end("gentle_review", text('{"outcome":"something-else"}'))), []);
+		assert.deepEqual(reviewOf(end("gentle_review", text('{"outcome":"native-approved-acknowledgement-completed"}'), true)), []);
+	});
+
+	it("ignores tools that are not review tools, and keeps the review feature signal", () => {
+		assert.deepEqual(reviewOf(end("bash", text('{"state":"approved"}'))), []);
+		assert.deepEqual(reviewOf(start("gentle_design", { operation: "start" })), []);
+		assert.deepEqual(start("gentle_review_capture", { reviewerRunAcknowledged: true }).filter(event => event.type === "feature"), [{ v: 1, type: "feature", feature: "review", detail: "gentle_review_capture" }]);
+	});
+});
