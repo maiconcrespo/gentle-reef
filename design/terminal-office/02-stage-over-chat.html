@@ -13,10 +13,9 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; width: 1920px; height: 920px; overflow: hidden; background: var(--bg); color: var(--text); font: 14px/1.45 var(--mono); }
-  .term { position: relative; width: 1920px; height: 920px; display: grid; grid-template-rows: 28px 56px minmax(0, 1fr); }
+  .term { position: relative; width: 1920px; height: 920px; display: grid; grid-template-rows: 56px minmax(0, 1fr); }
   /* Pixel frame of the reef module around the whole window (same rings as the web office frame). */
   .term::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 20; box-shadow: inset 0 0 0 4px var(--bg), inset 0 0 0 5px var(--sel); }
-  .titlebar { display: flex; align-items: center; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
 
   /* HUD: game panels, one per status fact. */
   .hud { display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--panel); border-bottom: 2px solid var(--border); white-space: nowrap; overflow: hidden; }
@@ -35,12 +34,15 @@
   .main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; min-height: 0; }
   .col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
-  /* Stage: full bleed across the chat column, 1 px per engine pixel. */
-  .stage { position: relative; flex: none; height: 360px; overflow: hidden; background: var(--panel); border-bottom: 2px solid var(--border); }
-  .stage canvas { display: block; width: 1560px; height: 360px; image-rendering: pixelated; image-rendering: crisp-edges; }
+  /* Stage band (T18): the real room at 2x, 1440 x 720, centred in the 1560 px chat column; the 60 px margins on each side are the hallway.
+     722 px with the rule under it. */
+  .stage { position: relative; flex: none; height: 722px; display: flex; justify-content: center; overflow: hidden; background: var(--panel); border-bottom: 2px solid var(--border); }
+  .hall { flex: none; width: 60px; height: 720px; }
+  .hall canvas { display: block; width: 60px; height: 720px; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .stage canvas#room { flex: none; display: block; width: 1440px; height: 720px; image-rendering: pixelated; image-rendering: crisp-edges; }
 
   /* ask_user dialog: story-mode box over the stage floor, display only. */
-  .ask { position: absolute; left: 18px; bottom: 14px; width: 560px; padding: 12px 16px 14px; background: var(--panel); border: 3px solid var(--text); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border); }
+  .ask { position: absolute; left: 78px; bottom: 14px; width: 560px; padding: 12px 16px 14px; background: var(--panel); border: 3px solid var(--text); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border); }
   .ask[hidden] { display: none; }
   .ask h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
   .ask p { margin: 0; font-size: 14px; }
@@ -49,16 +51,17 @@
   .ask .note { margin-top: 8px; font-size: 12px; color: var(--muted); }
   .who { color: var(--gold); font-weight: 700; }
 
-  .caption { margin: 12px 18px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Chat under the stage: caption, three lines of log, and the input. */
+  .caption { margin: 6px 18px 0; padding: 6px 12px; background: var(--panel); border: 1px solid var(--border); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .caption .who { margin-right: 6px; }
-  .log { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; padding: 14px 18px; overflow: hidden; }
-  .msg { margin: 0; max-width: 900px; font-size: 14px; line-height: 1.5; }
+  .log { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding: 6px 18px; overflow: hidden; }
+  .msg { margin: 0; max-width: 900px; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .you { color: var(--pink); }
   .tool { color: var(--blue); font-size: 13px; }
   .ok { color: var(--green); }
 
   /* Input: the one place to type, with a gold frame and a visible caret. */
-  .input { flex: none; display: flex; align-items: center; gap: 12px; margin: 0 18px 16px; padding: 12px 16px; background: var(--bg); border: 2px solid var(--gold); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--border); }
+  .input { flex: none; display: flex; align-items: center; gap: 12px; margin: 0 18px 8px; padding: 6px 14px; background: var(--bg); border: 2px solid var(--gold); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--border); font-size: 13px; }
   .chip-you { padding: 2px 6px; background: var(--pink); color: var(--bg); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
   .prompt { color: var(--pink); font-weight: 700; }
   .placeholder { color: var(--muted); }
@@ -92,8 +95,8 @@
   .counter { padding: 8px 10px; background: var(--panel); border: 2px solid var(--border); box-shadow: inset 0 0 0 2px var(--panel), inset 0 0 0 3px var(--sel); }
   .counter b { display: block; margin-top: 2px; font-size: 18px; font-weight: 700; color: var(--gold); }
 
-  /* Annotation strip: toggleable, updated for this round. */
-  .notes { position: absolute; right: 386px; top: 484px; width: 440px; max-height: 340px; overflow: auto; margin: 0; background: var(--panel); border: 2px solid var(--gold); box-shadow: 0 0 0 3px var(--bg); font-size: 12px; z-index: 5; }
+  /* Annotation strip: toggleable, sits in the sidebar's free space so it never covers the room or the chat. */
+  .notes { position: absolute; right: 10px; bottom: 10px; width: 340px; max-height: 262px; overflow: auto; margin: 0; background: var(--panel); border: 2px solid var(--gold); box-shadow: 0 0 0 3px var(--bg); font-size: 12px; z-index: 5; }
   .notes summary { padding: 6px 12px; background: var(--sel); color: var(--gold); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
   .notes summary:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
   .notes ul { margin: 0; padding: 8px 12px 10px 24px; }
@@ -104,7 +107,6 @@
 </head>
 <body>
 <div class="term">
-  <div class="titlebar">ghostty · pi · ~/gentle-reef</div>
   <header class="hud" aria-label="Status bar">
     <span class="badge">✿ Gentle Shell</span>
     <div class="box"><span class="lbl">Project</span><b>~/gentle-reef</b><span class="muted">feat/gentle-office</span></div>
@@ -115,7 +117,9 @@
   <div class="main">
     <section class="col" aria-label="Chat">
       <section class="stage" aria-label="Office stage">
-        <canvas id="room" role="img" aria-label="Office room across the full stage. The orchestrator writes on the whiteboard while a tool runs. Explore and Worker chat by the coffee counter on break. A working role walks to its desk and back."></canvas>
+        <div class="hall" aria-hidden="true"><canvas id="hall-l" width="30" height="360"></canvas></div>
+        <canvas id="room" role="img" aria-label="Office room at 2x: five rooms, a desk island in the work room, lounge sofas by the coffee table, the orchestrator's office, and the verify lab. The orchestrator writes on the whiteboard while a tool runs. Idle staff rest on the sofas and walk to a desk when their role starts work."></canvas>
+        <div class="hall" aria-hidden="true"><canvas id="hall-r" width="30" height="360"></canvas></div>
         <section class="ask" id="ask" aria-live="polite" hidden>
           <h3>ask_user · display only</h3>
           <p id="ask-q"></p>
@@ -123,15 +127,10 @@
           <p class="note">Answer in the terminal prompt. This stage only shows the question and closes with the ask.</p>
         </section>
       </section>
-      <p class="caption" aria-live="polite"><span class="who" id="narr-who">orchestrator</span><span id="narr-text">sipping at the counter. Explore and Worker are on break by the coffee machine.</span></p>
+      <p class="caption" aria-live="polite"><span class="who" id="narr-who">orchestrator</span><span id="narr-text">resting in its office.</span></p>
       <div class="log" aria-label="Conversation">
-        <p class="msg"><span class="you">›</span> explorá dónde se pinta el dialog de ask_user y si el cierre llega con los eventos</p>
-        <p class="msg"><span class="who">✿ orchestrator</span> Lanzo a gentle-ai-explore para ubicar los call sites. No toco nada hasta tener el mapa.</p>
-        <p class="msg tool ok">✓ gentle-ai-explore 35k · 17s</p>
-        <p class="msg"><span class="who">✿ orchestrator</span> Listo. El dialog se abre con ask open y se cierra con close, en web/app.js. El snapshot ya trae la pregunta para las ventanas que llegan tarde.</p>
-        <p class="msg tool">Falta confirmar el cierre en una sesión Pi viva; el headless no lo cubre.</p>
-        <p class="msg"><span class="you">›</span> me gusta la 02, pero la veo muy simplificada: que el escenario se llene de lado a lado y que las barras de status sean parte del módulo reef</p>
-        <p class="msg"><span class="who">✿ orchestrator</span> Hecho: arte real del motor, escenario de borde a borde y paneles de juego para status, agentes y entrada. Explore y Worker esperan junto a la cafetera; cada uno pasa a su desk cuando arranca su rol.</p>
+        <p class="msg"><span class="you">›</span> que el escenario se llene de lado a lado y que los status sean parte del modulo</p>
+        <p class="msg"><span class="who">✿ orchestrator</span> Hecho: motor real a 2x, sala completa y paneles de juego. Explore espera en el sofá.</p>
         <p class="msg tool ok">✓ design/terminal-office/02-stage-over-chat.html</p>
       </div>
       <div class="input" role="textbox" aria-readonly="true" aria-label="Prompt input">
@@ -155,7 +154,7 @@
         <h2 id="pt-h">❀ Party · agents</h2>
         <div class="body">
           <ul class="party">
-            <li class="row" data-row="orch"><canvas class="face" data-face="orch" width="24" height="24" aria-hidden="true"></canvas><div><div class="head"><span class="name">orchestrator</span><span class="chip orch">ORCH</span></div><span class="state">at the counter</span></div></li>
+            <li class="row" data-row="orch"><canvas class="face" data-face="orch" width="24" height="24" aria-hidden="true"></canvas><div><div class="head"><span class="name">orchestrator</span><span class="chip orch">ORCH</span></div><span class="state">resting in its office</span></div></li>
             <li class="row" data-row="explore"><canvas class="face" data-face="explore" width="24" height="24" aria-hidden="true"></canvas><div><div class="head"><span class="name">gentle-ai-explore</span><span class="chip explore">EXPLORE</span></div><span class="state">on break</span></div></li>
             <li class="row" data-row="worker"><canvas class="face" data-face="worker" width="24" height="24" aria-hidden="true"></canvas><div><div class="head"><span class="name">gentle-ai-worker</span><span class="chip worker">WORKER</span></div><span class="state">on break</span></div></li>
             <li class="row" data-row="verify"><canvas class="face" data-face="verify" width="24" height="24" aria-hidden="true"></canvas><div><div class="head"><span class="name">gentle-ai-verify</span><span class="chip verify">VERIFY</span></div><span class="state">on break</span></div></li>
@@ -171,66 +170,508 @@
   <details class="notes" open>
     <summary>Annotations · toggle</summary>
     <ul>
-      <li><b>Stage.</b> Edge to edge: the room is the real engine art at 1x, 65 x 15 tiles (1560 x 360 px), so the band fills the chat column with no side margin. Pixels stay square.</li>
-      <li><b>Panels.</b> Status bar, Status, Party and the input box are framed pixel panels. Coffee is the context as an HP bar: it shows what is left of the pot (1 minus context).</li>
-      <li><b>Idle crew.</b> Explore and Worker chat by the counter in turns and sip now and then; Verify sips. A role that acts walks to its desk and back. A second worker walks in from the door and out again.</li>
-      <li><b>Budget.</b> 5 fps (200 ms steps) only while someone walks, types, writes or a prop is lit. Otherwise it sleeps until the next idle gesture or scene step, with no fixed timer. Paused on blur, hidden or off-screen. Reduced motion: one still frame, no timers.</li>
+      <li><b>Stage.</b> The real engine room (HEAD, 30 x 15 tiles) at 2x: 1440 x 720 px, pixels square. The band is 722 px tall and 1560 px wide, so the room sits centred with a 60 px hallway on each side.</li>
+      <li><b>Chat.</b> The title bar is gone (it is not part of the module) so the stage fits. Caption, input and three log lines stay readable under the stage.</li>
+      <li><b>Panels.</b> Status bar, Status, Party and the input box are framed pixel panels. Coffee is the context as an HP bar: what is left of the pot (1 minus context).</li>
+      <li><b>Idle crew.</b> Explore, Worker and Verify rest on the lounge sofas by the coffee table. A role that acts walks to the pod or the lab and back to its sofa. Extra residents walk in from the door.</li>
+      <li><b>Budget.</b> 5 fps (200 ms steps) only while someone walks, writes, types or sips, or a prop animates. Otherwise the page sleeps until the next sip, chat switch, head turn or scene step. Paused on blur, hidden or off-screen. Reduced motion: one still frame, no timers.</li>
       <li><b>ask_user.</b> The dialog opens over the stage floor while the question is open and closes with it. Display only: answers stay in the terminal.</li>
       <li><b>Pin a moment.</b> Open this file with <b>#t=12</b> (0 to 80 s) to start the loop there.</li>
     </ul>
   </details>
 </div>
 <script>
-/* Design 02, terminal stage over chat. The Gentle Office engine from web/office-engine.js at HEAD, with four
-   changes for the terminal: a 65 x 15 tile room that fills the stage band, a palette read from the page tokens,
-   no random wandering, and a page-driven step (advance). Browser module: no imports, no network. */
+// Pure scene reducer for the Gentle Office page. It turns contract messages
+// (snapshot and live OfficeEvents, v: 1) into a scene state, and a view the
+// canvas engine draws. No DOM, no timers, no Date.now(): the page passes `at`.
+// Plain ES module on purpose: the browser loads it as-is and node tests import it.
+
+const SCENE_LOG_LIMIT = 40;
+const DESK_COUNT = 4;
+// Verify residents (S17) have their own corner with these seats. Extra verify agents take a pod desk, like any resident.
+const VERIFY_DESK_COUNT = 2;
+// A feature prop stays lit this long after its last event, and for as long as one of its tools is still running.
+const FEATURE_LINGER_MS = 4000;
+const FEATURE_NAMES = ["music", "design", "memory", "web", "todo", "ask", "mcp", "codegraph"];
+const CONTRACT_VERSION = 1;
+
+const ORCHESTRATOR_STATES = new Set(["thinking", "tool", "idle", "waiting-user"]);
+const COMPACTION_PHASES = new Set(["start", "end", "failed"]);
+const AGENT_STATUSES = new Set(["queued", "running", "waiting", "completed", "failed", "cancelled", "timed_out"]);
+const ACTIVE_AGENT_STATUSES = new Set(["queued", "running", "waiting"]);
+// Only a started (running or waiting) agent can sit at a desk. A queued one waits on the bench.
+const SEATED_AGENT_STATUSES = new Set(["running", "waiting"]);
+// Residents get a desk and a sprite. Inspectors and judges are logged only until T4/T5.
+const RESIDENT_ROLES = new Set(["explore", "worker", "verify"]);
+const ROLES = new Set(["explore", "worker", "verify", "inspector", "judge"]);
+// Idle staff (S16): one per resident role waits in the lounge by the coffee counter until an agent of its role takes a desk.
+const STAFF_ROLES = ["explore", "worker", "verify"];
+const FINISHED_AGENT_STATUSES = new Set(["completed", "failed", "cancelled", "timed_out"]);
+const BREAK_STATUS = "on break";
+const emptyLounge = () => Object.fromEntries(STAFF_ROLES.map((role) => [role, null]));
+
+// Where the orchestrator stands for each state (S6): whiteboard while working, floor while idle, front when it needs you.
+const INTENT_BY_STATE = { thinking: "whiteboard", tool: "whiteboard", idle: "floor", "waiting-user": "front" };
+const BUBBLE_BY_STATE = { thinking: "idea", tool: "wrench", idle: null, "waiting-user": "question" };
+
+const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+const isPercent = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
+const isActive = (agent) => ACTIVE_AGENT_STATUSES.has(agent.status);
+const isResident = (agent) => RESIDENT_ROLES.has(agent.role);
+
+function initialScene(deskCount = DESK_COUNT, verifyCount = VERIFY_DESK_COUNT) {
+  return {
+    orchestrator: { state: "idle" },
+    context: { percent: null },
+    compaction: null,
+    agents: [],
+    // desks[i] is the agent id at pod desk i, verify[i] at verify seat i (or null). bench keeps queued agents in arrival order.
+    // lounge[role] is the agent holding that role's staff member (its claim), or null while the staff member idles in the lounge.
+    seats: { desks: Array(deskCount).fill(null), verify: Array(verifyCount).fill(null), bench: [], lounge: emptyLounge() },
+    // toolStarts[name] is when that tool last started, so its end can log one line with the duration.
+    toolStarts: {},
+    // features[feature].until is when its prop goes idle again; running[toolName] is the feature of a tool still in flight.
+    features: {},
+    running: {},
+    log: [],
+    logSeq: 0,
+  };
+}
+
+function reduceScene(state, action) {
+  if (!isRecord(action)) return state;
+  switch (action.type) {
+    case "snapshot":
+      return applySnapshot(state, action);
+    case "event":
+      return applyEvent(state, action);
+    case "departed":
+      return applyDeparture(state, String(action.id));
+    case "note":
+      return pushLog(state, { kind: typeof action.kind === "string" ? action.kind : "info", text: String(action.text), at: action.at ?? 0 });
+    default:
+      return state;
+  }
+}
+
+function applySnapshot(state, { snapshot }) {
+  if (!isRecord(snapshot) || snapshot.v !== CONTRACT_VERSION || !isRecord(snapshot.orchestrator)) return state;
+  const orchestratorState = snapshot.orchestrator.state;
+  if (!ORCHESTRATOR_STATES.has(orchestratorState)) return state;
+  const percent = isRecord(snapshot.context) && isPercent(snapshot.context.percent) ? snapshot.context.percent : null;
+  const listed = Array.isArray(snapshot.agents) ? snapshot.agents.filter(isAgent).map(pickAgent) : [];
+  const listedIds = new Set(listed.map((agent) => agent.id));
+  // Agents the snapshot no longer lists leave their seats. Listed ones keep theirs, so a reconnect does not reseat them.
+  let seats = pruneSeats(state.seats, listedIds);
+  const agents = [];
+  for (const agent of listed) {
+    const previous = state.agents.find((item) => item.id === agent.id);
+    // A snapshot agent that is finished and has no seat is not on screen; it does not need to appear.
+    if (!isActive(agent) && seatOf(seats, agent.id) === null) continue;
+    // Restored agents are placed at once: no walk-in animation for the ones the page already showed or the ones it missed.
+    agents.push({ ...agent, instant: previous ? previous.instant : true });
+    if (isResident(agent) && isActive(agent) && seatOf(seats, agent.id) === null) seats = { ...seats, bench: [...seats.bench, agent.id] };
+  }
+  seats = withClaims(state.seats, settle(seats, agents), agents);
+  return {
+    ...state,
+    orchestrator: orchestratorOf(snapshot.orchestrator),
+    // Only the tool the snapshot still reports can be running; any other end was missed while disconnected.
+    running: keepRunning(state.running, snapshot.orchestrator.toolName),
+    context: { percent },
+    compaction: COMPACTION_PHASES.has(snapshot.compaction) ? snapshot.compaction : null,
+    agents: agents.filter((agent) => isActive(agent) || seatOf(seats, agent.id) !== null),
+    seats,
+  };
+}
+
+function applyEvent(state, { event, at = 0 }) {
+  if (!isRecord(event) || event.v !== CONTRACT_VERSION) return state;
+  switch (event.type) {
+    case "orchestrator": {
+      if (!ORCHESTRATOR_STATES.has(event.state)) return state;
+      const next = { ...state, orchestrator: orchestratorOf(event) };
+      if (event.state === "waiting-user" && state.orchestrator.state !== "waiting-user") {
+        return pushLog(next, { kind: "ask", text: "Waiting for your answer", at });
+      }
+      return next;
+    }
+    case "context": {
+      if (event.percent !== null && !isPercent(event.percent)) return state;
+      return { ...state, context: { percent: event.percent } };
+    }
+    case "compaction":
+      return applyCompaction(state, event.phase, at);
+    case "tool": {
+      if (typeof event.toolName !== "string") return state;
+      const starts = state.toolStarts ?? {};
+      if (event.phase === "start") return { ...state, toolStarts: { ...starts, [event.toolName]: at } };
+      if (event.phase === "end") {
+        const startedAt = Object.hasOwn(starts, event.toolName) ? starts[event.toolName] : undefined;
+        const { [event.toolName]: _done, ...rest } = starts;
+        const next = endFeature({ ...state, toolStarts: rest }, event.toolName, at);
+        const failed = event.ok === false;
+        const text = startedAt === undefined
+          ? `${event.toolName} ${failed ? "failed" : "finished"}`
+          : `${event.toolName}${failed ? " failed" : ""} · ${formatDuration(at - startedAt)}`;
+        return pushLog(next, { kind: failed ? "fail" : "tool", text, at });
+      }
+      return state;
+    }
+    case "subagent": {
+      if (!isAgent(event)) return state;
+      return applySubagent(state, event, at);
+    }
+    case "feature": {
+      if (typeof event.feature !== "string" || typeof event.detail !== "string") return state;
+      return lightFeature(pushLog(state, { kind: "feature", text: `${event.feature}: ${event.detail}`, at }), event.feature, event.detail, at);
+    }
+    default:
+      return state;
+  }
+}
+
+function applySubagent(state, value, at) {
+  const incoming = pickAgent(value);
+  const previous = state.agents.find((item) => item.id === incoming.id);
+  const agent = { ...incoming, instant: previous ? previous.instant : false };
+  const others = state.agents.filter((item) => item.id !== agent.id);
+  const agents = [...others, agent];
+  let seats = state.seats;
+  if (isResident(agent)) {
+    // A resident the page has not seated yet joins the bench; settle moves it to a free desk when it may sit.
+    if (seatOf(seats, agent.id) === null && isActive(agent)) seats = { ...seats, bench: [...seats.bench, agent.id] };
+  } else if (seatOf(seats, agent.id) !== null) {
+    // The identity turned out to be a non-resident (inspector or judge): it gives its seat back.
+    seats = removeSeat(seats, agent.id);
+  }
+  seats = withClaims(state.seats, settle(seats, agents), agents);
+  // Finished agents stay only while they still hold a seat (they are leaving); the rest are dropped.
+  const kept = agents.filter((item) => isActive(item) || seatOf(seats, item.id) !== null);
+  const next = { ...state, agents: kept, seats };
+  if (previous && previous.status === agent.status) return next;
+  return pushLog(next, { kind: "agent", text: `${nameOf(agent)}: ${agent.status}`, at });
+}
+
+// The page reports `departed` once the agent has walked out. Only then does its seat free up for the next in line.
+function applyDeparture(state, id) {
+  if (seatOf(state.seats, id) === null) return state;
+  const agents = state.agents.filter((agent) => agent.id !== id);
+  return { ...state, agents, seats: withClaims(state.seats, settle(removeSeat(state.seats, id), agents), agents) };
+}
+
+/** A feature event is sent when its tool starts: the prop lights and stays lit while that tool runs. */
+function lightFeature(state, feature, toolName, at) {
+  return {
+    ...state,
+    features: { ...(state.features ?? {}), [feature]: { until: at + FEATURE_LINGER_MS } },
+    running: { ...(state.running ?? {}), [toolName]: feature },
+  };
+}
+
+/** The tool ended: its prop lingers for the usual time from now. */
+function endFeature(state, toolName, at) {
+  const running = state.running ?? {};
+  if (!Object.hasOwn(running, toolName)) return state;
+  const { [toolName]: feature, ...rest } = running;
+  return { ...state, running: rest, features: { ...(state.features ?? {}), [feature]: { until: at + FEATURE_LINGER_MS } } };
+}
+
+function keepRunning(running = {}, toolName) {
+  return Object.fromEntries(Object.entries(running).filter(([tool]) => tool === toolName));
+}
+
+/** Whether a prop entry from sceneView is lit at `now` (the page's clock, in the same units as `at`). */
+function featureActive(entry, now) {
+  return Boolean(entry) && (entry.running || now < entry.until);
+}
+
+function applyCompaction(state, phase, at) {
+  if (!COMPACTION_PHASES.has(phase)) return state;
+  if (phase === "start") {
+    return pushLog({ ...state, compaction: "start" }, { kind: "coffee", text: "Compaction started: the orchestrator brews a fresh pot", at });
+  }
+  if (phase === "end") {
+    // Pi reports no usage right after compaction, so the stale reading is dropped and the pot is full until the next one.
+    return pushLog({ ...state, compaction: "end", context: { percent: null } }, { kind: "coffee", text: "Fresh pot brewed: context compacted", at });
+  }
+  return pushLog({ ...state, compaction: "failed" }, { kind: "fail", text: "Compaction failed", at });
+}
+
+/** Where an agent stands: a desk index, a bench index, or null when it has no place in the room. */
+function seatOf(seats, id) {
+  const desk = seats.desks.indexOf(id);
+  if (desk >= 0) return { zone: "desk", index: desk };
+  const verify = seats.verify.indexOf(id);
+  if (verify >= 0) return { zone: "verify", index: verify };
+  const bench = seats.bench.indexOf(id);
+  return bench >= 0 ? { zone: "bench", index: bench } : null;
+}
+
+// Every seat that holds an agent, the pod and the verify corner alike.
+const seated = (seats) => [...seats.desks, ...seats.verify];
+
+function removeSeat(seats, id) {
+  return {
+    ...seats,
+    desks: seats.desks.map((item) => (item === id ? null : item)),
+    verify: seats.verify.map((item) => (item === id ? null : item)),
+    bench: seats.bench.filter((item) => item !== id),
+  };
+}
+
+function pruneSeats(seats, keep) {
+  return {
+    ...seats,
+    desks: seats.desks.map((item) => (item !== null && keep.has(item) ? item : null)),
+    verify: seats.verify.map((item) => (item !== null && keep.has(item) ? item : null)),
+    bench: seats.bench.filter((item) => keep.has(item)),
+  };
+}
+
+/**
+ * Staff claims (S16). A claim is held by an agent sitting at a desk, so it ends when that seat is freed (the agent has walked back to the lounge).
+ * A resident of a staff role claims its staff member the first time it is seated, from the door, the bench or a snapshot.
+ * Extras of a role whose staff member is busy take a desk or the bench as before.
+ */
+function withClaims(before, seats, agents) {
+  const lounge = {};
+  for (const role of STAFF_ROLES) {
+    const holder = before.lounge[role];
+    lounge[role] = holder !== null && seated(seats).includes(holder) ? holder : null;
+  }
+  for (const id of seated(seats)) {
+    if (id === null || seated(before).includes(id)) continue;
+    const agent = agents.find((item) => item.id === id);
+    if (agent && agent.claims && lounge[agent.role] === null) lounge[agent.role] = id;
+  }
+  return { ...seats, lounge };
+}
+
+/**
+ * Moves sittable bench agents into free seats, in bench order. Seated agents never move.
+ * Verify agents fill the verify corner first (S17); any agent may then take a pod desk, so explore and worker never take a verify seat.
+ */
+function settle(seats, agents) {
+  const sittable = (id) => agents.some((agent) => agent.id === id && SEATED_AGENT_STATUSES.has(agent.status));
+  const isVerify = (id) => agents.some((agent) => agent.id === id && agent.role === "verify");
+  const verify = seats.verify.slice();
+  const desks = seats.desks.slice();
+  let bench = seats.bench.slice();
+  for (let index = 0; index < verify.length; index++) {
+    if (verify[index] !== null) continue;
+    const next = bench.find((id) => sittable(id) && isVerify(id));
+    if (next === undefined) break;
+    verify[index] = next;
+    bench = bench.filter((id) => id !== next);
+  }
+  for (let index = 0; index < desks.length; index++) {
+    if (desks[index] !== null) continue;
+    const next = bench.find((id) => sittable(id));
+    if (next === undefined) break;
+    desks[index] = next;
+    bench = bench.filter((id) => id !== next);
+  }
+  return { ...seats, desks, verify, bench };
+}
+
+function orchestratorOf(source) {
+  return typeof source.toolName === "string" ? { state: source.state, toolName: source.toolName } : { state: source.state };
+}
+
+function isAgent(value) {
+  return isRecord(value) && typeof value.id === "string" && value.id.length > 0 && AGENT_STATUSES.has(value.status);
+}
+
+function pickAgent(value) {
+  return {
+    id: value.id,
+    agent: typeof value.agent === "string" ? value.agent : "unknown",
+    role: ROLES.has(value.role) ? value.role : "worker",
+    label: typeof value.label === "string" ? value.label : "",
+    status: value.status,
+    // Only an explicit resident role claims a staff member; an unrecognised role takes a desk as before but never claims.
+    claims: RESIDENT_ROLES.has(value.role),
+  };
+}
+
+function nameOf(agent) {
+  return agent.label || (agent.agent === "unknown" ? agent.id : agent.agent);
+}
+
+/** 0.4s under ten seconds, 13s under a minute, then 1m 05s. */
+function formatDuration(ms) {
+  const safe = Math.max(0, ms);
+  if (safe < 10_000) return `${(safe / 1000).toFixed(1)}s`;
+  const seconds = Math.round(safe / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+}
+
+function pushLog(state, entry) {
+  const logSeq = state.logSeq + 1;
+  return { ...state, logSeq, log: [{ id: logSeq, ...entry }, ...state.log].slice(0, SCENE_LOG_LIMIT) };
+}
+
+/**
+ * What the canvas draws. The pot level is 1 - percent/100; unknown usage shows a full pot labelled "—" by the page.
+ * `agents` lists the residents on a desk or the bench. Each has `seat`, `leaving` (finished, walking out) and
+ * `instant` (placed at once, no walk-in).
+ */
+function sceneView(state) {
+  const orchestratorState = state.orchestrator.state;
+  const brewing = state.compaction === "start";
+  const percent = state.context.percent;
+  const agents = state.agents
+    .filter(isResident)
+    .map((agent) => ({
+      id: agent.id,
+      agent: agent.agent,
+      role: agent.role,
+      label: agent.label,
+      status: agent.status,
+      seat: seatOf(state.seats, agent.id),
+      leaving: !isActive(agent),
+      instant: agent.instant,
+      // The staff member of this role is this agent: it walks from the lounge and walks back to it.
+      claimed: state.seats.lounge[agent.role] === agent.id,
+    }))
+    .filter((agent) => agent.seat !== null);
+  return {
+    intent: brewing ? "coffee" : INTENT_BY_STATE[orchestratorState],
+    writing: !brewing && (orchestratorState === "thinking" || orchestratorState === "tool"),
+    bubble: brewing ? "cup" : BUBBLE_BY_STATE[orchestratorState],
+    brewing,
+    orchestrator: orchestratorState,
+    percent: percent === null ? null : Math.round(percent),
+    potLevel: percent === null ? 1 : Math.round((1 - percent / 100) * 10000) / 10000,
+    activeAgents: state.agents.filter(isActive).length,
+    agents,
+    // Idle staff: present in the lounge, or claimed by the agent named here.
+    staff: STAFF_ROLES.map((role) => ({ role, present: state.seats.lounge[role] === null, claimedBy: state.seats.lounge[role] })),
+    // Per prop: `running` while one of its tools is in flight, and `until` for the linger. Use featureActive(entry, now).
+    features: Object.fromEntries(FEATURE_NAMES.map((name) => [name, {
+      running: Object.values(state.running ?? {}).includes(name),
+      until: state.features?.[name]?.until ?? 0,
+    }])),
+  };
+}
+
+/**
+ * The team list: residents first (as drawn), then each idle staff member on break. Pure over sceneView, so the page and tests read the same rows.
+ */
+function teamRows(view) {
+  return [
+    ...view.agents.map((agent) => ({ kind: "resident", id: agent.id, role: agent.role, label: agent.label, status: agent.status })),
+    ...view.staff.filter((item) => item.present).map((item) => ({ kind: "staff", role: item.role, status: BREAK_STATUS })),
+  ];
+}
+
+
+/* Gentle Office engine: the 32-bit pixel-art office from design/agent-office/01-overworld-hq.html.
+   Driven by a scene view (see scene-reducer.js sceneView). Resident subagents (T3) take the four desks and
+   a waiting bench by the door; each desk monitor shows its agent's work while it runs. Idle staff (S16) chat by the coffee counter until an agent of their role takes a desk. Browser module: no imports, no network. */
+
 const OFFICE_CONFIG = {
-	cols: 65, rows: 15, tile: 24,
-	desks: [{ x: 28, y: 5 }, { x: 35, y: 5 }, { x: 42, y: 5 }, { x: 21, y: 5 }],
-	whiteboard: { x: 33, w: 4 }, coffee: { x: 50, y: 2, w: 3 }, table: { x: 42, y: 9, w: 4, h: 2 },
-	rug: { x: 39, y: 8, w: 12, h: 6 }, window: { x: 2, w: 4 }, shelf: 12, clock: 8, door: { x: 31, w: 2 },
-	plants: [{ x: 0, y: 2 }, { x: 63, y: 2 }, { x: 0, y: 13 }, { x: 63, y: 13 }], rack: { x: 63, y: 5 },
-	orchStart: { x: 51, y: 4 }, front: { x: 28, y: 9 },
-	bench: { x: 34, w: 6 },
-	// Idle staff (S16): one lounge spot per role by the coffee counter. They block walkers, and a claimant walks back to its own spot.
-	lounge: { explore: { x: 46, y: 4, face: 'right' }, worker: { x: 48, y: 4, face: 'left' }, verify: { x: 54, y: 4, face: 'left' } }
+	cols: 30, rows: 15, tile: 24,
+	// Rooms (S17): judges | work room (pod and lounge) | orchestrator office over the verify lab | archive. Walls block walkers; the gaps are doors.
+	rooms: [
+		{ name: 'judges room', x: 0, y: 2, w: 6, h: 12 },
+		{ name: 'work room', x: 7, y: 2, w: 9, h: 12 },
+		{ name: 'orchestrator office', x: 17, y: 2, w: 7, h: 6 },
+		{ name: 'verify lab', x: 17, y: 9, w: 7, h: 5 },
+		{ name: 'archive', x: 25, y: 2, w: 5, h: 12 }
+	],
+	// Door gaps: judges to work at (6,9); work to orchestrator office at (16,5) and to verify lab at (16,11); orchestrator office to archive at (24,4).
+	walls: [
+		{ x: 6, y: 2, w: 1, h: 7 }, { x: 6, y: 10, w: 1, h: 5 },
+		{ x: 16, y: 2, w: 1, h: 3 }, { x: 16, y: 6, w: 1, h: 5 }, { x: 16, y: 12, w: 1, h: 3 },
+		{ x: 17, y: 8, w: 7, h: 1 },
+		{ x: 24, y: 2, w: 1, h: 2 }, { x: 24, y: 5, w: 1, h: 10 }
+	],
+	// Pod island (S17): four desks face each other across a cross divider, chairs on the outside. desks[0] and desks[1] are the ones nearest the lounge.
+	desks: [{ x: 12, y: 5, face: 'down' }, { x: 12, y: 9, face: 'up' }, { x: 9, y: 5, face: 'down' }, { x: 9, y: 9, face: 'up' }],
+	podArms: [{ x: 11, y: 6, w: 1, h: 3 }, { x: 9, y: 7, w: 5, h: 1 }],
+	// Verify lab (S17): two desks, and a big research screen on the east wall. The verify staff member is two steps from verifyDesks[0].
+	verifyDesks: [{ x: 17, y: 12, face: 'down' }, { x: 20, y: 12, face: 'down' }],
+	researchScreen: { x: 22, y: 9, w: 2, h: 4 },
+	// Lounge (S16, S17): a sofa on each side of a coffee table, facing each other, beside the pod. Explore and worker staff are two steps from their desks.
+	sofas: [{ x: 13, y: 3, w: 3, h: 1 }, { x: 13, y: 11, w: 2, h: 1 }],
+	coffeeTable: { x: 15, y: 7, w: 1, h: 1 },
+	// Archive shelves (static decor) along the east wall, beside the memory cabinet and the MCP rack.
+	shelves: [{ x: 28, y: 5, w: 2, h: 1 }, { x: 28, y: 8, w: 2, h: 1 }, { x: 28, y: 11, w: 2, h: 1 }],
+	// Idle staff (S16): one lounge seat per role. They block walkers, and a claimant walks back to its own seat.
+	// The verify member stands by the lab door (x 15) so the door stays open: it is two steps from its desk.
+	lounge: { explore: { x: 13, y: 3, face: 'down', sit: true }, worker: { x: 13, y: 11, face: 'up', sit: true }, verify: { x: 15, y: 11, face: 'up', sit: false } },
+	coffee: { x: 13, y: 2, w: 3 },
+	whiteboard: { x: 18, w: 3 }, clock: 17, shelf: 22, window: { x: 2, w: 3 },
+	rugs: [{ x: 17, y: 3, w: 6, h: 4 }, { x: 1, y: 6, w: 4, h: 4 }],
+	// Judges' table (S7, T5 seats them later): a long table with two chairs on one side.
+	judges: { x: 1, y: 7, w: 4, h: 2 }, judgeSeats: [{ x: 2, y: 6 }, { x: 3, y: 6 }],
+	// Orchestrator office: the armchair is its rest spot, and the whiteboard is on the wall above it.
+	armchair: { x: 18, y: 5, w: 2, h: 2 }, orchStart: { x: 18, y: 5 },
+	front: { x: 11, y: 3 },
+	door: { x: 11, w: 2 },
+	bench: { x: 7, w: 4 },
+	rack: { x: 29, y: 2 },
+	plants: [{ x: 0, y: 13 }, { x: 5, y: 13 }, { x: 10, y: 2 }, { x: 15, y: 13 }, { x: 23, y: 2 }, { x: 17, y: 7 }, { x: 19, y: 9 }, { x: 23, y: 13 }, { x: 25, y: 13 }, { x: 27, y: 7 }, { x: 29, y: 13 }]
 };
 
-/* One prop per gentle-shell feature (S8). Each footprint is tiles walkers cannot stand on. The rack is the existing one (cfg.rack). */
+/* Story layout (T14): the room is shown zoomed by a whole number, so pixels stay square. Taller windows zoom in further, never past 4x. */
+const STORY_ZOOM_MAX = 4;
+function storyZoom(width, height) {
+	return Math.max(1, Math.min(STORY_ZOOM_MAX, Math.floor(Math.min(height / 200, width / 160))));
+}
+
+/* One prop per gentle-shell feature (S8). Each footprint is tiles walkers cannot stand on. The rack is the existing one (cfg.rack).
+   Kept free on purpose: coffee spot (17,4), whiteboard spot (9,3), front (8,6), rest (9,5), door approach (9-10,11), bench overflow (row 11, x 2-13). */
 const FEATURE_PROPS = [
-	{ feature: 'music', x: 6, y: 3, w: 2, h: 2 },
-	{ feature: 'design', x: 9, y: 3, w: 2, h: 2 },
-	{ feature: 'memory', x: 18, y: 3, w: 1, h: 2 },
-	{ feature: 'ask', x: 27, y: 3, w: 1, h: 2 },
-	{ feature: 'todo', x: 56, y: 3, w: 2, h: 2 },
-	{ feature: 'mcp', x: OFFICE_CONFIG.rack.x, y: OFFICE_CONFIG.rack.y, w: 1, h: 2 },
-	{ feature: 'web', x: 57, y: 9, w: 1, h: 2 },
-	{ feature: 'codegraph', x: 59, y: 9, w: 2, h: 2 }
+	{ feature: 'design', x: 0, y: 2, w: 2, h: 2 },
+	{ feature: 'web', x: 5, y: 2, w: 1, h: 2 },
+	{ feature: 'codegraph', x: 0, y: 10, w: 2, h: 2 },
+	{ feature: 'todo', x: 7, y: 2, w: 2, h: 2 },
+	{ feature: 'ask', x: 14, y: 12, w: 1, h: 2 },
+	{ feature: 'music', x: 21, y: 5, w: 2, h: 2 },
+	{ feature: 'memory', x: 28, y: 2, w: 1, h: 2 },
+	{ feature: 'mcp', x: OFFICE_CONFIG.rack.x, y: OFFICE_CONFIG.rack.y, w: 1, h: 2 }
 ];
 
 /* The grid a figure walks on: true where it cannot stand. Walls, furniture, feature props and the lounge spots block; the rug, floor and door do not. */
 function walkableGrid(cfg, props = FEATURE_PROPS) {
 	const block = Array.from({ length: cfg.rows }, (_, y) => Array(cfg.cols).fill(y < 2));
 	const mark = (x, y, w, h) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (block[j] && i < cfg.cols) block[j][i] = true; };
-	cfg.desks.forEach(d => mark(d.x, d.y, 2, 1));
-	mark(cfg.table.x, cfg.table.y, cfg.table.w, cfg.table.h);
+	const rect = r => mark(r.x, r.y, r.w, r.h);
+	/* A desk blocks its own two tiles and the monitor tiles on its far side (north for face-up, south for face-down). */
+	const desk = d => { mark(d.x, d.y, 2, 1); mark(d.x, d.face === 'down' ? d.y + 1 : d.y - 1, 2, 1); };
+	cfg.walls.forEach(rect);
+	cfg.desks.forEach(desk);
+	cfg.verifyDesks.forEach(desk);
+	cfg.podArms.forEach(rect);
+	cfg.sofas.forEach(rect);
+	rect(cfg.coffeeTable);
 	mark(cfg.coffee.x, cfg.coffee.y, cfg.coffee.w, 1);
+	rect(cfg.judges);
+	rect(cfg.armchair);
+	rect(cfg.researchScreen);
+	cfg.shelves.forEach(rect);
 	cfg.plants.forEach(p => mark(p.x, p.y, 1, 1));
 	mark(cfg.rack.x, cfg.rack.y, 1, 2);
 	mark(cfg.bench.x, cfg.rows - 1, cfg.bench.w, 1);
-	Object.values(cfg.lounge).forEach(s => mark(s.x, s.y, 1, 1));
+	// Seated staff block their sofa tile. A standing one (verify, by the lab door) leaves its tile open, so the door stays through.
+	Object.values(cfg.lounge).filter(s => s.sit).forEach(s => mark(s.x, s.y, 1, 1));
 	props.forEach(p => mark(p.x, p.y, p.w, p.h));
 	return block;
 }
 
-/* Palette: every colour is a :root token from design/system.md, read when the page loads. The engine has no literal colour. */
+/* Palette: every colour is a :root token from design/system.md, read when the page loads. The engine has no literal colour.
+   Canvas-only tints of web/office-engine.js (fuchsia, dusty-rose floor) map to the nearest token. */
 const TOK = name => getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
 const P = {
 	bg: TOK('bg'), panel: TOK('panel'), user: TOK('user'), sel: TOK('sel'), border: TOK('border'),
 	text: TOK('text'), muted: TOK('muted'), dim: TOK('dim'), gold: TOK('gold'), blue: TOK('blue'), green: TOK('green'),
 	sand: TOK('sand'), red: TOK('red'), pink: TOK('pink'), purple: TOK('pink'),
 	sky: TOK('blue'), sec: TOK('text'), softRose: TOK('pink'), deep: TOK('pink'), violet: TOK('pink'), steel: TOK('muted'),
-	floorA: TOK('user'), floorB: TOK('border'), seam: TOK('bg'), plum: TOK('user'), champagne: TOK('gold')
+	floorA: TOK('dim'), floorB: TOK('dim'), seam: TOK('border'), plum: TOK('user'), champagne: TOK('gold')
 };
 /* Nearest token, never a mix: a colour is either the first or the second token. */
 function goMix(a, b, t) { return t >= 0.5 ? b : a; }
@@ -322,9 +763,30 @@ const triangle = v => { const f = v - Math.floor(v); return f < 0.5 ? f * 2 : 2 
 /* Stable hash of a task id: the same agent always gets the same look. */
 const strHash = s => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
 
+/** Draws the coffee pot in the sidebar. The fill is the remaining context (level 0..1). */
+function drawPot(ctx, level, t, brewing) {
+	const R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+	ctx.clearRect(0, 0, 32, 38);
+	/* Glass carafe with a warm liquid level and a plum-tinted lid */
+	R(12, 1, 8, 2, P.border); R(8, 3, 16, 3, P.border); R(9, 3, 14, 1, P.steel);
+	R(3, 8, 3, 2, P.sec);
+	R(5, 6, 22, 27, P.sec); R(6, 7, 20, 25, P.bg);
+	const lv = Math.max(0, Math.min(1, level)), h = Math.round(24 * lv);
+	if (h > 0) {
+		const liquid = goMix(P.sand, P.plum, 0.3);
+		R(7, 32 - h, 18, h, liquid); R(7, 32 - h, 18, 1, goMix(liquid, P.text, 0.3));
+		if (h > 4) for (let i = 0; i < 3; i++) { const by = 31 - ((t * 5 + i * 7) % (h - 2)); R(9 + i * 5, Math.floor(by), 1, 1, P.text); }
+	}
+	R(8, 9, 1, 17, P.text); R(9, 9, 1, 5, P.softRose);
+	R(26, 9, 2, 2, P.border); R(27, 10, 3, 15, P.border); R(26, 24, 2, 2, P.border);
+	R(2, 33, 28, 4, P.border); R(2, 33, 28, 1, P.muted);
+	R(5, 35, 2, 1, brewing ? P.red : P.green);
+	if (brewing) { const dy = Math.floor(t * 10) % 4; R(15, dy, 1, 1, P.sand); }
+}
+
 /**
  * Creates the office on `canvas` and starts its frame loop.
- * Hooks are optional; the terminal stage passes none.
+ * `hooks.onPot({ level, brewing, time })` runs about every 150 ms so the page can redraw the sidebar pot.
  */
 function createOfficeEngine(canvas, cfg, hooks = {}) {
 	const T = cfg.tile, COLS = cfg.cols, ROWS = cfg.rows, W = COLS * T, H = ROWS * T;
@@ -357,7 +819,9 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 
 	/* ---------- walkable grid ---------- */
 	const block = walkableGrid(cfg);
-	const tb = cfg.table, cf = cfg.coffee, wb = cfg.whiteboard;
+	const cf = cfg.coffee, wb = cfg.whiteboard;
+	/* Every desk, pod first, then the verify lab. The engine keeps one screen state per desk in this order. */
+	const allDesks = [...cfg.desks, ...cfg.verifyDesks];
 
 	function path(fx, fy, tx, ty) {
 		const key = (x, y) => y * COLS + x, prev = new Map([[key(fx, fy), null]]), q = [[fx, fy]];
@@ -383,27 +847,34 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 	const FX = tx => tx * T + T / 2, FY = ty => ty * T + T - 4;
 
 	/* ---------- spots ---------- */
-	const deskSpot = d => ({ tx: d.x, ty: d.y + 1, px: FX(d.x + 1) - 4, py: FY(d.y + 1) - 2, face: 'up', sit: true });
+	/* A seated figure sits on the tile in front of its desk: south of a face-up desk, north of a face-down one. */
+	const sitTile = d => (d.face === 'down' ? d.y - 1 : d.y + 1);
+	/* Centred under its desk: the desk spans two tiles, so its middle is the edge between them. */
+	const deskSpot = d => ({ tx: d.x, ty: sitTile(d), px: (d.x + 1) * T, py: FY(sitTile(d)) - 2, face: d.face === 'down' ? 'down' : 'up', sit: true });
 	const spots = {
-		/* One row below the wall props so a 48 px tall orchestrator does not cover the board or the pot. */
-		whiteboard: { tx: wb.x + 1, ty: 3, px: FX(wb.x + 2), py: FY(3), face: 'up' },
+		/* Stands in front of the board, on the tile under its middle. */
+		whiteboard: { tx: wb.x + 1, ty: 3, px: FX(wb.x + 1), py: FY(3), face: 'up' },
 		coffee: { tx: cf.x + 1, ty: cf.y + 2, face: 'up' },
 		front: { tx: cfg.front.x, ty: cfg.front.y, face: 'down' },
-		rest: { tx: cfg.orchStart.x, ty: cfg.orchStart.y, face: 'down' }
+		/* The armchair: the orchestrator rests here while idle (S17) and does not wander the room. */
+		rest: { tx: cfg.orchStart.x, ty: cfg.orchStart.y, face: 'down', sit: true }
 	};
-	/* Waiting bench: queued residents stand on the row above the bench. Past the bench width they continue along that row, beside it, so they never stand on a desk seat. */
-	const benchSpot = i => ({ tx: cfg.bench.x + (i % (2 * cfg.bench.w)), ty: ROWS - 2, face: 'down' });
-
+	/* Waiting bench: queued residents stand on the row above the bench and stack upwards past its width, so they never stand on a desk seat. */
+	const benchSpot = i => ({ tx: cfg.bench.x + (i % cfg.bench.w), ty: ROWS - 2 - Math.floor(i / cfg.bench.w), face: 'down' });
 
 	/* ---------- state ---------- */
 	const reducedQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 	let reduced = !!(reducedQuery && reducedQuery.matches);
 	let time = 0, intent = null, view = null, potShown = 1, potTarget = 1, brewingNow = false;
 	let wbLines = 2, wbChecks = 1, wbWriting = false, wbPartial = 1, wbHold = 0;
+	let hudT = 0;
 	/* Which feature props are lit this frame, by feature name. */
 	let lit = {};
+	/* Story camera (T14). Null in full and compact, so their drawing never goes through a transform. */
+	let camera = null;
+	const cam = { x: W / 2, y: H / 2, placed: false, tx: 0, ty: 0 };
 	const orch = {
-		x: FX(cfg.orchStart.x), y: FY(cfg.orchStart.y), path: [], face: 'down', sit: false, moving: false,
+		x: FX(cfg.orchStart.x), y: FY(cfg.orchStart.y), path: [], face: 'down', sit: true, moving: false,
 		mode: 'idle', wait: 0.5, bubble: null, step: 0, onArrive: null, target: null
 	};
 
@@ -418,7 +889,7 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 	}
 	function moveChar(c, dt) {
 		if (!c.path.length) { c.moving = false; return; }
-		const t = c.path[0], dx = t.x - c.x, dy = t.y - c.y, d = Math.hypot(dx, dy), sp = 72 * dt;
+		const t = c.path[0], dx = t.x - c.x, dy = t.y - c.y, d = Math.hypot(dx, dy), sp = 44 * dt;
 		c.moving = true; c.step += dt * 8;
 		if (d > 0.5) { if (Math.abs(dx) > Math.abs(dy)) c.face = dx > 0 ? 'right' : 'left'; else c.face = dy > 0 ? 'down' : 'up'; }
 		if (d <= sp) {
@@ -438,7 +909,7 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 
 	/* ---------- orchestrator behaviour ---------- */
 	function arrive(name) {
-		if (name === 'whiteboard') { orch.mode = 'plan'; wbWriting = true; wbPartial = reduced ? 1 : 0; }
+		if (name === 'whiteboard') { orch.mode = 'plan'; wbWriting = true; wbPartial = 0; }
 		else if (name === 'coffee') orch.mode = 'brew';
 		else if (name === 'front') orch.mode = 'front';
 	}
@@ -446,8 +917,9 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 		intent = name;
 		orch.path = []; orch.onArrive = null; orch.target = null; wbWriting = false;
 		if (name === 'floor') {
+			// Back to the armchair (S17): it walks there, then rests. Under reduced motion it is placed at once.
 			if (reduced) { placeAt(orch, spots.rest); orch.mode = 'idle'; }
-			else { orch.mode = 'idle'; orch.wait = 0.4; }
+			else { orch.mode = 'walk'; goTo(orch, spots.rest, () => { orch.mode = 'idle'; orch.sit = true; orch.wait = 0.5; }); }
 			return;
 		}
 		const spot = spots[name];
@@ -463,8 +935,13 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 				else if ((wbHold += dt) > 2) { wbLines = 1; wbChecks = 0; wbPartial = 0; wbHold = 0; }
 			}
 		} else if (orch.mode === 'idle' && !reduced) {
+			// Resting in the armchair (S17): now and then the head turns to one side and back, and nothing walks.
 			orch.wait -= dt;
-			/* Terminal design: the orchestrator never roams. It holds its spot between scripted intents. */
+			if (orch.wait <= 0) {
+				const turned = orch.face !== 'down';
+				orch.face = turned ? 'down' : pick(['left', 'right']);
+				orch.wait = turned ? rnd(3, 6) : 1.2;
+			}
 		}
 	}
 
@@ -489,8 +966,8 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 					B(Math.max(0, x), py, Math.min(52, W - Math.max(0, x)) - (x < 0 ? -x : 0), 6, base);
 					B(Math.max(0, x), py + 5, Math.min(52, W - Math.max(0, x)), 1, P.seam);
 					const gx = Math.max(0, x) + 6 + ((p * 11) % 17);
-					if (gx < W) B(gx, py + 2, 10, 1, goMix(base, P.user, 0.25));
-					if (gx + 22 < W) B(gx + 22, py + 3, 6, 1, goMix(base, P.user, 0.2));
+					if (gx < W) B(gx, py + 2, 10, 1, P.seam);
+					if (gx + 22 < W) B(gx + 22, py + 3, 6, 1, P.seam);
 				}
 			}
 			B(0, top + T - 2, W, 2, P.seam);
@@ -544,15 +1021,15 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 				B(x + 3 + b * 4, (r === 0 ? 9 : r === 1 ? 17 : 25) + (6 - bh), 3, bh, col);
 			}
 		}
-		/* Rug with border pattern and corner tassels. */
-		if (cfg.rug) {
-			const r = cfg.rug, x = r.x * T + 6, y = r.y * T + 6, w = r.w * T - 12, h = r.h * T - 12;
-			B(x, y, w, h, P.sel); B(x + 3, y + 3, w - 6, h - 6, goMix(P.sel, P.border, 0.4));
-			B(x + 6, y + 6, w - 12, h - 12, P.sel);
-			for (let i = 0; i < w - 12; i += 6) B(x + 6 + i, y + 6, 3, 1, P.border);
-			for (let i = 0; i < h - 12; i += 6) B(x + 6, y + 6 + i, 1, 3, P.border);
+		/* Rugs with a bordered pattern and corner tassels, one per rug in the config. */
+		for (const r of cfg.rugs) {
+			const x = r.x * T + 6, y = r.y * T + 6, w = r.w * T - 12, h = r.h * T - 12;
+			const cloth = goMix(P.sel, P.deep, 0.3);
+			B(x, y, w, h, cloth); B(x + 3, y + 3, w - 6, h - 6, goMix(cloth, P.border, 0.35));
+			B(x + 6, y + 6, w - 12, h - 12, cloth);
+			for (let i = 0; i < w - 12; i += 6) B(x + 6 + i, y + 6, 3, 1, P.violet);
+			for (let i = 0; i < h - 12; i += 6) B(x + 6, y + 6 + i, 1, 3, P.violet);
 			[[x + 1, y + 1], [x + w - 4, y + 1], [x + 1, y + h - 4], [x + w - 4, y + h - 4]].forEach(([a, b]) => { B(a, b, 3, 3, P.gold); B(a + 1, b + 1, 1, 1, P.text); });
-			B(x + w / 2 - 2, y + h / 2 - 2, 4, 4, P.deep);
 		}
 		/* Door and mat at the bottom edge. */
 		if (cfg.door) {
@@ -591,6 +1068,31 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 			B(x + 2, y + 3, 11, 5, P.bg); B(x + 2, y + 3, 11, 1, P.border);
 			B(x + 5, y + 10, 5, 2, P.border);
 		}
+	}
+
+	/* ---------- rooms (S17): walls, the pod's cross divider, sofas, armchair, judges' table, research screen frame ---------- */
+	function paintRooms() {
+		/* Walls and partitions: wood panels with a lit top edge and a shadow along the bottom, so no wall reads as floor. */
+		for (const w of cfg.walls) {
+			const x = w.x * T, y = w.y * T, ww = w.w * T, hh = w.h * T;
+			B(x, y, ww, hh, P.border); B(x, y, ww, 1, C.steelH);
+			B(x + ww - 2, y, 2, hh, shade(P.border)); B(x, y + hh - 2, ww, 2, P.sel);
+		}
+		/* Cross divider of the pod: steel panels between the four monitors. */
+		for (const a of cfg.podArms) {
+			const x = a.x * T, y = a.y * T, ww = a.w * T, hh = a.h * T;
+			B(x + 3, y + 3, ww - 6, hh - 6, P.steel); B(x + 3, y + 3, ww - 6, 1, C.steelH); B(x + 3, y + hh - 4, ww - 6, 1, shade(P.steel));
+		}
+		for (const sofa of cfg.sofas) drawSofa(sofa, sofa.y < cfg.coffeeTable.y ? 'n' : 's');
+		drawCoffeeTable(cfg.coffeeTable);
+		drawArmchair(cfg.armchair);
+		drawJudges();
+		for (const sh of cfg.shelves) drawShelf(sh);
+		/* Research screen frame on a stand; its content is drawn live. */
+		const r = cfg.researchScreen, x = r.x * T, y = r.y * T;
+		B(x + 5, y + 5, 2 * T - 10, 3 * T - 24, P.steel);
+		B(x + 7, y + 7, 2 * T - 14, 3 * T - 28, P.bg);
+		B(x + T - 3, y + 3 * T - 18, 6, 8, P.steel); B(x + T - 8, y + 3 * T - 10, 16, 3, P.border);
 	}
 
 	/* ---------- live room parts (drawn each frame) ---------- */
@@ -637,13 +1139,23 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 		R(x + 1, y + 19, 46, 3, C.woodS);
 		R(x + 2, y + 22, 4, 2, P.border); R(x + 40, y + 22, 4, 2, P.border);
 		R(x + 36, y + 9, 8, 3, C.woodS); R(x + 37, y + 10, 6, 1, P.gold);
-		/* Monitor: bezel, screen (screensaver when empty, the agent's work while it runs), stand. */
-		const mx = x + 14, my = y - 14;
-		R(mx, my, 20, 16, P.border); R(mx, my, 20, 1, P.steel);
-		R(mx + 1, my + 1, 18, 13, P.bg);
-		if (deskWorking[i]) drawWorkingScreen(mx + 1, my + 1, deskWorking[i], i);
-		else drawScreensaver(mx + 1, my + 1, 18, 13, i);
-		R(mx + 8, my + 16, 4, 3, P.steel); R(mx + 5, my + 19, 10, 2, P.border);
+		/* Monitor on the pod's centre side: above a face-up desk, below a face-down one. A face-down screen faces its sitter, so the
+		   camera sees its back, with an activity light in place of the screen. */
+		const mx = x + 14;
+		if (d.face === 'down') {
+			const my = y + 20;
+			R(mx, my, 20, 14, P.border); R(mx + 1, my + 1, 18, 11, P.steel); R(mx + 1, my + 1, 18, 1, P.sec);
+			R(mx + 8, my + 14, 4, 2, P.steel); R(mx + 5, my + 16, 10, 2, P.border);
+			R(mx + 15, my + 9, 2, 2, deskWorking[i] || P.dim);
+		} else {
+			/* Bezel, screen (screensaver when empty, the agent's work while it runs), stand. */
+			const my = y - 14;
+			R(mx, my, 20, 16, P.border); R(mx, my, 20, 1, P.steel);
+			R(mx + 1, my + 1, 18, 13, P.bg);
+			if (deskWorking[i]) drawWorkingScreen(mx + 1, my + 1, deskWorking[i], i);
+			else drawScreensaver(mx + 1, my + 1, 18, 13, i);
+			R(mx + 8, my + 16, 4, 3, P.steel); R(mx + 5, my + 19, 10, 2, P.border);
+		}
 		/* Keyboard, mouse, folder, empty mug. */
 		R(x + 9, y + 9, 14, 4, P.steel); R(x + 9, y + 9, 14, 1, P.sec);
 		for (let k = 0; k < 4; k++) R(x + 10 + k * 3, y + 10, 2, 1, P.border);
@@ -662,22 +1174,66 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 		R(px - 2, py + 4, 4, 3, P.border); R(px - 5, py + 7, 2, 1, P.bg); R(px + 3, py + 7, 2, 1, P.bg);
 	}
 
-	function drawTable() {
-		const x = tb.x * T, y = tb.y * T, w = tb.w * T, h = tb.h * T;
-		const topH = h - 12, edge = y + 4 + topH;
-		R(x + 2, y + 4, w - 4, topH, C.woodH); R(x + 2, y + 4, w - 4, 1, P.gold);
-		R(x + 2, edge, w - 4, 4, C.woodS); R(x + 2, edge + 4, w - 4, 2, P.border);
-		R(x + 4, y + h - 2, 3, 2, P.bg); R(x + w - 7, y + h - 2, 3, 2, P.bg);
-		/* Laptop (closed in T2: no sync meeting yet), papers, vase with flowers. */
-		const lx = x + 6, ly = y + 5, lh = Math.max(5, topH - 5);
-		R(lx, ly, 14, lh, P.steel); R(lx + 1, ly + 1, 12, lh - 2, P.bg);
-		R(lx - 2, ly + lh - 1, 18, 2, P.sec);
-		R(x + 26, y + 6, 8, 5, P.text); R(x + 26, y + 6, 8, 1, P.sec);
-		R(x + 28, y + 8, 4, 1, P.steel);
-		const vx = x + w - 16, vy = y + 4;
-		R(vx, vy + 8, 8, 8, C.pinkS); R(vx + 1, vy + 8, 6, 1, C.pink); R(vx - 1, vy + 14, 10, 2, P.deep);
-		R(vx + 3, vy + 2, 1, 6, C.leafS); R(vx + 1, vy - 1, 3, 3, C.pink); R(vx + 5, vy + 1, 3, 2, P.violet);
-		R(vx - 3, vy + 3, 3, 3, C.leaf); R(vx + 7, vy + 4, 3, 3, C.leaf);
+	/* Lounge sofa (S16, S17): a pink cushion row with its backrest on the wall side, `back` 'n' or 's'. The staff sit on it, so it is drawn under them. */
+	function drawSofa(sofa, back) {
+		const x = sofa.x * T, y = sofa.y * T, w = sofa.w * T;
+		const rest = back === 'n' ? y + 2 : y + T - 8, seat = back === 'n' ? y + 8 : y + 4;
+		B(x + 1, rest, w - 2, 6, C.pinkS); B(x + 1, rest, w - 2, 1, C.pink);
+		B(x, seat, w, 12, C.pink); B(x, seat, w, 1, C.pinkH); B(x, seat + 11, w, 1, C.pinkS);
+		for (let i = 1; i < sofa.w; i++) B(x + i * T, seat + 1, 1, 10, C.pinkS);
+		B(x - 1, y + 4, 2, T - 6, C.pinkS); B(x + w - 1, y + 4, 2, T - 6, C.pinkS);
+		B(x + 1, seat + 12, w - 2, 2, P.border);
+	}
+	/* Coffee table between the sofas, with two cups. */
+	function drawCoffeeTable(t) {
+		const x = t.x * T, y = t.y * T, w = t.w * T;
+		B(x + 3, y + 8, w - 6, 8, C.woodH); B(x + 3, y + 8, w - 6, 1, P.gold); B(x + 3, y + 15, w - 6, 2, C.woodS);
+		B(x + 4, y + 17, 2, 4, P.border); B(x + w - 6, y + 17, 2, 4, P.border);
+		B(x + 7, y + 5, 3, 3, P.text); B(x + 13, y + 5, 3, 3, P.text);
+	}
+	/* Orchestrator's armchair: its back on the north side, where the orchestrator's head turns from. */
+	function drawArmchair(a) {
+		const x = a.x * T, y = a.y * T, w = a.w * T, h = a.h * T;
+		B(x + 1, y + 1, w - 2, 8, C.pinkS); B(x + 1, y + 1, w - 2, 1, C.pink);
+		B(x, y + 9, w, h - 9, C.pink); B(x, y + 9, w, 1, C.pinkH);
+		B(x, y + 9, 3, h - 9, C.pinkS); B(x + w - 3, y + 9, 3, h - 9, C.pinkS);
+		B(x + 3, y + h - 4, w - 6, 3, C.pinkS);
+		B(x + 2, y + h - 1, 2, 2, P.border); B(x + w - 4, y + h - 1, 2, 2, P.border);
+	}
+	/* Judges' table (S7): a long table with papers and a gavel, and two chairs on its north side. T5 seats the judges here. */
+	function drawJudges() {
+		const j = cfg.judges, x = j.x * T, y = j.y * T, w = j.w * T, h = j.h * T;
+		B(x + 2, y + 6, w - 4, h - 10, C.woodH); B(x + 2, y + 6, w - 4, 1, P.gold);
+		B(x + 2, y + h - 4, w - 4, 3, C.woodS); B(x + 2, y + h - 1, 3, 1, P.border); B(x + w - 5, y + h - 1, 3, 1, P.border);
+		B(x + 8, y + 9, 8, 6, P.text); B(x + 8, y + 9, 8, 1, P.sec); B(x + 10, y + 12, 4, 1, P.steel);
+		B(x + w - 14, y + 10, 6, 3, P.border); B(x + w - 14, y + 10, 6, 1, P.steel); B(x + w - 11, y + 13, 1, 4, C.woodS);
+		for (const c of cfg.judgeSeats) {
+			const cx = c.x * T, cy = c.y * T;
+			B(cx + 4, cy + 3, 16, 9, P.border); B(cx + 5, cy + 4, 14, 7, P.sel);
+			B(cx + 2, cy + 12, 20, 6, P.border); B(cx + 3, cy + 13, 18, 4, P.sel);
+		}
+	}
+	/* Archive shelf (S17): a case with folders in two rows, on a plinth. */
+	function drawShelf(sh) {
+		const x = sh.x * T, y = sh.y * T, w = sh.w * T;
+		B(x + 1, y + 2, w - 2, T - 4, P.border); B(x + 3, y + 4, w - 6, 8, P.bg); B(x + 3, y + 14, w - 6, 6, P.bg);
+		B(x + 3, y + 12, w - 6, 2, C.steelH);
+		for (let i = 0; i < w - 8; i += 4) {
+			const c = [P.sand, P.blue, P.gold, P.green, P.purple][(i / 4 + sh.y) % 5];
+			B(x + 4 + i, y + 5, 3, 6, c); B(x + 4 + i, y + 15, 3, 4, shade(c));
+		}
+		B(x + 1, y + T - 2, w - 2, 2, P.seam);
+	}
+	/* Research screen (S17): charts and code lines. They move while a verify agent works and stay flat while the lab is empty. */
+	function drawResearch() {
+		const r = cfg.researchScreen, sx = r.x * T + 7, sy = r.y * T + 7, iw = 2 * T - 14, ih = 3 * T - 28;
+		const busy = deskWorking.slice(cfg.desks.length).some(Boolean) && !reduced;
+		for (let k = 0; k < 4; k++) R(sx + 2, sy + 2 + k * 3, 5 + Math.floor(hash(k + 4) * (iw - 12)), 1, k === 0 ? P.gold : P.steel);
+		const bars = [P.blue, P.purple, P.sand, P.green, P.violet, P.sky];
+		bars.forEach((c, k) => {
+			const height = busy ? 3 + Math.round(triangle(time * 0.7 + k * 0.31) * (ih - 14)) : 4 + k;
+			R(sx + 3 + k * 5, sy + ih - 3 - height, 3, height, c);
+		});
 	}
 
 	/* The pot level follows the eased fill; the LED is red while brewing. */
@@ -936,10 +1492,10 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 		const sw = c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
 		g.globalAlpha = 0.35; R(fx - 9, fy - 1, 18, 2, INK); g.globalAlpha = 1;
 		const { rows, flip, fam } = headFor(c);
-		drawFigure(ox, oy, { color: ORCH_COLOR, walk, sw, sit: false });
+		drawFigure(ox, oy, { color: ORCH_COLOR, walk, sw, sit: c.sit });
 		const map = { K: INK, H: ORCH_HAIR, h: shade(ORCH_HAIR), l: hi(ORCH_HAIR), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep };
 		sprite(rows, map, ox, oy, flip);
-		const blink = !reduced && !c.moving && Math.floor(time) % 11 === 5 && time % 1 < 0.6;
+		const blink = !reduced && Math.floor(time * 10) % 37 === 0;
 		if (blink && fam === 'down') { R(ox + 5, oy + 7, 2, 2, SKIN); R(ox + 5, oy + 8, 2, 1, INK); }
 		drawOrchHead(ox, oy, fam, flip);
 		drawOrchTie(ox, oy);
@@ -968,7 +1524,7 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 	/* Sprites follow the approved design (design/agent-office/01-overworld-hq.html: drawBody, drawKit), redrawn at 24x36 (T9). */
 	const LEAVE_DELAY = 1.6;
 	const residents = new Map();
-	let deskWorking = cfg.desks.map(() => null);
+	let deskWorking = allDesks.map(() => null);
 	/* Explore: powder blue, safari hat, binoculars. Worker: mint or sky, hard hat, tool belt. Verify: pink, lab coat, glasses, clipboard. */
 	const lookFor = a => {
 		if (a.role === 'explore') return { color: P.blue, hair: P.gold, kit: 'explore' };
@@ -976,7 +1532,7 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 		// A worker that takes the lounge's staff member keeps the staff look, so it reads as the same person (S16).
 		return a.claimed || strHash(a.id) % 2 === 0 ? { color: P.green, hair: P.purple, kit: 'worker' } : { color: P.sky, hair: P.steel, kit: 'worker' };
 	};
-	const seatSpot = seat => (seat.zone === 'desk' ? deskSpot(cfg.desks[seat.index]) : benchSpot(seat.index));
+	const seatSpot = seat => (seat.zone === 'verify' ? deskSpot(cfg.verifyDesks[seat.index]) : seat.zone === 'desk' ? deskSpot(cfg.desks[seat.index]) : benchSpot(seat.index));
 	const loungeSpot = role => ({ tx: cfg.lounge[role].x, ty: cfg.lounge[role].y, face: cfg.lounge[role].face });
 	const sameSeat = (a, b) => !!a && !!b && a.zone === b.zone && a.index === b.index;
 	/* Reduced motion: an agent snaps to its seat. Otherwise it walks there. */
@@ -1110,7 +1666,7 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 	const SIP_OFFSET = { explore: 1.5, worker: 4.5, verify: 7 };
 	const staffFigures = Object.keys(cfg.lounge).map(role => {
 		const spot = cfg.lounge[role], id = `staff-${role}`;
-		return { id, role, x: FX(spot.x), y: FY(spot.y), face: spot.face, moving: false, sit: false, typing: false, sipping: false, step: 0, ...lookFor({ id, role, claimed: true }) };
+		return { id, role, x: FX(spot.x), y: FY(spot.y), face: spot.face, moving: false, sit: !!spot.sit, typing: false, sipping: false, step: 0, ...lookFor({ id, role, claimed: true }) };
 	});
 	/* The staff members the scene reports present this frame. */
 	let presentStaff = [];
@@ -1133,15 +1689,16 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 		syncResidents(next.agents || []);
 		const present = new Set((next.staff || []).filter(s => s.present).map(s => s.role));
 		presentStaff = staffFigures.filter(f => present.has(f.role));
-		deskWorking = cfg.desks.map((_, i) => {
-			const owner = (next.agents || []).find(a => a.seat && a.seat.zone === 'desk' && a.seat.index === i && a.status === 'running' && !a.leaving);
+		deskWorking = allDesks.map((_, i) => {
+			const zone = i < cfg.desks.length ? 'desk' : 'verify', index = i < cfg.desks.length ? i : i - cfg.desks.length;
+			const owner = (next.agents || []).find(a => a.seat && a.seat.zone === zone && a.seat.index === index && a.status === 'running' && !a.leaving);
 			return owner ? lookFor(owner).color : null;
 		});
 	}
 
 	/* Same rule as scene-reducer featureActive(): a tool is running, or the feature is inside its linger. Read every frame so a prop goes idle on time. */
 	function updateLit() {
-		const wall = Date.now();
+		const wall = demoClockMs();
 		for (const p of FEATURE_PROPS) {
 			const entry = view && view.features ? view.features[p.feature] : undefined;
 			lit[p.feature] = !!entry && (!!entry.running || wall < entry.until);
@@ -1155,6 +1712,7 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 		updateOrch(dt);
 		updateResidents(dt);
 		updateStaff();
+		if (camera) updateCamera(dt);
 		potShown += (potTarget - potShown) * Math.min(1, dt * 1.2);
 		brewingNow = !!(view && view.brewing) && orch.mode === 'brew';
 	}
@@ -1165,14 +1723,14 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 		drawClockHands();
 		drawWhiteboard();
 		const list = [];
-		cfg.desks.forEach((d, i) => {
+		allDesks.forEach((d, i) => {
 			const s = deskSpot(d), chairY = s.py - CHAIR_LIFT;
 			list.push({ k: (d.y + 1) * T - 1, f: () => drawDesk(d, i) });
 			/* Both chair halves sort before the resident on the seat, so a seated figure covers its chair. */
 			list.push({ k: s.py - 0.6, f: () => drawChair(s.px, chairY, false) });
 			list.push({ k: s.py - 0.5, f: () => drawChair(s.px, chairY, true) });
 		});
-		list.push({ k: (tb.y + tb.h) * T - 1, f: drawTable });
+		list.push({ k: (cfg.researchScreen.y + cfg.researchScreen.h) * T - 1, f: drawResearch });
 		list.push({ k: (cf.y + 1) * T - 1, f: drawCoffee });
 		cfg.plants.forEach(p => list.push({ k: (p.y + 1) * T - 1, f: () => drawPlant(p) }));
 		FEATURE_PROPS.forEach(p => list.push({ k: (p.y + p.h) * T - 1, f: () => PROP_DRAWERS[p.feature](p, lit[p.feature]) }));
@@ -1187,89 +1745,204 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 		if (speaker) drawBubble(Math.round(speaker.x) - 9, Math.round(speaker.y) - 35 - 14, 'dots');
 	}
 
-	/* ---------- terminal driver ---------- */
-	/* The page owns the clock. step() moves the room; advance() also repaints, and only when the visible pose changed. */
-	let lastKey = '';
-	function poseKey() {
-		const chat = chattingStaff();
-		const parts = [Math.round(orch.x), Math.round(orch.y), orch.face, orch.moving, Math.floor(orch.step) % 4, orch.mode, orch.bubble ? orch.bubble.icon : '', brewingNow, Math.round(potShown * 100), wbLines, wbChecks, Math.round(wbPartial * 10), Math.floor(time) % 11 === 5, deskWorking.join(','), chat ? chat.id : ''];
-		for (const c of residents.values()) parts.push(c.id, Math.round(c.x), Math.round(c.y), c.face, c.moving, Math.floor(c.step) % 4, c.sit, c.leaving, c.bubble ? c.bubble.icon : '');
-		for (const f of presentStaff) parts.push(f.id, Math.round(f.x), Math.round(f.y), f.sipping);
-		for (const p of FEATURE_PROPS) parts.push(!!lit[p.feature]);
-		return parts.join('|');
+	/* ---------- story camera (T14) ---------- */
+	/* Share of the remaining gap closed per second when the camera follows a new actor. */
+	const CAMERA_EASE = 3;
+	/* Where a camera target is right now, in room pixels. Null when it cannot be found (for example a resident that left). */
+	function cameraPoint(target) {
+		if (!target) return null;
+		if (typeof target.x === 'number' && typeof target.y === 'number') return { x: target.x, y: target.y };
+		if (target.kind === 'orchestrator') return { x: orch.x, y: orch.y - 20 };
+		if (target.kind === 'resident') {
+			const c = residents.get(target.id);
+			return c ? { x: c.x, y: c.y - 20 } : null;
+		}
+		if (target.kind === 'feature') {
+			const p = FEATURE_PROPS.find(q => q.feature === target.feature);
+			return p ? { x: (p.x + p.w / 2) * T, y: (p.y + p.h / 2) * T } : null;
+		}
+		return null;
 	}
-	/* Someone walks, types, writes or a prop is lit: the page steps at 5 fps. Otherwise it wakes twice a second for the idle gestures. */
-	function busy() {
-		if (orch.moving || orch.mode === 'plan' || brewingNow) return true;
-		for (const c of residents.values()) if (c.moving || c.typing || c.leaving) return true;
-		return FEATURE_PROPS.some(p => lit[p.feature]);
+	/* Moves the camera centre toward its target, then clamps it so the view never shows past the room. A view wider or taller than the room is centred. */
+	function updateCamera(dt) {
+		const wanted = cameraPoint(camera.target);
+		if (wanted && cam.placed) {
+			const k = reduced ? 1 : 1 - Math.exp(-CAMERA_EASE * dt);
+			cam.x += (wanted.x - cam.x) * k;
+			cam.y += (wanted.y - cam.y) * k;
+		} else if (wanted) {
+			/* First placement snaps: the camera does not slide in from the room centre. */
+			cam.x = wanted.x; cam.y = wanted.y; cam.placed = true;
+		} else if (!cam.placed) {
+			cam.x = W / 2; cam.y = H / 2; cam.placed = true;
+		}
+		const halfW = camera.vw / (2 * camera.zoom), halfH = camera.vh / (2 * camera.zoom);
+		cam.x = 2 * halfW >= W ? W / 2 : Math.min(W - halfW, Math.max(halfW, cam.x));
+		cam.y = 2 * halfH >= H ? H / 2 : Math.min(H - halfH, Math.max(halfH, cam.y));
+		/* Whole-pixel offsets keep the scaled pixels crisp. */
+		cam.tx = Math.round(camera.vw / 2 - cam.x * camera.zoom);
+		cam.ty = Math.round(camera.vh / 2 - cam.y * camera.zoom);
 	}
-	/* Seconds until the next idle gesture starts or stops: a sip, a chat turn or a blink. The page sleeps until then, so an idle room holds no fixed timer. */
-	function idleWait() {
-		let d = Infinity;
-		for (const f of staffFigures) { const ph = (time + SIP_OFFSET[f.role]) % SIP_EVERY; d = Math.min(d, SIP_EVERY - ph, ph < SIP_FOR ? SIP_FOR - ph : Infinity); }
-		const ch = time % CHAT_EVERY; d = Math.min(d, CHAT_EVERY - ch, ch < CHAT_FOR ? CHAT_FOR - ch : Infinity);
-		const fr = time % 1; d = Math.min(d, 1 - fr, fr < 0.6 ? 0.6 - fr : Infinity);
-		return d;
+	/* Without a camera the frame is drawn exactly as before. With one, the view is cleared and the room is drawn through the zoom. */
+	function paint() {
+		if (!camera) { draw(); return; }
+		g.fillStyle = P.bg;
+		g.fillRect(0, 0, camera.vw, camera.vh);
+		g.save();
+		g.setTransform(camera.zoom, 0, 0, camera.zoom, cam.tx, cam.ty);
+		draw();
+		g.restore();
 	}
+	/* Story layout on: the canvas takes the window's size and the room is drawn at `zoom` around the camera. Null: back to the room's own size. */
+	function setCamera(next) {
+		if (!next) {
+			camera = null;
+			cam.placed = false;
+			canvas.width = W; canvas.height = H;
+			g.imageSmoothingEnabled = false;
+			return;
+		}
+		camera = {
+			zoom: Math.max(1, Math.floor(next.zoom)),
+			vw: Math.max(1, Math.round(next.width)),
+			vh: Math.max(1, Math.round(next.height)),
+			target: next.target ?? null,
+		};
+		/* Resizing a canvas resets its context state, so it is only resized when the size changes; the smoothing flag is set again either way. */
+		if (canvas.width !== camera.vw) canvas.width = camera.vw;
+		if (canvas.height !== camera.vh) canvas.height = camera.vh;
+		g.imageSmoothingEnabled = false;
+	}
+
+	/* ---------- terminal driver: the page steps the room, no frame loop runs here ---------- */
+	const onMotionChange = e => { reduced = e.matches; };
+	if (reducedQuery && reducedQuery.addEventListener) reducedQuery.addEventListener('change', onMotionChange);
+
+	/* Advances the room by dt seconds without painting (pre-roll of a pinned moment). */
 	function step(dt) { time += dt; update(dt); }
-	function advance(dt) {
-		step(dt);
-		const k = poseKey();
-		if (k !== lastKey) { lastKey = k; draw(); }
+	/* Advances the room and paints one frame. */
+	function advance(dt) { step(dt); paint(); }
+	/* Acting: someone walks, writes, types or sips, or a prop is animating. The page steps at 5 fps only then. */
+	function busy() {
+		if (orch.moving || wbWriting) return true;
+		for (const c of residents.values()) if (c.moving || c.typing) return true;
+		if (presentStaff.some(f => f.sipping)) return true;
+		if (view && view.features && Object.values(view.features).some(e => e.running)) return true;
+		return Math.abs(potShown - potTarget) > 0.001;
 	}
-	function paintNow() { lastKey = poseKey(); draw(); }
+	/* Seconds until something visibly changes while idle: an orchestrator head turn, a chat switch, a sip, a prop linger ending. */
+	function idleWait() {
+		const nowMs = demoClockMs();
+		let wait = 1;
+		if (orch.mode === 'idle' && !reduced) wait = Math.min(wait, orch.wait);
+		if (presentStaff.length) {
+			wait = Math.min(wait, CHAT_EVERY - (time % CHAT_EVERY));
+			for (const f of presentStaff) {
+				const p = (time + SIP_OFFSET[f.role]) % SIP_EVERY;
+				wait = Math.min(wait, p < SIP_FOR ? SIP_FOR - p : SIP_EVERY - p);
+			}
+		}
+		if (view && view.features) for (const e of Object.values(view.features)) if (!e.running && e.until > nowMs) wait = Math.min(wait, (e.until - nowMs) / 1000);
+		return Math.max(0.05, wait);
+	}
 
 	paintStatic();
+	paintRooms();
+	/* Start from the rest spot until the first scene arrives; the page calls setScene straight after. */
 	applyIntent('floor');
-	return { setScene, step, advance, paintNow, busy, idleWait };
+
+	return {
+		setScene, setCamera, step, advance, busy, idleWait,
+		paintNow() { paint(); },
+		destroy() {
+			if (reducedQuery && reducedQuery.removeEventListener) reducedQuery.removeEventListener('change', onMotionChange);
+		}
+	};
 }
 
-/* Terminal stage, design 02: a scripted run of the real office engine above, and the game-panel UI around it. */
-const LOOP = 80;
-const ROLES = ['explore', 'worker', 'verify'];
-/* A claimed subagent takes its role's staff member: the staff hides and the claimant walks out from the lounge. */
-const crew = (role, where, status) => ({ id: 'gentle-ai-' + role, role, claimed: true, seat: where, status: status || 'running' });
-const walkOut = role => ({ ...crew(role, { zone: 'desk', index: 0 }, 'completed'), leaving: true });
-const guest = (id, where, status, extra) => ({ id, role: 'worker', seat: where, status, instant: false, ...(extra || {}) });
-const desk = index => ({ zone: 'desk', index });
-const lounge = index => ({ zone: 'lounge', index });
-const staffOut = (...hidden) => ROLES.map(role => ({ role, present: !hidden.includes(role) }));
+/* Hallway margins (S17, T18): the room's wall band, rail, wainscot and planks carried on to both sides, shown at 2x.
+   A window and a plant on each side keep the margin from reading as empty space. 30 x 360 px drawn, 60 x 720 shown. */
+function paintHall(cv, side) {
+	const W = cv.width, H = cv.height, x = cv.getContext('2d');
+	x.imageSmoothingEnabled = false;
+	const B = (px, py, w, h, c) => { x.fillStyle = c; x.fillRect(px, py, w, h); };
+	/* Wall band: same rows as the room (crown, wallpaper, rail, wainscot, baseboard). */
+	B(0, 0, W, 6, P.border); B(0, 0, W, 1, P.deep); B(0, 6, W, 2, shade(P.border));
+	B(0, 8, W, 22, P.sel);
+	B(0, 30, W, 2, P.border); B(0, 32, W, 2, P.deep);
+	B(0, 34, W, 12, P.panel);
+	for (let px = 0; px < W; px += 12) { B(px, 36, 1, 10, P.border); B(px + 1, 36, 1, 10, P.bg); }
+	B(0, 46, W, 2, P.panel);
+	/* Planks: the room's floor rows, staggered per row, low contrast between boards. */
+	for (let row = 2; row < 15; row++) for (let p = 0; p < 4; p++) {
+		const py = row * 24 + p * 6;
+		B(0, py, W, 6, P.dim);
+		B(0, py + 5, W, 1, P.seam);
+		B(((row * 7 + p * 5) % 13) * 2, py + 2, 8, 1, P.seam);
+	}
+	/* Window in the wall band, with a sill. */
+	const wx = side === 'left' ? 6 : 5;
+	B(wx - 1, 7, 18, 22, P.border); B(wx, 8, 16, 20, P.bg);
+	for (let s = 0; s < 5; s++) B(wx, 8 + s * 4, 16, 4, s % 2 ? P.user : P.sel);
+	B(wx + 7, 8, 2, 20, P.border); B(wx, 16, 16, 2, P.border);
+	B(wx - 2, 29, 20, 2, P.border);
+	/* Plant on the floor: a pot with a gold rim and a fern of green leaves. */
+	const px0 = side === 'left' ? 8 : 4, base = 334;
+	const leaves = side === 'left' ? [[10, 296, 3, 36], [14, 288, 3, 44], [6, 306, 4, 20], [17, 304, 4, 22]] : [[6, 300, 3, 32], [10, 290, 3, 42], [13, 308, 4, 18], [3, 312, 4, 14]];
+	for (const [lx, ly, lw, lh] of leaves) { B(px0 + lx, ly, lw, lh, P.green); B(px0 + lx + lw - 1, ly, 1, lh, shade(P.green)); }
+	B(px0 + 4, base - 14, 12, 12, P.sand); B(px0 + 3, base - 16, 14, 3, P.gold); B(px0 + 4, base - 2, 12, 2, P.border);
+	/* Sconce on the right margin, lit gold. */
+	if (side === 'right') { B(22, 18, 4, 8, P.border); B(23, 16, 2, 2, P.gold); }
+}
 
-const BASE = {
-	intent: 'coffee', bubble: null, potLevel: 0.8, brewing: false, features: {}, ask: null,
-	cost: '$0.012', usage: 18,
-	narr: ['orchestrator', 'sipping at the counter. Explore and Worker are on break by the coffee machine.'],
-	party: { orch: 'at the counter', explore: 'on break', worker: 'on break', verify: 'on break' },
-	agents: [], staff: staffOut()
-};
-const scene = o => ({ ...BASE, ...o, party: { ...BASE.party, ...(o.party || {}) } });
-
-/* Timeline in seconds. Each entry is the full scene from its start until the next one.
-   A walk takes about 4 to 8 s, so an intent is sent before the event that needs it: the ask opens once the orchestrator is at the front. */
-const W_OUT = staffOut('worker'), V_OUT = staffOut('verify'), E_OUT = staffOut('explore');
-const KEYS = [
-	[0, scene({})],
-	[4, scene({ intent: 'whiteboard', bubble: 'idea', narr: ['orchestrator', 'planning the explore task on the whiteboard.'], party: { orch: 'planning' } })],
-	[7, scene({ intent: 'whiteboard', bubble: 'wrench', features: { mcp: { running: true, until: 0 } }, agents: [crew('explore', desk(0))], staff: E_OUT, cost: '$0.024', usage: 21, narr: ['orchestrator', 'gentle-ai-explore takes desk 1 and searches the code.'], party: { orch: 'writing on the whiteboard', explore: 'running · desk 1' } })],
-	[20, scene({ intent: 'whiteboard', bubble: 'check', agents: [walkOut('explore')], staff: E_OUT, cost: '$0.041', usage: 24, narr: ['orchestrator', 'Explore finished in 17s and walks back to its spot by the counter.'], party: { orch: 'plan ready', explore: 'done · walking back' } })],
-	[24, scene({ bubble: 'cup', potLevel: 0.62, agents: [walkOut('explore')], staff: E_OUT, cost: '$0.041', usage: 24, narr: ['orchestrator', 'context is at 38%, so the coffee pot is half empty.'], party: { explore: 'done · walking back' } })],
-	[30, scene({ potLevel: 0.62, cost: '$0.041', usage: 24, narr: ['orchestrator', 'Explore is back on break. Worker is next in line.'] })],
-	[36, scene({ intent: 'front', potLevel: 0.62, agents: [crew('worker', desk(1))], staff: W_OUT, cost: '$0.058', usage: 27, narr: ['orchestrator', 'gentle-ai-worker takes desk 2 and edits web/office.css.'], party: { orch: 'walking to the front', worker: 'running · desk 2' } })],
-	[44, scene({ intent: 'front', bubble: 'question', potLevel: 0.62, features: { ask: { running: true, until: 0 } }, agents: [crew('worker', desk(1))], staff: W_OUT, ask: { question: 'Which branch should the worker use for the CSS change?', options: ['feat/gentle-office (current)', 'main'] }, cost: '$0.058', usage: 27, narr: ['ask_user', 'Which branch should the worker use for the CSS change?'], party: { orch: 'waiting for your answer', worker: 'running · desk 2' } })],
-	[50, scene({ potLevel: 0.62, agents: [walkOut('worker')], staff: W_OUT, cost: '$0.071', usage: 29, narr: ['orchestrator', 'ask closed. Worker is done and walks back to its spot.'], party: { orch: 'walking back to the counter', worker: 'done · walking back' } })],
-	[52, scene({ potLevel: 0.62, agents: [walkOut('worker'), guest('extra-worker', desk(3), 'running')], staff: W_OUT, cost: '$0.071', usage: 29, narr: ['orchestrator', 'a second worker walks in from the door to desk 4.'], party: { worker: 'done · walking back' } })],
-	[58, scene({ potLevel: 0.62, agents: [guest('extra-worker', desk(3), 'running')], cost: '$0.083', usage: 30, narr: ['orchestrator', 'Worker is back on break. Desk 4 is still running.'], party: { worker: 'running · desk 4' } })],
-	[60, scene({ potLevel: 0.62, agents: [guest('extra-worker', desk(3), 'completed', { leaving: true })], cost: '$0.083', usage: 30, narr: ['orchestrator', 'second worker finished and walks out the door.'], party: { worker: 'on break' } })],
-	[62, scene({ potLevel: 0.62, staff: V_OUT, agents: [crew('verify', desk(2))], cost: '$0.094', usage: 31, narr: ['orchestrator', 'gentle-ai-verify takes desk 3 and reviews the diff.'], party: { verify: 'running · desk 3' } })],
-	[72, scene({ potLevel: 0.62, staff: V_OUT, agents: [walkOut('verify')], cost: '$0.101', usage: 31, narr: ['orchestrator', 'verify passed and walks back to its spot.'], party: { verify: 'done · walking back' } })],
-	[78, scene({ potLevel: 0.62, cost: '$0.101', usage: 31, narr: ['orchestrator', 'coffee break. Waiting for your next prompt.'] })]
-];
-
+/* Terminal stage, design 02: the Gentle Office engine and scene reducer from web/ at HEAD, driven by a scripted run of real events.
+   The page owns the clock: the room steps at 5 fps only while someone acts, sleeps otherwise, paused on blur, hidden or off-screen. */
 const $ = id => document.getElementById(id);
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const LOOP = 80;
+let demoT = 0, cycleStart = 0, nextBeat = 0, timer = 0, running = false;
+/* The engine's clock for feature lingers, in the same milliseconds as the reducer's `at`. */
+const demoClockMs = () => demoT * 1000;
 
-/* Pixel avatars: the engine's own head map, with a hat per role. */
+/* Contract actions (scene-reducer.js reduceScene). Each event beat carries its `at` when it fires. */
+const dmSnap = percent => ({ type: 'snapshot', snapshot: { v: 1, orchestrator: { state: 'idle' }, context: { percent }, agents: [], compaction: null } });
+const dmEv = event => ({ type: 'event', event: { v: 1, ...event } });
+const dmOrch = (state, toolName) => dmEv({ type: 'orchestrator', state, ...(toolName ? { toolName } : {}) });
+const dmCtx = percent => dmEv({ type: 'context', percent });
+const dmAgent = (id, role, status) => dmEv({ type: 'subagent', id, agent: 'gentle-ai-' + role, role, label: 'gentle-ai-' + role, status });
+const dmTool = (toolName, phase) => dmEv({ type: 'tool', toolName, phase, ok: true });
+const dmFeat = (feature, detail) => dmEv({ type: 'feature', feature, detail });
+const dmComp = phase => dmEv({ type: 'compaction', phase });
+
+/* Scripted run, seconds into the loop. Each beat fires its real events, then sets the page text (caption, cost, usage, ask). */
+const BEATS = [
+	{ at: 0, actions: [dmSnap(20)], page: { narr: ['orchestrator', 'resting in its office. Explore, Worker and Verify are on break on the lounge sofas.'], cost: '$0.012', usage: 18, ask: null } },
+	{ at: 4, actions: [dmOrch('thinking')], page: { narr: ['orchestrator', 'planning the explore task on the whiteboard.'] } },
+	{ at: 7, actions: [dmOrch('tool', 'subagent_run'), dmAgent('explore-1', 'explore', 'running')], page: { narr: ['orchestrator', 'gentle-ai-explore leaves its sofa, takes a desk and searches the code.'], cost: '$0.024', usage: 21 } },
+	{ at: 8, actions: [dmFeat('codegraph', 'codegraph_explore')], page: {} },
+	{ at: 18, actions: [dmTool('codegraph_explore', 'end')], page: {} },
+	{ at: 20, actions: [dmAgent('explore-1', 'explore', 'completed')], page: { narr: ['orchestrator', 'Explore finished in 13s and walks back to its sofa.'], cost: '$0.041', usage: 24 } },
+	{ at: 24, actions: [dmCtx(38)], page: { narr: ['orchestrator', 'context is at 38%, so 62% of the coffee pot is left.'] } },
+	{ at: 30, actions: [], page: { narr: ['orchestrator', 'Explore is back on its sofa. Worker is next in line.'] } },
+	{ at: 36, actions: [dmAgent('worker-1', 'worker', 'running')], page: { narr: ['orchestrator', 'gentle-ai-worker takes a desk and edits web/office.css.'], cost: '$0.058', usage: 27 } },
+	{ at: 44, actions: [dmOrch('waiting-user', 'ask_user'), dmFeat('ask', 'ask_user')], page: { narr: ['ask_user', 'Which branch should the worker use for the CSS change?'], ask: { question: 'Which branch should the worker use for the CSS change?', options: ['feat/gentle-office (current)', 'main'] } } },
+	{ at: 50, actions: [dmTool('ask_user', 'end'), dmOrch('thinking'), dmAgent('worker-1', 'worker', 'completed')], page: { narr: ['orchestrator', 'ask closed. Worker is done and walks back to its sofa.'], cost: '$0.071', usage: 29, ask: null } },
+	{ at: 52, actions: [dmAgent('worker-2', 'worker', 'running')], page: { narr: ['orchestrator', 'a second worker walks in from the door and takes a free desk.'] } },
+	{ at: 58, actions: [], page: { narr: ['orchestrator', 'Worker is back on its sofa. The second worker is still at its desk.'], cost: '$0.083', usage: 30 } },
+	{ at: 60, actions: [dmAgent('worker-2', 'worker', 'completed')], page: { narr: ['orchestrator', 'the second worker finished and walks out the door.'] } },
+	{ at: 62, actions: [dmAgent('verify-1', 'verify', 'running')], page: { narr: ['orchestrator', 'gentle-ai-verify takes the lab desk and reviews the diff.'], cost: '$0.094', usage: 31 } },
+	{ at: 72, actions: [dmAgent('verify-1', 'verify', 'completed')], page: { narr: ['orchestrator', 'verify passed and walks back to its spot by the lab door.'], cost: '$0.101' } },
+	{ at: 74, actions: [dmOrch('idle'), dmComp('start')], page: { narr: ['orchestrator', 'context compacting: a fresh pot is brewing at the counter.'] } },
+	{ at: 79, actions: [dmComp('end')], page: { narr: ['orchestrator', 'fresh pot brewed. Back to the office for your next prompt.'] } }
+];
+
+/* Page state the beats set; the HUD, caption, party and ask dialog read it. */
+const page = { narr: ['orchestrator', ''], cost: '$0.012', usage: 18, ask: null };
+
+let scene = initialScene(OFFICE_CONFIG.desks.length, OFFICE_CONFIG.verifyDesks.length);
+let view = sceneView(scene);
+
+/* Faces for the party list: the engine's own head map with a hat per role. */
 function drawFace(cv, kind) {
 	const x = cv.getContext('2d');
 	x.imageSmoothingEnabled = false;
@@ -1282,69 +1955,97 @@ function drawFace(cv, kind) {
 	if (kind === 'worker') { put(P.gold, 5, 3, 14, 5); put(P.text, 7, 4, 3, 1); put(P.gold, 3, 7, 18, 2); }
 	if (kind === 'verify') { put(P.border, 5, 7, 14, 2); }
 }
-document.querySelectorAll('canvas[data-face]').forEach(cv => drawFace(cv, cv.dataset.face));
 
-/* The HUD, caption, party and ask dialog follow the same scene the engine gets. */
-function renderUi(s) {
-	const filled = Math.round(s.potLevel * 10);
+/* Party text comes from the scene the engine gets, so it cannot drift from what is drawn. */
+function orchText() {
+	if (view.brewing) return 'brewing at the counter';
+	if (view.orchestrator === 'waiting-user') return 'waiting for your answer';
+	if (view.writing) return 'writing on the whiteboard';
+	return 'resting in its office';
+}
+function roleText(role) {
+	const agent = view.agents.find(item => item.role === role);
+	if (!agent) return 'on break';
+	if (agent.leaving) return 'done · walking back';
+	const where = agent.seat.zone === 'verify' ? 'lab desk' : agent.seat.zone === 'desk' ? `desk ${agent.seat.index + 1}` : 'bench';
+	return (agent.status === 'queued' ? 'queued · ' : 'running · ') + where;
+}
+
+function renderHud() {
+	const filled = Math.round(view.potLevel * 10);
 	document.querySelectorAll('#coffee-bar .seg').forEach((seg, i) => seg.classList.toggle('on', i < filled));
-	$('coffee-pct').textContent = Math.round(s.potLevel * 100) + '%';
-	$('ctx').textContent = 'ctx ' + Math.round((1 - s.potLevel) * 100) + '%';
-	$('cost').textContent = s.cost;
-	$('usage').textContent = s.usage + '%';
+	$('coffee-pct').textContent = Math.round(view.potLevel * 100) + '%';
+	$('ctx').textContent = view.percent === null ? 'ctx —' : `ctx ${view.percent}%`;
+}
+function renderParty() {
+	const rows = { orch: orchText(), explore: roleText('explore'), worker: roleText('worker'), verify: roleText('verify') };
 	document.querySelectorAll('.party .row').forEach(li => {
-		const state = s.party[li.dataset.row];
+		const state = rows[li.dataset.row];
 		li.querySelector('.state').textContent = state;
-		li.classList.toggle('on', !/on break|at the counter/.test(state));
+		li.classList.toggle('on', !/on break|resting/.test(state));
 	});
-	$('narr-who').textContent = s.narr[0];
-	$('narr-text').textContent = s.narr[1];
-	$('ask').hidden = !s.ask;
-	if (s.ask) {
-		$('ask-q').textContent = s.ask.question;
-		$('ask-opts').replaceChildren(...s.ask.options.map(o => { const li = document.createElement('li'); li.textContent = o; return li; }));
+}
+function renderPage() {
+	$('narr-who').textContent = page.narr[0];
+	$('narr-text').textContent = page.narr[1];
+	$('cost').textContent = page.cost;
+	$('usage').textContent = page.usage + '%';
+	$('ask').hidden = !page.ask;
+	if (page.ask) {
+		$('ask-q').textContent = page.ask.question;
+		$('ask-opts').replaceChildren(...page.ask.options.map(o => { const li = document.createElement('li'); li.textContent = o; return li; }));
 	}
 }
 
-const engine = createOfficeEngine($('room'), OFFICE_CONFIG, {});
+const engine = createOfficeEngine($('room'), OFFICE_CONFIG, {
+	/* An agent has walked out of the door: its seat frees up for the next one in line. */
+	onDeparted: id => dispatch({ type: 'departed', id })
+});
+paintHall($('hall-l'), 'left');
+paintHall($('hall-r'), 'right');
 
-/* The demo clock. t only moves while the loop runs, so a paused window keeps its moment. */
-let t = 0, shown = -1, timer = 0, running = false;
-function sceneIndex() {
-	let k = 0;
-	KEYS.forEach(([start], i) => { if (t % LOOP >= start) k = i; });
-	return k;
+function dispatch(action) {
+	const next = reduceScene(scene, action);
+	if (next === scene) return;
+	scene = next;
+	view = sceneView(scene);
+	engine.setScene(view);
+	renderHud();
+	renderParty();
 }
-function apply() {
-	const k = sceneIndex();
-	if (k === shown) return;
-	shown = k;
-	engine.setScene(KEYS[k][1]);
-	renderUi(KEYS[k][1]);
+
+/* Applies every beat whose time has come. The loop wraps with a fresh snapshot, so the scene resets through the reducer. */
+function fire() {
+	while (demoT + 1e-9 >= cycleStart + BEATS[nextBeat].at) {
+		const beat = BEATS[nextBeat];
+		const at = Math.round((cycleStart + beat.at) * 1000);
+		for (const action of beat.actions) dispatch({ ...action, at });
+		Object.assign(page, beat.page);
+		renderPage();
+		nextBeat += 1;
+		if (nextBeat === BEATS.length) { nextBeat = 0; cycleStart += LOOP; }
+	}
 }
+
 /* Pre-roll the room to a moment without painting, so a pinned #t= starts with people where they should be. */
 function preroll(to) {
-	while (t < to - 1e-6) {
-		const dt = Math.min(0.2, to - t);
-		t += dt;
-		apply();
+	while (demoT < to - 1e-6) {
+		const dt = Math.min(0.2, to - demoT);
+		demoT += dt;
+		fire();
 		engine.step(dt);
 	}
+	fire();
 }
 
-/* Steps of 200 ms while someone acts. Otherwise the page sleeps until the next idle gesture or scene step. Each step repaints only if the pose changed. */
-function keyWait() {
-	const now = t % LOOP;
-	const later = KEYS.map(([start]) => start).filter(start => start > now + 1e-6);
-	return (later.length ? Math.min(...later) : LOOP) - now;
-}
+/* Acting: 200 ms steps (5 fps). Idle: the next moment something changes, never a fixed timer. */
+function keyWait() { return Math.max(0.05, cycleStart + BEATS[nextBeat].at - demoT); }
 function tick() {
 	timer = 0;
 	if (!running) return;
-	const acting = engine.busy();
-	const dt = acting ? 0.2 : Math.max(0.05, Math.min(engine.idleWait(), keyWait()));
-	t += dt;
-	apply();
+	const dt = engine.busy() ? 0.2 : Math.max(0.05, Math.min(engine.idleWait(), keyWait()));
+	demoT += dt;
+	fire();
 	engine.advance(dt);
 	timer = setTimeout(tick, dt * 1000);
 }
@@ -1359,10 +2060,11 @@ function stop() {
 	timer = 0;
 }
 
+document.querySelectorAll('canvas[data-face]').forEach(cv => drawFace(cv, cv.dataset.face));
 const hashAt = /t=([\d.]+)/.exec(location.hash);
 const startAt = Math.min(LOOP, Math.max(0, hashAt ? parseFloat(hashAt[1]) : (reducedMotion ? 12 : 0)));
 preroll(startAt);
-apply();
+renderPage();
 engine.paintNow();
 if (!reducedMotion) {
 	start();
@@ -1371,6 +2073,7 @@ if (!reducedMotion) {
 	window.addEventListener('focus', start);
 	new IntersectionObserver(es => (es[0].isIntersecting ? start() : stop())).observe($('room'));
 }
+
 </script>
 </body>
 </html>
