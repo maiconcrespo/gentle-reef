@@ -43,7 +43,8 @@ describe("desk assignment", () => {
 		const state = run(sub("t1", "gentle-ai-explore", "running"), sub("t2", "gentle-ai-worker", "running"), sub("t3", "gentle-ai-verify", "running"));
 		assert.deepEqual(seatOf(state, "t1"), { zone: "desk", index: 0 });
 		assert.deepEqual(seatOf(state, "t2"), { zone: "desk", index: 1 });
-		assert.deepEqual(seatOf(state, "t3"), { zone: "desk", index: 2 });
+		// A verify agent takes the verify corner, not the pod (S17), so the pod's third desk stays for the next resident.
+		assert.deepEqual(seatOf(state, "t3"), { zone: "verify", index: 0 });
 	});
 
 	it("keeps the same desk when the status changes", () => {
@@ -56,7 +57,7 @@ describe("desk assignment", () => {
 			sub("t1", "gentle-ai-explore", "running"),
 			sub("t2", "gentle-ai-worker", "running"),
 			sub("t3", "gentle-ai-worker", "running"),
-			sub("t4", "gentle-ai-verify", "running"),
+			sub("t4", "gentle-ai-worker", "running"),
 			sub("t5", "gentle-ai-worker", "running"),
 		);
 		assert.deepEqual(seatOf(state, "t5"), { zone: "bench", index: 0 });
@@ -64,7 +65,7 @@ describe("desk assignment", () => {
 			sub("t1", "gentle-ai-explore", "running"),
 			sub("t2", "gentle-ai-worker", "running"),
 			sub("t3", "gentle-ai-worker", "running"),
-			sub("t4", "gentle-ai-verify", "running"),
+			sub("t4", "gentle-ai-worker", "running"),
 			sub("t5", "gentle-ai-worker", "running"),
 			sub("t1", "gentle-ai-explore", "completed"),
 			departed("t1"),
@@ -234,7 +235,7 @@ describe("lounge staff (S16): a running agent claims the staff member of its rol
 	it("a bench agent that gets a desk for the first time claims a staff member that is free", () => {
 		const state = run(
 			sub("t1", "gentle-ai-explore", "running"),
-			sub("t2", "gentle-ai-verify", "running"),
+			sub("t2", "gentle-ai-worker", "running"),
 			sub("t3", "gentle-ai-worker", "running"),
 			sub("t4", "gentle-ai-worker", "running"),
 			sub("t5", "gentle-ai-explore", "running"),
@@ -307,5 +308,41 @@ describe("lounge staff (S16): a running agent claims the staff member of its rol
 		const state = reduceScene(live, snapshot([{ id: "t1", agent: "gentle-ai-explore", role: "explore", label: "map", status: "completed" }]));
 		assert.equal(staffOf(state, "explore")?.claimedBy, "t1");
 		assert.equal(staffOf(reduceScene(state, departed("t1")), "explore")?.present, true);
+	});
+});
+
+describe("verify corner (S17): verify residents sit in the verify seats first", () => {
+	const verifySeat = (state: Scene, id: string) => (sceneView(state).agents.find((agent: { id: string }) => agent.id === id) as { seat?: unknown } | undefined)?.seat;
+
+	it("a verify agent sits in the verify corner, not at the pod", () => {
+		const state = run(sub("v1", "gentle-ai-verify", "running"));
+		assert.deepEqual(verifySeat(state, "v1"), { zone: "verify", index: 0 });
+		assert.deepEqual(state.seats.desks, [null, null, null, null], "the pod stays free");
+	});
+
+	it("the second verify agent takes the second verify seat; the third takes a pod desk", () => {
+		const state = run(sub("v1", "gentle-ai-verify", "running"), sub("v2", "gentle-ai-verify", "running"), sub("v3", "gentle-ai-verify", "running"));
+		assert.deepEqual(verifySeat(state, "v1"), { zone: "verify", index: 0 });
+		assert.deepEqual(verifySeat(state, "v2"), { zone: "verify", index: 1 });
+		assert.deepEqual(verifySeat(state, "v3"), { zone: "desk", index: 0 }, "an extra verify agent uses the pod");
+	});
+
+	it("explore and worker agents never take a verify seat", () => {
+		const state = run(sub("e1", "gentle-ai-explore", "running"), sub("w1", "gentle-ai-worker", "running"), sub("w2", "gentle-ai-worker", "running"));
+		assert.deepEqual(state.seats.verify, [null, null], "the verify corner stays free");
+		assert.deepEqual(verifySeat(state, "e1"), { zone: "desk", index: 0 });
+		assert.deepEqual(verifySeat(state, "w1"), { zone: "desk", index: 1 });
+		assert.deepEqual(verifySeat(state, "w2"), { zone: "desk", index: 2 });
+	});
+
+	it("a queued verify agent takes the first verify seat that frees, before a queued worker", () => {
+		const state = run(
+			sub("v1", "gentle-ai-verify", "running"), sub("v2", "gentle-ai-verify", "running"),
+			sub("w1", "gentle-ai-worker", "running"), sub("w2", "gentle-ai-worker", "running"), sub("w3", "gentle-ai-worker", "running"), sub("w4", "gentle-ai-worker", "running"),
+			sub("v3", "gentle-ai-verify", "running"), sub("w5", "gentle-ai-worker", "running"),
+			departed("v1"),
+		);
+		assert.deepEqual(verifySeat(state, "v3"), { zone: "verify", index: 0 }, "the verify seat goes to the verify agent waiting on the bench");
+		assert.deepEqual(seatOf(state, "w5"), { zone: "bench", index: 0 }, "the worker stays on the bench until a pod desk frees");
 	});
 });

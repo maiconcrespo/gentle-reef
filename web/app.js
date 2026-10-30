@@ -51,7 +51,7 @@ const STATUS_LABEL = {
 	timed_out: "timed out, heading out",
 };
 
-let scene = initialScene(OFFICE_CONFIG.desks.length);
+let scene = initialScene(OFFICE_CONFIG.desks.length, OFFICE_CONFIG.verifyDesks.length);
 let view = sceneView(scene);
 let seenLogId = 0;
 let lastLabel = "";
@@ -69,6 +69,8 @@ let finishedAt = 0;
 let follow = { kind: "orchestrator" };
 // Story camera size, set by fitStory: the engine gets it again whenever the followed actor changes.
 let storyFrame = null;
+// Compact/full when the room is wider than the column even at 1x (S17 wide room): a 1x view that pans with the action.
+let roomView = null;
 
 const reducedQuery = matchMedia("(prefers-reduced-motion: reduce)");
 let reduced = reducedQuery.matches;
@@ -107,8 +109,11 @@ function initialLayout() {
 function applyLayout(layout, { remember }) {
 	document.documentElement.dataset.layout = layout;
 	for (const button of layoutButtons) button.setAttribute("aria-pressed", String(button.dataset.layout === layout));
-	// Only the story layout has a camera. Full and compact go back to the room's own size.
-	if (layout !== "story") engine.setCamera(null);
+	// Only the story layout has a camera. Full and compact go back to the room's own size, and refit even at the same scale.
+	if (layout !== "story") {
+		engine.setCamera(null);
+		fitKey = "";
+	}
 	fitCanvas();
 	renderNarration();
 	renderParty();
@@ -128,7 +133,8 @@ for (const button of layoutButtons) {
 }
 
 // Integer-scale fit for full and compact: the room is shown at the largest whole multiple (1x, 2x, 3x...) that fits the stage
-// column and keeps the whole room on screen. Whole multiples keep the pixel art crisp; the scale never drops below 1x.
+// column and keeps the whole room on screen. Whole multiples keep the pixel art crisp. When even 1x is wider than the column
+// (the wide room of S17 in a narrow dock), the room is shown at 1x through a camera that pans to follow the action.
 const mainEl = document.querySelector("main");
 const asideEl = document.querySelector("aside");
 let fitKey = "";
@@ -150,13 +156,24 @@ function fitCanvas() {
 	const stageRest = canvas.closest(".stage").offsetHeight - canvas.offsetHeight - legendH;
 	const roomH = window.innerHeight - document.querySelector("header").offsetHeight - document.querySelector("footer").offsetHeight
 		- num(main, "paddingTop") - num(main, "paddingBottom") - stageRest;
-	const fits = Math.min(Math.floor((roomW - frameX) / canvas.width), Math.floor(roomH / canvas.height));
-	const scale = Number.isFinite(fits) ? Math.max(1, fits) : 1;
-	const key = `room:${scale}`;
+	const roomPxW = OFFICE_CONFIG.cols * OFFICE_CONFIG.tile, roomPxH = OFFICE_CONFIG.rows * OFFICE_CONFIG.tile;
+	const columnW = roomW - frameX;
+	const whole = Math.min(Math.floor(columnW / roomPxW), Math.floor(roomH / roomPxH));
+	const panned = whole < 1;
+	const key = panned ? `pan:${Math.floor(columnW)}x${Math.floor(roomH)}` : `room:${whole}`;
 	if (key === fitKey) return;
 	fitKey = key;
-	canvas.style.width = `${canvas.width * scale}px`;
-	canvas.style.height = `${canvas.height * scale}px`;
+	if (panned) {
+		roomView = { zoom: 1, width: Math.max(1, Math.min(roomPxW, Math.floor(columnW))), height: Math.max(1, Math.min(roomPxH, Math.floor(roomH))) };
+		pushCamera();
+		canvas.style.width = `${roomView.width}px`;
+		canvas.style.height = `${roomView.height}px`;
+		return;
+	}
+	roomView = null;
+	engine.setCamera(null);
+	canvas.style.width = `${roomPxW * whole}px`;
+	canvas.style.height = `${roomPxH * whole}px`;
 }
 
 // Story: the canvas fills the frame at a whole-number zoom. The frame is the whole main area, so its size is the window's.
@@ -173,7 +190,8 @@ function fitStory() {
 }
 
 function pushCamera() {
-	if (storyFrame) engine.setCamera({ ...storyFrame, target: follow });
+	if (isStory() && storyFrame) engine.setCamera({ ...storyFrame, target: follow });
+	else if (roomView) engine.setCamera({ ...roomView, target: follow });
 }
 
 // Refit on every page resize (window or stage). Queued to the next frame so the observer never fires mid-layout.
@@ -191,7 +209,7 @@ new ResizeObserver(queueFit).observe(mainEl);
 // The story camera follows whoever acted last. The party list marks the same actor.
 function setFollow(actor) {
 	follow = actor;
-	if (isStory()) pushCamera();
+	if (isStory() || roomView) pushCamera();
 	renderParty();
 }
 

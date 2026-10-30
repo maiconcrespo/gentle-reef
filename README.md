@@ -2,7 +2,7 @@
 
 A pixel-art office that shows real gentle-shell activity: the orchestrator, subagents, and tokens as a coffee pot. It ships as a standalone Pi package from this repo.
 
-**Status (T15):** event contract, adapter, hub, toggle, `/office` command, and the browser window with three layouts (full, compact, story). The window shows the orchestrator, the coffee pot, and resident subagents (explore, worker, verify) at the four desks; extra agents wait on a bench by the door. Idle staff chat by the coffee counter until an agent of their role takes a desk. The story layout has a close-up camera and a narration dialog.
+**Status (T16):** event contract, adapter, hub, toggle, `/office` command, and the browser window with three layouts (full, compact, story). The room is now five rooms side by side: judges (left), a work room with the 2x2 desk pod and the lounge sofas, the orchestrator's office over the verify lab, and an archive. Resident subagents (explore and worker) sit at the pod, verify agents in the verify lab, and extras wait on a bench by the door. Idle staff sit on the lounge sofas, two steps from their desks. The story layout has a close-up camera and a narration dialog.
 
 ## Install
 
@@ -36,8 +36,9 @@ The menu lists the same actions as the subcommands. While the module is off: Tur
 
 - the orchestrator at the whiteboard while it thinks or runs a tool, walking the floor while idle, and at the front with a `?` bubble when it waits for you;
 - resident subagents (explore, worker, verify, and unknown agents as generic workers) at the desks: they walk in, type while running, show `?` while waiting, and leave through the door with `✓` or `!` when they finish. Inspectors and judges are only logged until T4 and T5;
-- idle staff (S16): one per role (explore, worker, verify) stands in a lounge by the coffee counter, passing a speech bubble in turn and sipping now and then. The first agent of a role that takes a desk is that staff member: it walks over from the lounge, keeps the staff look, and walks back to the lounge when it finishes (`✓` or `!`). Its role narrates the break, for example `EXPLORE: back to the coffee.`. Further agents of that role walk in from the door as before. Team and PARTY lists show the idle staff as `on break`;
+- idle staff (S16): one per role (explore, worker, verify) waits in the lounge: explore and worker sit on the two sofas facing each other across the coffee table, verify stands by the lab door, passing a speech bubble in turn and sipping now and then. The first agent of a role that takes a desk is that staff member: it walks over from the lounge, keeps the staff look, and walks back to the lounge when it finishes (`✓` or `!`). Its role narrates the break, for example `EXPLORE: back to the coffee.`. Further agents of that role walk in from the door as before. Team and PARTY lists show the idle staff as `on break`;
 - a story-mode dialog box with the question and its options while an `ask_user` prompt is open. It is display only: you still answer in the terminal, and it closes when the prompt ends;
+- the orchestrator rests in its armchair while idle (a small head turn now and then, no walking); it walks to the whiteboard in its office while it thinks or runs a tool, and to the front spot above the pod when it waits for you;
 - the coffee pot: it drains as context fills (level = 1 - percent/100), and compaction walks the orchestrator to the coffee machine to brew a fresh one;
 - feature props that light up while their tool runs and for 4 s after it ends: a record player (music; idle for now, because gentle music emits no event the office can see), an easel (`gentle_design`), a filing cabinet (`mem_*`), a desk bell (`ask_user_*`), a corkboard (`todo`), the MCP rack (`mcp`, `codemode`), a pigeon (`web_search`, `fetch_content`, `get_search_content`) and a pinned map (codegraph);
 - a narration dialog: one line per real event with a speaker (see [Narration](#narration));
@@ -51,9 +52,9 @@ With `prefers-reduced-motion` set, the orchestrator does not wander, residents s
 The window has two layouts that share one page and one state:
 
 - **Full** (default): the desk window described above.
-- **Compact** (`design/agent-office/02-dock-pane.html`): one narrow column, 520 px at most. The room is on top at 1x, then the context brew, the team and the activity. The legend is left out, and the ask dialog overlays the bottom of the room and runs a little past it, so its top stays below the orchestrator's front spot.
+- **Compact** (`design/agent-office/02-dock-pane.html`): one narrow column, 520 px at most. The room is on top at 1x (panned, see below), then the context brew, the team and the activity. The legend is left out, and the ask dialog overlays the bottom of the room and runs a little past it, so its top stays below the orchestrator's front spot.
 
-Open the compact layout with `/office dock`, or with "Open the compact window" / "Turn on and open the compact window" in the menu. The URL gets `?layout=dock` after the token; the token, path and checks are unchanged. The header switch (Full / Compact / Story) changes layout without reloading. Its choice is saved in the browser's localStorage and written into the URL, so a reload keeps it. A `?layout=` already in the URL wins over the saved choice for that load, so `/office dock` always shows the compact layout. The room stays at 1x, so below about 490 px of window width the page scrolls sideways.
+Open the compact layout with `/office dock`, or with "Open the compact window" / "Turn on and open the compact window" in the menu. The URL gets `?layout=dock` after the token; the token, path and checks are unchanged. The header switch (Full / Compact / Story) changes layout without reloading. Its choice is saved in the browser's localStorage and written into the URL, so a reload keeps it. A `?layout=` already in the URL wins over the saved choice for that load, so `/office dock` always shows the compact layout. The room is 720 px wide, wider than this column, so the compact layout shows it at 1x through a camera that pans to follow the action (the same camera as story). Full keeps whole-number scaling when the stage column is wide enough for the room.
 
 ### Story layout
 

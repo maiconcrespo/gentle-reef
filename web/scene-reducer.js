@@ -5,6 +5,8 @@
 
 export const SCENE_LOG_LIMIT = 40;
 export const DESK_COUNT = 4;
+// Verify residents (S17) have their own corner with these seats. Extra verify agents take a pod desk, like any resident.
+export const VERIFY_DESK_COUNT = 2;
 // A feature prop stays lit this long after its last event, and for as long as one of its tools is still running.
 export const FEATURE_LINGER_MS = 4000;
 const FEATURE_NAMES = ["music", "design", "memory", "web", "todo", "ask", "mcp", "codegraph"];
@@ -34,15 +36,15 @@ const isPercent = (value) => typeof value === "number" && Number.isFinite(value)
 const isActive = (agent) => ACTIVE_AGENT_STATUSES.has(agent.status);
 const isResident = (agent) => RESIDENT_ROLES.has(agent.role);
 
-export function initialScene(deskCount = DESK_COUNT) {
+export function initialScene(deskCount = DESK_COUNT, verifyCount = VERIFY_DESK_COUNT) {
   return {
     orchestrator: { state: "idle" },
     context: { percent: null },
     compaction: null,
     agents: [],
-    // desks[i] is the agent id at desk i (or null). bench keeps queued agents in arrival order.
+    // desks[i] is the agent id at pod desk i, verify[i] at verify seat i (or null). bench keeps queued agents in arrival order.
     // lounge[role] is the agent holding that role's staff member (its claim), or null while the staff member idles in the lounge.
-    seats: { desks: Array(deskCount).fill(null), bench: [], lounge: emptyLounge() },
+    seats: { desks: Array(deskCount).fill(null), verify: Array(verifyCount).fill(null), bench: [], lounge: emptyLounge() },
     // toolStarts[name] is when that tool last started, so its end can log one line with the duration.
     toolStarts: {},
     // features[feature].until is when its prop goes idle again; running[toolName] is the feature of a tool still in flight.
@@ -217,18 +219,29 @@ function applyCompaction(state, phase, at) {
 export function seatOf(seats, id) {
   const desk = seats.desks.indexOf(id);
   if (desk >= 0) return { zone: "desk", index: desk };
+  const verify = seats.verify.indexOf(id);
+  if (verify >= 0) return { zone: "verify", index: verify };
   const bench = seats.bench.indexOf(id);
   return bench >= 0 ? { zone: "bench", index: bench } : null;
 }
 
+// Every seat that holds an agent, the pod and the verify corner alike.
+const seated = (seats) => [...seats.desks, ...seats.verify];
+
 function removeSeat(seats, id) {
-  return { ...seats, desks: seats.desks.map((item) => (item === id ? null : item)), bench: seats.bench.filter((item) => item !== id) };
+  return {
+    ...seats,
+    desks: seats.desks.map((item) => (item === id ? null : item)),
+    verify: seats.verify.map((item) => (item === id ? null : item)),
+    bench: seats.bench.filter((item) => item !== id),
+  };
 }
 
 function pruneSeats(seats, keep) {
   return {
     ...seats,
     desks: seats.desks.map((item) => (item !== null && keep.has(item) ? item : null)),
+    verify: seats.verify.map((item) => (item !== null && keep.has(item) ? item : null)),
     bench: seats.bench.filter((item) => keep.has(item)),
   };
 }
@@ -242,28 +255,41 @@ function withClaims(before, seats, agents) {
   const lounge = {};
   for (const role of STAFF_ROLES) {
     const holder = before.lounge[role];
-    lounge[role] = holder !== null && seats.desks.includes(holder) ? holder : null;
+    lounge[role] = holder !== null && seated(seats).includes(holder) ? holder : null;
   }
-  for (const id of seats.desks) {
-    if (id === null || before.desks.includes(id)) continue;
+  for (const id of seated(seats)) {
+    if (id === null || seated(before).includes(id)) continue;
     const agent = agents.find((item) => item.id === id);
     if (agent && agent.claims && lounge[agent.role] === null) lounge[agent.role] = id;
   }
   return { ...seats, lounge };
 }
 
-/** Moves the first sittable bench agent into each free desk, in bench order. Seated agents never move. */
+/**
+ * Moves sittable bench agents into free seats, in bench order. Seated agents never move.
+ * Verify agents fill the verify corner first (S17); any agent may then take a pod desk, so explore and worker never take a verify seat.
+ */
 function settle(seats, agents) {
+  const sittable = (id) => agents.some((agent) => agent.id === id && SEATED_AGENT_STATUSES.has(agent.status));
+  const isVerify = (id) => agents.some((agent) => agent.id === id && agent.role === "verify");
+  const verify = seats.verify.slice();
   const desks = seats.desks.slice();
   let bench = seats.bench.slice();
+  for (let index = 0; index < verify.length; index++) {
+    if (verify[index] !== null) continue;
+    const next = bench.find((id) => sittable(id) && isVerify(id));
+    if (next === undefined) break;
+    verify[index] = next;
+    bench = bench.filter((id) => id !== next);
+  }
   for (let index = 0; index < desks.length; index++) {
     if (desks[index] !== null) continue;
-    const next = bench.find((id) => agents.some((agent) => agent.id === id && SEATED_AGENT_STATUSES.has(agent.status)));
+    const next = bench.find((id) => sittable(id));
     if (next === undefined) break;
     desks[index] = next;
     bench = bench.filter((id) => id !== next);
   }
-  return { ...seats, desks, bench };
+  return { ...seats, desks, verify, bench };
 }
 
 function orchestratorOf(source) {

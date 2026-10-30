@@ -240,16 +240,18 @@ describe("feature props", () => {
 	});
 
 	it("walk spots, desks, the bench and the door stay reachable with every prop placed", () => {
+		const cfg = OFFICE_CONFIG as unknown as { front: { x: number; y: number }; coffee: { x: number; y: number }; whiteboard: { x: number }; desks: Array<{ x: number; y: number; face: string }>; verifyDesks: Array<{ x: number; y: number; face: string }>; door: { x: number }; bench: { x: number; w: number }; rows: number; orchStart: { x: number; y: number } };
 		const block = engineModule.walkableGrid(OFFICE_CONFIG, props());
-		const rest: [number, number] = [OFFICE_CONFIG.orchStart.x, OFFICE_CONFIG.orchStart.y];
-		const seen = reachableFrom(block, rest);
+		const seen = reachableFrom(block, [cfg.orchStart.x, cfg.orchStart.y]);
+		const sit = (d: { x: number; y: number; face: string }): [number, number] => [d.x, d.face === "down" ? d.y - 1 : d.y + 1];
 		const spots: Array<[number, number, string]> = [
-			[9, 3, "whiteboard"], [17, 4, "coffee"], [17, 5, "coffee approach"], [8, 6, "front"], [9, 5, "rest"],
-			[1, 5, "desk 1"], [5, 5, "desk 2"], [1, 9, "desk 3"], [5, 9, "desk 4"],
-			[9, 12, "door"], [10, 12, "door"],
+			[cfg.whiteboard.x + 1, 3, "whiteboard"], [cfg.coffee.x + 1, cfg.coffee.y + 2, "coffee"], [cfg.front.x, cfg.front.y, "front"],
+			...cfg.desks.map((d, i): [number, number, string] => [...sit(d), `desk ${i}`]),
+			...cfg.verifyDesks.map((d, i): [number, number, string] => [...sit(d), `verify desk ${i}`]),
+			[cfg.door.x, cfg.rows - 2, "door"], [cfg.door.x + 1, cfg.rows - 2, "door"],
 		];
-		for (let i = 2; i < 2 + 12; i++) spots.push([i, 11, "bench overflow"]);
-		// A lounge spot is blocked for walkers, but a walker can still end on it: one of its neighbours must be reachable (S16).
+		for (let i = 0; i < 2 * cfg.bench.w; i++) spots.push([cfg.bench.x + (i % cfg.bench.w), cfg.rows - 2 - Math.floor(i / cfg.bench.w), "bench overflow"]);
+		// A lounge seat is blocked for walkers, but a walker can still end on it: one of its neighbours must be reachable (S16).
 		for (const [name, tile] of Object.entries((OFFICE_CONFIG as unknown as { lounge: Record<string, { x: number; y: number }> }).lounge)) {
 			const neighbours = [[tile.x + 1, tile.y], [tile.x - 1, tile.y], [tile.x, tile.y + 1], [tile.x, tile.y - 1]];
 			assert.ok(neighbours.some(([x, y]) => seen.has(`${x},${y}`)), `${name} lounge spot ${tile.x},${tile.y} can be reached`);
@@ -344,11 +346,11 @@ describe("story camera: an optional view transform", () => {
 		const { canvas, transforms } = onScreen();
 		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
 		engine.setScene(view([]));
-		// memory prop: x 18, y 3, 1x2 tiles, so its centre is (444, 96) in room pixels. The view is 200x120 at zoom 2: half 50x30.
+		// memory prop: x 28, y 2, 1x2 tiles, so its centre is (684, 72) in room pixels. The view is 200x120 at zoom 2: half 50x30.
 		engine.setCamera({ zoom: 2, width: 200, height: 120, target: { kind: "feature", feature: "memory" } });
 		run(5);
-		// x clamps to 480 - 50 = 430 (room width) and y stays at 96. The translation puts that point at the view centre.
-		assert.deepEqual(transforms.at(-1), [2, 0, 0, 2, -760, -132]);
+		// x clamps to 720 - 50 = 670 (room width) and y stays at 72. The translation puts that point at the view centre.
+		assert.deepEqual(transforms.at(-1), [2, 0, 0, 2, -1240, -84]);
 		engine.destroy();
 	});
 
@@ -360,8 +362,8 @@ describe("story camera: an optional view transform", () => {
 		run(1);
 		const before = transforms.length;
 		engine.setCamera(null);
-		assert.equal(canvas.width, 480);
-		assert.equal(canvas.height, 312);
+		assert.equal(canvas.width, OFFICE_CONFIG.cols * OFFICE_CONFIG.tile);
+		assert.equal(canvas.height, OFFICE_CONFIG.rows * OFFICE_CONFIG.tile);
 		run(1);
 		assert.equal(transforms.length, before, "no transform once the camera is off");
 		engine.destroy();
@@ -377,7 +379,8 @@ describe("idle staff in the lounge (S16)", () => {
 	type Rect = [number, number, number, number, string];
 	const inTile = (x: number, y: number, tile: { x: number; y: number }) => x >= tile.x * T && x < (tile.x + 1) * T && y >= tile.y * T && y < (tile.y + 1) * T;
 	// The lounge area around the coffee counter: the three staff, their bubbles and their sips.
-	const inLounge = (x: number, y: number) => x >= 13 * T && x < 17 * T && y >= 4 * T && y < 7 * T;
+	// The area over each lounge seat: its tile and the bubble above it, not the pod desks beside the sofas.
+	const inLounge = (x: number, y: number) => Object.values(LOUNGE).some(t => x >= t.x * T && x < (t.x + 2) * T && y >= (t.y - 2) * T && y < (t.y + 1) * T);
 	const isBubble = ([, , w, h]: Rect) => w === 18 && h === 14;
 
 	function room(camera?: { zoom: number; width: number; height: number; target: unknown }) {
@@ -545,6 +548,147 @@ describe("idle staff: an extra of a busy role walks in from the door", () => {
 		const atDoorRow = torsos.filter(([, y]) => y >= (OFFICE_CONFIG.rows - 2) * T);
 		assert.equal(atDoorRow.length, 1, "exactly one of them is still at the door row, on its way in");
 		const [x] = atDoorRow[0];
-		assert.ok(x >= 8 * T && x < 11 * T, `it is at the door columns, x ${x}`);
+		const door = (OFFICE_CONFIG as unknown as { door: { x: number; w: number } }).door;
+		assert.ok(x >= (door.x - 1) * T && x < (door.x + door.w + 1) * T, `it is at the door columns, x ${x}`);
+	});
+});
+
+describe("office floor plan (S17): rooms, lounge crew and short walks", () => {
+	type Cfg = { cols: number; rows: number; tile: number; desks: Array<{ x: number; y: number; face: string }>; verifyDesks: Array<{ x: number; y: number; face: string }>; lounge: Record<string, { x: number; y: number; face: string }>; rooms: Array<{ name: string; x: number; y: number; w: number; h: number }>; plants: Array<{ x: number; y: number }>; front: { x: number; y: number }; whiteboard: { x: number; w: number }; coffee: { x: number; y: number; w: number }; door: { x: number; w: number }; bench: { x: number; w: number } };
+	const CFG = OFFICE_CONFIG as unknown as Cfg;
+	const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+
+	/** Walking steps from `from` to `to` on the engine's grid (the start may be blocked, the way a lounge seat is). Undefined when unreachable. */
+	function stepsFrom(block: boolean[][], from: [number, number], to: [number, number]): number | undefined {
+		const dist = new Map<string, number>([[from.join(","), 0]]);
+		const queue: Array<[number, number]> = [from];
+		while (queue.length) {
+			const [x, y] = queue.shift()!;
+			if (x === to[0] && y === to[1]) return dist.get(`${x},${y}`);
+			for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+				const nx = x + dx, ny = y + dy;
+				if (ny < 0 || nx < 0 || ny >= block.length || nx >= block[0].length) continue;
+				if (block[ny][nx] && !(nx === to[0] && ny === to[1])) continue;
+				const key = `${nx},${ny}`;
+				if (dist.has(key)) continue;
+				dist.set(key, dist.get(`${x},${y}`)! + 1);
+				queue.push([nx, ny]);
+			}
+		}
+		return undefined;
+	}
+	/** The tile a seated figure at a desk sits on: the side opposite its monitor (down-facing desks have their sitter to the north). */
+	const sitterTile = (d: { x: number; y: number; face: string }): [number, number] => [d.x, d.face === "down" ? d.y - 1 : d.y + 1];
+	const block = () => engineModule.walkableGrid(OFFICE_CONFIG, props());
+	/** Every tile reachable from `from` on the engine's grid (true = blocked). */
+	function reachableFrom(grid: boolean[][], from: [number, number]): Set<string> {
+		const seen = new Set<string>([from.join(",")]);
+		const queue: Array<[number, number]> = [from];
+		while (queue.length) {
+			const [x, y] = queue.shift()!;
+			for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+				const nx = x + dx, ny = y + dy;
+				if (ny < 0 || nx < 0 || ny >= grid.length || nx >= grid[0].length || grid[ny][nx]) continue;
+				const key = `${nx},${ny}`;
+				if (seen.has(key)) continue;
+				seen.add(key);
+				queue.push([nx, ny]);
+			}
+		}
+		return seen;
+	}
+	const props = (): Array<{ feature: string; x: number; y: number; w: number; h: number }> => (engineModule as unknown as { FEATURE_PROPS: Array<{ feature: string; x: number; y: number; w: number; h: number }> }).FEATURE_PROPS;
+
+	it("the lounge crew is not in one straight line", () => {
+		const [a, b, c] = ["explore", "worker", "verify"].map(role => CFG.lounge[role]);
+		const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+		assert.notEqual(cross, 0, `lounge spots ${[a, b, c].map(s => `${s.x},${s.y}`).join(" ")} must not be collinear`);
+	});
+
+	it("each lounge seat is at most two steps from the desk its role takes first", () => {
+		const grid = block();
+		const pairs: Array<[string, { x: number; y: number }, [number, number]]> = [
+			["explore", CFG.lounge.explore, sitterTile(CFG.desks[0])],
+			["worker", CFG.lounge.worker, sitterTile(CFG.desks[1])],
+			["verify", CFG.lounge.verify, sitterTile(CFG.verifyDesks[0])],
+		];
+		for (const [role, seat, desk] of pairs) {
+			const steps = stepsFrom(grid, [seat.x, seat.y], desk);
+			assert.ok(steps !== undefined && steps <= 2, `${role} walks ${steps} steps from ${seat.x},${seat.y} to its desk at ${desk}; two is about 1.1 s`);
+		}
+	});
+
+	it("the room has a verify corner with two seats, and every resident desk has its sitter tile free", () => {
+		assert.equal(CFG.verifyDesks.length, 2, "two verify seats");
+		const grid = block();
+		for (const d of [...CFG.desks, ...CFG.verifyDesks]) {
+			const [x, y] = sitterTile(d);
+			assert.equal(grid[y][x], false, `sitter tile ${x},${y} is free`);
+		}
+	});
+
+	it("every room is split off by walls and has a reachable floor tile inside it", () => {
+		assert.ok(Array.isArray(CFG.rooms) && CFG.rooms.length >= 4, "rooms are listed");
+		const grid = block();
+		const seen = reachableFrom(grid, [CFG.front.x, CFG.front.y]);
+		for (const room of CFG.rooms) {
+			const reached = [...seen].some(key => { const [x, y] = key.split(",").map(Number); return inRect(x, y, room); });
+			assert.ok(reached, `${room.name} can be walked into`);
+		}
+	});
+
+	it("every room has at least one plant", () => {
+		assert.ok(Array.isArray(CFG.plants) && CFG.plants.length >= CFG.rooms.length, "a plant per room at least");
+		for (const room of CFG.rooms) assert.ok(CFG.plants.some(p => inRect(p.x, p.y, room)), `${room.name} has a plant`);
+	});
+
+	it("the new spots are reachable: whiteboard, coffee, front, verify seats, bell approach and the bench", () => {
+		const grid = block();
+		const seen = reachableFrom(grid, [CFG.front.x, CFG.front.y]);
+		const spots: Array<[number, number, string]> = [
+			[CFG.whiteboard.x + 1, 3, "whiteboard"], [CFG.coffee.x + 1, CFG.coffee.y + 2, "coffee"],
+			[CFG.front.x, CFG.front.y, "front"], ...CFG.verifyDesks.map((d, i): [number, number, string] => [...sitterTile(d), `verify seat ${i}`]),
+			...CFG.desks.map((d, i): [number, number, string] => [...sitterTile(d), `desk ${i}`]),
+			[CFG.door.x, CFG.rows - 2, "door approach"], [CFG.bench.x, CFG.rows - 2, "bench"],
+		];
+		for (const [x, y, name] of spots) assert.ok(seen.has(`${x},${y}`), `${name} at ${x},${y} is reachable`);
+	});
+
+	it("the orchestrator rests in its office and does not wander across the room while idle", () => {
+		const rects: unknown[][] = [];
+		const random = Math.random;
+		Math.random = () => 0.9;
+		let engine: { destroy(): void; setScene(v: unknown): void };
+		try {
+			engine = createOfficeEngine({ width: 0, height: 0, getContext: () => styledContext(rects as unknown[][]) }, OFFICE_CONFIG) as never;
+			engine.setScene(view([], {}, staffView()));
+			for (let i = 0; i < 60 * 40; i++) run(1 / 60);
+		} finally {
+			Math.random = random;
+			engine!.destroy();
+		}
+		const office = (CFG.rooms as Array<{ name: string; x: number; y: number; w: number; h: number }>).find(r => r.name === "orchestrator office")!;
+		const T = CFG.tile;
+		const torsos = rects.filter(([, , w, h, fill]) => w === 12 && h === 11 && fill === "#E0C27A") as Array<[number, number]>;
+		assert.ok(torsos.length > 0, "the orchestrator is drawn");
+		assert.ok(torsos.every(([x, y]) => x >= office.x * T && x < (office.x + office.w) * T && y >= office.y * T && y < (office.y + office.h) * T), "every frame keeps it inside its office");
+	});
+
+	it("the front spot is in the upper half of the room, above the ask dialog", () => {
+		assert.ok(CFG.front.y < CFG.rows / 2, `front row ${CFG.front.y} is in the upper half`);
+	});
+
+	it("the floor is light and low-contrast: planks differ by a few levels only", () => {
+		const tones = (engineModule as unknown as { FLOOR_TONES: { a: string; b: string; seam: string } }).FLOOR_TONES;
+		assert.ok(tones, "FLOOR_TONES is exported");
+		const channels = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+		const [a, b] = [channels(tones.a), channels(tones.b)];
+		for (let i = 0; i < 3; i++) assert.ok(Math.abs(a[i] - b[i]) <= 10, `plank channel ${i} differs by at most 10`);
+		assert.ok(a.reduce((s, v) => s + v, 0) / 3 >= 110, "the planks are light enough to read as a floor");
+	});
+
+	it("the room's height fits 2x in a 900 px window, beside the header and footer", () => {
+		// The width is not asserted: the full layout's stage column is narrower than 2x the room, so it shows 1x or the pan (see README).
+		assert.ok(CFG.rows * CFG.tile * 2 <= 780, "height at 2x leaves room for the header and footer");
 	});
 });

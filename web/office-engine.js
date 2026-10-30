@@ -3,15 +3,48 @@
    a waiting bench by the door; each desk monitor shows its agent's work while it runs. Idle staff (S16) chat by the coffee counter until an agent of their role takes a desk. Browser module: no imports, no network. */
 
 export const OFFICE_CONFIG = {
-	cols: 20, rows: 13, tile: 24,
-	desks: [{ x: 1, y: 4 }, { x: 5, y: 4 }, { x: 1, y: 8 }, { x: 5, y: 8 }],
-	whiteboard: { x: 8, w: 4 }, coffee: { x: 16, y: 2, w: 3 }, table: { x: 11, y: 7, w: 4, h: 2 },
-	rug: { x: 10, y: 5, w: 7, h: 6 }, window: { x: 1, w: 3 }, shelf: 13, clock: 6, door: { x: 9, w: 2 },
-	plants: [{ x: 0, y: 2 }, { x: 19, y: 2 }, { x: 0, y: 12 }, { x: 19, y: 12 }], rack: { x: 19, y: 6 },
-	orchStart: { x: 9, y: 5 }, front: { x: 8, y: 6 },
-	bench: { x: 2, w: 6 },
-	// Idle staff (S16): one lounge spot per role by the coffee counter. They block walkers, and a claimant walks back to its own spot.
-	lounge: { explore: { x: 14, y: 6, face: 'right' }, worker: { x: 15, y: 6, face: 'down' }, verify: { x: 16, y: 6, face: 'left' } }
+	cols: 30, rows: 15, tile: 24,
+	// Rooms (S17): judges | work room (pod and lounge) | orchestrator office over the verify lab | archive. Walls block walkers; the gaps are doors.
+	rooms: [
+		{ name: 'judges room', x: 0, y: 2, w: 6, h: 12 },
+		{ name: 'work room', x: 7, y: 2, w: 9, h: 12 },
+		{ name: 'orchestrator office', x: 17, y: 2, w: 7, h: 6 },
+		{ name: 'verify lab', x: 17, y: 9, w: 7, h: 5 },
+		{ name: 'archive', x: 25, y: 2, w: 5, h: 12 }
+	],
+	// Door gaps: judges to work at (6,9); work to orchestrator office at (16,5) and to verify lab at (16,11); orchestrator office to archive at (24,4).
+	walls: [
+		{ x: 6, y: 2, w: 1, h: 7 }, { x: 6, y: 10, w: 1, h: 5 },
+		{ x: 16, y: 2, w: 1, h: 3 }, { x: 16, y: 6, w: 1, h: 5 }, { x: 16, y: 12, w: 1, h: 3 },
+		{ x: 17, y: 8, w: 7, h: 1 },
+		{ x: 24, y: 2, w: 1, h: 2 }, { x: 24, y: 5, w: 1, h: 10 }
+	],
+	// Pod island (S17): four desks face each other across a cross divider, chairs on the outside. desks[0] and desks[1] are the ones nearest the lounge.
+	desks: [{ x: 12, y: 5, face: 'down' }, { x: 12, y: 9, face: 'up' }, { x: 9, y: 5, face: 'down' }, { x: 9, y: 9, face: 'up' }],
+	podArms: [{ x: 11, y: 6, w: 1, h: 3 }, { x: 9, y: 7, w: 5, h: 1 }],
+	// Verify lab (S17): two desks, and a big research screen on the east wall. The verify staff member is two steps from verifyDesks[0].
+	verifyDesks: [{ x: 17, y: 12, face: 'down' }, { x: 20, y: 12, face: 'down' }],
+	researchScreen: { x: 22, y: 9, w: 2, h: 4 },
+	// Lounge (S16, S17): a sofa on each side of a coffee table, facing each other, beside the pod. Explore and worker staff are two steps from their desks.
+	sofas: [{ x: 13, y: 3, w: 3, h: 1 }, { x: 13, y: 11, w: 2, h: 1 }],
+	coffeeTable: { x: 15, y: 7, w: 1, h: 1 },
+	// Archive shelves (static decor) along the east wall, beside the memory cabinet and the MCP rack.
+	shelves: [{ x: 28, y: 5, w: 2, h: 1 }, { x: 28, y: 8, w: 2, h: 1 }, { x: 28, y: 11, w: 2, h: 1 }],
+	// Idle staff (S16): one lounge seat per role. They block walkers, and a claimant walks back to its own seat.
+	// The verify member stands by the lab door (x 15) so the door stays open: it is two steps from its desk.
+	lounge: { explore: { x: 13, y: 3, face: 'down', sit: true }, worker: { x: 13, y: 11, face: 'up', sit: true }, verify: { x: 15, y: 11, face: 'up', sit: false } },
+	coffee: { x: 13, y: 2, w: 3 },
+	whiteboard: { x: 18, w: 3 }, clock: 17, shelf: 22, window: { x: 2, w: 3 },
+	rugs: [{ x: 17, y: 3, w: 6, h: 4 }, { x: 1, y: 6, w: 4, h: 4 }],
+	// Judges' table (S7, T5 seats them later): a long table with two chairs on one side.
+	judges: { x: 1, y: 7, w: 4, h: 2 }, judgeSeats: [{ x: 2, y: 6 }, { x: 3, y: 6 }],
+	// Orchestrator office: the armchair is its rest spot, and the whiteboard is on the wall above it.
+	armchair: { x: 18, y: 5, w: 2, h: 2 }, orchStart: { x: 18, y: 5 },
+	front: { x: 11, y: 3 },
+	door: { x: 11, w: 2 },
+	bench: { x: 7, w: 4 },
+	rack: { x: 29, y: 2 },
+	plants: [{ x: 0, y: 13 }, { x: 5, y: 13 }, { x: 10, y: 2 }, { x: 15, y: 13 }, { x: 23, y: 2 }, { x: 17, y: 7 }, { x: 19, y: 9 }, { x: 23, y: 13 }, { x: 25, y: 13 }, { x: 27, y: 7 }, { x: 29, y: 13 }]
 };
 
 /* Story layout (T14): the room is shown zoomed by a whole number, so pixels stay square. Taller windows zoom in further, never past 4x. */
@@ -23,27 +56,39 @@ export function storyZoom(width, height) {
 /* One prop per gentle-shell feature (S8). Each footprint is tiles walkers cannot stand on. The rack is the existing one (cfg.rack).
    Kept free on purpose: coffee spot (17,4), whiteboard spot (9,3), front (8,6), rest (9,5), door approach (9-10,11), bench overflow (row 11, x 2-13). */
 export const FEATURE_PROPS = [
-	{ feature: 'music', x: 13, y: 3, w: 2, h: 2 },
-	{ feature: 'design', x: 15, y: 3, w: 2, h: 2 },
-	{ feature: 'memory', x: 18, y: 3, w: 1, h: 2 },
-	{ feature: 'ask', x: 18, y: 6, w: 1, h: 2 },
-	{ feature: 'todo', x: 17, y: 8, w: 2, h: 2 },
-	{ feature: 'mcp', x: OFFICE_CONFIG.rack.x, y: OFFICE_CONFIG.rack.y, w: 1, h: 2 },
-	{ feature: 'web', x: 14, y: 11, w: 1, h: 2 },
-	{ feature: 'codegraph', x: 15, y: 11, w: 2, h: 2 }
+	{ feature: 'design', x: 0, y: 2, w: 2, h: 2 },
+	{ feature: 'web', x: 5, y: 2, w: 1, h: 2 },
+	{ feature: 'codegraph', x: 0, y: 10, w: 2, h: 2 },
+	{ feature: 'todo', x: 7, y: 2, w: 2, h: 2 },
+	{ feature: 'ask', x: 14, y: 12, w: 1, h: 2 },
+	{ feature: 'music', x: 21, y: 5, w: 2, h: 2 },
+	{ feature: 'memory', x: 28, y: 2, w: 1, h: 2 },
+	{ feature: 'mcp', x: OFFICE_CONFIG.rack.x, y: OFFICE_CONFIG.rack.y, w: 1, h: 2 }
 ];
 
 /* The grid a figure walks on: true where it cannot stand. Walls, furniture, feature props and the lounge spots block; the rug, floor and door do not. */
 export function walkableGrid(cfg, props = FEATURE_PROPS) {
 	const block = Array.from({ length: cfg.rows }, (_, y) => Array(cfg.cols).fill(y < 2));
 	const mark = (x, y, w, h) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (block[j] && i < cfg.cols) block[j][i] = true; };
-	cfg.desks.forEach(d => mark(d.x, d.y, 2, 1));
-	mark(cfg.table.x, cfg.table.y, cfg.table.w, cfg.table.h);
+	const rect = r => mark(r.x, r.y, r.w, r.h);
+	/* A desk blocks its own two tiles and the monitor tiles on its far side (north for face-up, south for face-down). */
+	const desk = d => { mark(d.x, d.y, 2, 1); mark(d.x, d.face === 'down' ? d.y + 1 : d.y - 1, 2, 1); };
+	cfg.walls.forEach(rect);
+	cfg.desks.forEach(desk);
+	cfg.verifyDesks.forEach(desk);
+	cfg.podArms.forEach(rect);
+	cfg.sofas.forEach(rect);
+	rect(cfg.coffeeTable);
 	mark(cfg.coffee.x, cfg.coffee.y, cfg.coffee.w, 1);
+	rect(cfg.judges);
+	rect(cfg.armchair);
+	rect(cfg.researchScreen);
+	cfg.shelves.forEach(rect);
 	cfg.plants.forEach(p => mark(p.x, p.y, 1, 1));
 	mark(cfg.rack.x, cfg.rack.y, 1, 2);
 	mark(cfg.bench.x, cfg.rows - 1, cfg.bench.w, 1);
-	Object.values(cfg.lounge).forEach(s => mark(s.x, s.y, 1, 1));
+	// Seated staff block their sofa tile. A standing one (verify, by the lab door) leaves its tile open, so the door stays through.
+	Object.values(cfg.lounge).filter(s => s.sit).forEach(s => mark(s.x, s.y, 1, 1));
 	props.forEach(p => mark(p.x, p.y, p.w, p.h));
 	return block;
 }
@@ -52,9 +97,11 @@ const P = {
 	bg: '#060407', panel: '#100A0F', user: '#2A1523', sel: '#28121E', border: '#563040',
 	text: '#F6EFF3', muted: '#A78E9B', dim: '#76616B', gold: '#E0C27A', blue: '#A9C7EE', sky: '#C4DAF6',
 	sec: '#D2CBD0', softRose: '#D7A0B8', green: '#B4E7C7', sand: '#F2B86D', red: '#FF718F',
-	purple: '#F095C8', deep: '#C96AA2', violet: '#FFB1DD', steel: '#A78E9B', floorA: '#4A2A3A', floorB: '#563446',
-	seam: '#0B070A', plum: '#2A1523', champagne: '#E0C27A'
+	purple: '#F095C8', deep: '#C96AA2', violet: '#FFB1DD', steel: '#A78E9B', floorA: '#8C6272', floorB: '#876072',
+	seam: '#6E4D5C', plum: '#2A1523', champagne: '#E0C27A'
 };
+/* Floor planks (S17): a light dusty rose with little difference between planks, so the floor reads as one surface. */
+export const FLOOR_TONES = { a: P.floorA, b: P.floorB, seam: P.seam };
 
 /* Mix two #rrggbb colors; t=0 gives a, t=1 gives b. Used for 3-tone shading. */
 export function goMix(a, b, t) {
@@ -195,7 +242,9 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 
 	/* ---------- walkable grid ---------- */
 	const block = walkableGrid(cfg);
-	const tb = cfg.table, cf = cfg.coffee, wb = cfg.whiteboard;
+	const cf = cfg.coffee, wb = cfg.whiteboard;
+	/* Every desk, pod first, then the verify lab. The engine keeps one screen state per desk in this order. */
+	const allDesks = [...cfg.desks, ...cfg.verifyDesks];
 
 	function path(fx, fy, tx, ty) {
 		const key = (x, y) => y * COLS + x, prev = new Map([[key(fx, fy), null]]), q = [[fx, fy]];
@@ -221,23 +270,20 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	const FX = tx => tx * T + T / 2, FY = ty => ty * T + T - 4;
 
 	/* ---------- spots ---------- */
-	const deskSpot = d => ({ tx: d.x, ty: d.y + 1, px: FX(d.x + 1) - 4, py: FY(d.y + 1) - 2, face: 'up', sit: true });
+	/* A seated figure sits on the tile in front of its desk: south of a face-up desk, north of a face-down one. */
+	const sitTile = d => (d.face === 'down' ? d.y - 1 : d.y + 1);
+	/* Centred under its desk: the desk spans two tiles, so its middle is the edge between them. */
+	const deskSpot = d => ({ tx: d.x, ty: sitTile(d), px: (d.x + 1) * T, py: FY(sitTile(d)) - 2, face: d.face === 'down' ? 'down' : 'up', sit: true });
 	const spots = {
-		/* One row below the wall props so a 48 px tall orchestrator does not cover the board or the pot. */
-		whiteboard: { tx: wb.x + 1, ty: 3, px: FX(wb.x + 2), py: FY(3), face: 'up' },
+		/* Stands in front of the board, on the tile under its middle. */
+		whiteboard: { tx: wb.x + 1, ty: 3, px: FX(wb.x + 1), py: FY(3), face: 'up' },
 		coffee: { tx: cf.x + 1, ty: cf.y + 2, face: 'up' },
 		front: { tx: cfg.front.x, ty: cfg.front.y, face: 'down' },
-		rest: { tx: cfg.orchStart.x, ty: cfg.orchStart.y, face: 'down' }
+		/* The armchair: the orchestrator rests here while idle (S17) and does not wander the room. */
+		rest: { tx: cfg.orchStart.x, ty: cfg.orchStart.y, face: 'down', sit: true }
 	};
-	/* Waiting bench: queued residents stand on the row above the bench. Past the bench width they continue along that row, beside it, so they never stand on a desk seat. */
-	const benchSpot = i => ({ tx: cfg.bench.x + (i % (2 * cfg.bench.w)), ty: ROWS - 2, face: 'down' });
-	function randomSpot() {
-		for (let n = 0; n < 200; n++) {
-			const x = Math.floor(rnd(0, COLS)), y = Math.floor(rnd(3, ROWS - 1));
-			if (!block[y][x]) return { tx: x, ty: y, face: pick(['down', 'left', 'right']) };
-		}
-		return spots.rest;
-	}
+	/* Waiting bench: queued residents stand on the row above the bench and stack upwards past its width, so they never stand on a desk seat. */
+	const benchSpot = i => ({ tx: cfg.bench.x + (i % cfg.bench.w), ty: ROWS - 2 - Math.floor(i / cfg.bench.w), face: 'down' });
 
 	/* ---------- state ---------- */
 	const reducedQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -251,7 +297,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	let camera = null;
 	const cam = { x: W / 2, y: H / 2, placed: false, tx: 0, ty: 0 };
 	const orch = {
-		x: FX(cfg.orchStart.x), y: FY(cfg.orchStart.y), path: [], face: 'down', sit: false, moving: false,
+		x: FX(cfg.orchStart.x), y: FY(cfg.orchStart.y), path: [], face: 'down', sit: true, moving: false,
 		mode: 'idle', wait: 0.5, bubble: null, step: 0, onArrive: null, target: null
 	};
 
@@ -294,19 +340,15 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		intent = name;
 		orch.path = []; orch.onArrive = null; orch.target = null; wbWriting = false;
 		if (name === 'floor') {
+			// Back to the armchair (S17): it walks there, then rests. Under reduced motion it is placed at once.
 			if (reduced) { placeAt(orch, spots.rest); orch.mode = 'idle'; }
-			else { orch.mode = 'idle'; orch.wait = 0.4; }
+			else { orch.mode = 'walk'; goTo(orch, spots.rest, () => { orch.mode = 'idle'; orch.sit = true; orch.wait = 0.5; }); }
 			return;
 		}
 		const spot = spots[name];
 		if (reduced) { placeAt(orch, spot); arrive(name); return; }
 		orch.mode = 'walk';
 		goTo(orch, spot, () => arrive(name));
-	}
-	/* Filler wandering: only while idle on the floor, never under reduced motion. */
-	function wander() {
-		orch.mode = 'walk';
-		goTo(orch, randomSpot(), () => { orch.mode = 'idle'; orch.wait = rnd(1, 2.5); });
 	}
 	function updateOrch(dt) {
 		if (orch.mode === 'plan') {
@@ -316,8 +358,13 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 				else if ((wbHold += dt) > 2) { wbLines = 1; wbChecks = 0; wbPartial = 0; wbHold = 0; }
 			}
 		} else if (orch.mode === 'idle' && !reduced) {
+			// Resting in the armchair (S17): now and then the head turns to one side and back, and nothing walks.
 			orch.wait -= dt;
-			if (orch.wait <= 0) wander();
+			if (orch.wait <= 0) {
+				const turned = orch.face !== 'down';
+				orch.face = turned ? 'down' : pick(['left', 'right']);
+				orch.wait = turned ? rnd(3, 6) : 1.2;
+			}
 		}
 	}
 
@@ -397,15 +444,15 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 				B(x + 3 + b * 4, (r === 0 ? 9 : r === 1 ? 17 : 25) + (6 - bh), 3, bh, col);
 			}
 		}
-		/* Rug with border pattern and corner tassels. */
-		if (cfg.rug) {
-			const r = cfg.rug, x = r.x * T + 6, y = r.y * T + 6, w = r.w * T - 12, h = r.h * T - 12;
-			B(x, y, w, h, P.sel); B(x + 3, y + 3, w - 6, h - 6, goMix(P.sel, P.border, 0.4));
-			B(x + 6, y + 6, w - 12, h - 12, P.sel);
-			for (let i = 0; i < w - 12; i += 6) B(x + 6 + i, y + 6, 3, 1, P.border);
-			for (let i = 0; i < h - 12; i += 6) B(x + 6, y + 6 + i, 1, 3, P.border);
+		/* Rugs with a bordered pattern and corner tassels, one per rug in the config. */
+		for (const r of cfg.rugs) {
+			const x = r.x * T + 6, y = r.y * T + 6, w = r.w * T - 12, h = r.h * T - 12;
+			const cloth = goMix(P.sel, P.deep, 0.3);
+			B(x, y, w, h, cloth); B(x + 3, y + 3, w - 6, h - 6, goMix(cloth, P.border, 0.35));
+			B(x + 6, y + 6, w - 12, h - 12, cloth);
+			for (let i = 0; i < w - 12; i += 6) B(x + 6 + i, y + 6, 3, 1, P.violet);
+			for (let i = 0; i < h - 12; i += 6) B(x + 6, y + 6 + i, 1, 3, P.violet);
 			[[x + 1, y + 1], [x + w - 4, y + 1], [x + 1, y + h - 4], [x + w - 4, y + h - 4]].forEach(([a, b]) => { B(a, b, 3, 3, P.gold); B(a + 1, b + 1, 1, 1, P.text); });
-			B(x + w / 2 - 2, y + h / 2 - 2, 4, 4, P.deep);
 		}
 		/* Door and mat at the bottom edge. */
 		if (cfg.door) {
@@ -444,6 +491,31 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 			B(x + 2, y + 3, 11, 5, P.bg); B(x + 2, y + 3, 11, 1, P.border);
 			B(x + 5, y + 10, 5, 2, P.border);
 		}
+	}
+
+	/* ---------- rooms (S17): walls, the pod's cross divider, sofas, armchair, judges' table, research screen frame ---------- */
+	function paintRooms() {
+		/* Walls and partitions: wood panels with a lit top edge and a shadow along the bottom, so no wall reads as floor. */
+		for (const w of cfg.walls) {
+			const x = w.x * T, y = w.y * T, ww = w.w * T, hh = w.h * T;
+			B(x, y, ww, hh, P.border); B(x, y, ww, 1, C.steelH);
+			B(x + ww - 2, y, 2, hh, shade(P.border)); B(x, y + hh - 2, ww, 2, P.sel);
+		}
+		/* Cross divider of the pod: steel panels between the four monitors. */
+		for (const a of cfg.podArms) {
+			const x = a.x * T, y = a.y * T, ww = a.w * T, hh = a.h * T;
+			B(x + 3, y + 3, ww - 6, hh - 6, P.steel); B(x + 3, y + 3, ww - 6, 1, C.steelH); B(x + 3, y + hh - 4, ww - 6, 1, shade(P.steel));
+		}
+		for (const sofa of cfg.sofas) drawSofa(sofa, sofa.y < cfg.coffeeTable.y ? 'n' : 's');
+		drawCoffeeTable(cfg.coffeeTable);
+		drawArmchair(cfg.armchair);
+		drawJudges();
+		for (const sh of cfg.shelves) drawShelf(sh);
+		/* Research screen frame on a stand; its content is drawn live. */
+		const r = cfg.researchScreen, x = r.x * T, y = r.y * T;
+		B(x + 5, y + 5, 2 * T - 10, 3 * T - 24, P.steel);
+		B(x + 7, y + 7, 2 * T - 14, 3 * T - 28, P.bg);
+		B(x + T - 3, y + 3 * T - 18, 6, 8, P.steel); B(x + T - 8, y + 3 * T - 10, 16, 3, P.border);
 	}
 
 	/* ---------- live room parts (drawn each frame) ---------- */
@@ -490,13 +562,23 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		R(x + 1, y + 19, 46, 3, C.woodS);
 		R(x + 2, y + 22, 4, 2, P.border); R(x + 40, y + 22, 4, 2, P.border);
 		R(x + 36, y + 9, 8, 3, C.woodS); R(x + 37, y + 10, 6, 1, P.gold);
-		/* Monitor: bezel, screen (screensaver when empty, the agent's work while it runs), stand. */
-		const mx = x + 14, my = y - 14;
-		R(mx, my, 20, 16, P.border); R(mx, my, 20, 1, P.steel);
-		R(mx + 1, my + 1, 18, 13, P.bg);
-		if (deskWorking[i]) drawWorkingScreen(mx + 1, my + 1, deskWorking[i], i);
-		else drawScreensaver(mx + 1, my + 1, 18, 13, i);
-		R(mx + 8, my + 16, 4, 3, P.steel); R(mx + 5, my + 19, 10, 2, P.border);
+		/* Monitor on the pod's centre side: above a face-up desk, below a face-down one. A face-down screen faces its sitter, so the
+		   camera sees its back, with an activity light in place of the screen. */
+		const mx = x + 14;
+		if (d.face === 'down') {
+			const my = y + 20;
+			R(mx, my, 20, 14, P.border); R(mx + 1, my + 1, 18, 11, P.steel); R(mx + 1, my + 1, 18, 1, P.sec);
+			R(mx + 8, my + 14, 4, 2, P.steel); R(mx + 5, my + 16, 10, 2, P.border);
+			R(mx + 15, my + 9, 2, 2, deskWorking[i] || P.dim);
+		} else {
+			/* Bezel, screen (screensaver when empty, the agent's work while it runs), stand. */
+			const my = y - 14;
+			R(mx, my, 20, 16, P.border); R(mx, my, 20, 1, P.steel);
+			R(mx + 1, my + 1, 18, 13, P.bg);
+			if (deskWorking[i]) drawWorkingScreen(mx + 1, my + 1, deskWorking[i], i);
+			else drawScreensaver(mx + 1, my + 1, 18, 13, i);
+			R(mx + 8, my + 16, 4, 3, P.steel); R(mx + 5, my + 19, 10, 2, P.border);
+		}
 		/* Keyboard, mouse, folder, empty mug. */
 		R(x + 9, y + 9, 14, 4, P.steel); R(x + 9, y + 9, 14, 1, P.sec);
 		for (let k = 0; k < 4; k++) R(x + 10 + k * 3, y + 10, 2, 1, P.border);
@@ -515,22 +597,66 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		R(px - 2, py + 4, 4, 3, P.border); R(px - 5, py + 7, 2, 1, P.bg); R(px + 3, py + 7, 2, 1, P.bg);
 	}
 
-	function drawTable() {
-		const x = tb.x * T, y = tb.y * T, w = tb.w * T, h = tb.h * T;
-		const topH = h - 12, edge = y + 4 + topH;
-		R(x + 2, y + 4, w - 4, topH, C.woodH); R(x + 2, y + 4, w - 4, 1, '#FFD9A6');
-		R(x + 2, edge, w - 4, 4, C.woodS); R(x + 2, edge + 4, w - 4, 2, P.border);
-		R(x + 4, y + h - 2, 3, 2, P.bg); R(x + w - 7, y + h - 2, 3, 2, P.bg);
-		/* Laptop (closed in T2: no sync meeting yet), papers, vase with flowers. */
-		const lx = x + 6, ly = y + 5, lh = Math.max(5, topH - 5);
-		R(lx, ly, 14, lh, P.steel); R(lx + 1, ly + 1, 12, lh - 2, P.bg);
-		R(lx - 2, ly + lh - 1, 18, 2, P.sec);
-		R(x + 26, y + 6, 8, 5, P.text); R(x + 26, y + 6, 8, 1, P.sec);
-		R(x + 28, y + 8, 4, 1, P.steel);
-		const vx = x + w - 16, vy = y + 4;
-		R(vx, vy + 8, 8, 8, C.pinkS); R(vx + 1, vy + 8, 6, 1, C.pink); R(vx - 1, vy + 14, 10, 2, P.deep);
-		R(vx + 3, vy + 2, 1, 6, C.leafS); R(vx + 1, vy - 1, 3, 3, C.pink); R(vx + 5, vy + 1, 3, 2, P.violet);
-		R(vx - 3, vy + 3, 3, 3, C.leaf); R(vx + 7, vy + 4, 3, 3, C.leaf);
+	/* Lounge sofa (S16, S17): a pink cushion row with its backrest on the wall side, `back` 'n' or 's'. The staff sit on it, so it is drawn under them. */
+	function drawSofa(sofa, back) {
+		const x = sofa.x * T, y = sofa.y * T, w = sofa.w * T;
+		const rest = back === 'n' ? y + 2 : y + T - 8, seat = back === 'n' ? y + 8 : y + 4;
+		B(x + 1, rest, w - 2, 6, C.pinkS); B(x + 1, rest, w - 2, 1, C.pink);
+		B(x, seat, w, 12, C.pink); B(x, seat, w, 1, C.pinkH); B(x, seat + 11, w, 1, C.pinkS);
+		for (let i = 1; i < sofa.w; i++) B(x + i * T, seat + 1, 1, 10, C.pinkS);
+		B(x - 1, y + 4, 2, T - 6, C.pinkS); B(x + w - 1, y + 4, 2, T - 6, C.pinkS);
+		B(x + 1, seat + 12, w - 2, 2, P.border);
+	}
+	/* Coffee table between the sofas, with two cups. */
+	function drawCoffeeTable(t) {
+		const x = t.x * T, y = t.y * T, w = t.w * T;
+		B(x + 3, y + 8, w - 6, 8, C.woodH); B(x + 3, y + 8, w - 6, 1, '#FFD9A6'); B(x + 3, y + 15, w - 6, 2, C.woodS);
+		B(x + 4, y + 17, 2, 4, P.border); B(x + w - 6, y + 17, 2, 4, P.border);
+		B(x + 7, y + 5, 3, 3, P.text); B(x + 13, y + 5, 3, 3, P.text);
+	}
+	/* Orchestrator's armchair: its back on the north side, where the orchestrator's head turns from. */
+	function drawArmchair(a) {
+		const x = a.x * T, y = a.y * T, w = a.w * T, h = a.h * T;
+		B(x + 1, y + 1, w - 2, 8, C.pinkS); B(x + 1, y + 1, w - 2, 1, C.pink);
+		B(x, y + 9, w, h - 9, C.pink); B(x, y + 9, w, 1, C.pinkH);
+		B(x, y + 9, 3, h - 9, C.pinkS); B(x + w - 3, y + 9, 3, h - 9, C.pinkS);
+		B(x + 3, y + h - 4, w - 6, 3, C.pinkS);
+		B(x + 2, y + h - 1, 2, 2, P.border); B(x + w - 4, y + h - 1, 2, 2, P.border);
+	}
+	/* Judges' table (S7): a long table with papers and a gavel, and two chairs on its north side. T5 seats the judges here. */
+	function drawJudges() {
+		const j = cfg.judges, x = j.x * T, y = j.y * T, w = j.w * T, h = j.h * T;
+		B(x + 2, y + 6, w - 4, h - 10, C.woodH); B(x + 2, y + 6, w - 4, 1, '#FFD9A6');
+		B(x + 2, y + h - 4, w - 4, 3, C.woodS); B(x + 2, y + h - 1, 3, 1, P.border); B(x + w - 5, y + h - 1, 3, 1, P.border);
+		B(x + 8, y + 9, 8, 6, P.text); B(x + 8, y + 9, 8, 1, P.sec); B(x + 10, y + 12, 4, 1, P.steel);
+		B(x + w - 14, y + 10, 6, 3, P.border); B(x + w - 14, y + 10, 6, 1, P.steel); B(x + w - 11, y + 13, 1, 4, C.woodS);
+		for (const c of cfg.judgeSeats) {
+			const cx = c.x * T, cy = c.y * T;
+			B(cx + 4, cy + 3, 16, 9, P.border); B(cx + 5, cy + 4, 14, 7, P.sel);
+			B(cx + 2, cy + 12, 20, 6, P.border); B(cx + 3, cy + 13, 18, 4, P.sel);
+		}
+	}
+	/* Archive shelf (S17): a case with folders in two rows, on a plinth. */
+	function drawShelf(sh) {
+		const x = sh.x * T, y = sh.y * T, w = sh.w * T;
+		B(x + 1, y + 2, w - 2, T - 4, P.border); B(x + 3, y + 4, w - 6, 8, P.bg); B(x + 3, y + 14, w - 6, 6, P.bg);
+		B(x + 3, y + 12, w - 6, 2, C.steelH);
+		for (let i = 0; i < w - 8; i += 4) {
+			const c = [P.sand, P.blue, P.gold, P.green, P.purple][(i / 4 + sh.y) % 5];
+			B(x + 4 + i, y + 5, 3, 6, c); B(x + 4 + i, y + 15, 3, 4, shade(c));
+		}
+		B(x + 1, y + T - 2, w - 2, 2, P.seam);
+	}
+	/* Research screen (S17): charts and code lines. They move while a verify agent works and stay flat while the lab is empty. */
+	function drawResearch() {
+		const r = cfg.researchScreen, sx = r.x * T + 7, sy = r.y * T + 7, iw = 2 * T - 14, ih = 3 * T - 28;
+		const busy = deskWorking.slice(cfg.desks.length).some(Boolean) && !reduced;
+		for (let k = 0; k < 4; k++) R(sx + 2, sy + 2 + k * 3, 5 + Math.floor(hash(k + 4) * (iw - 12)), 1, k === 0 ? P.gold : P.steel);
+		const bars = [P.blue, P.purple, P.sand, P.green, P.violet, P.sky];
+		bars.forEach((c, k) => {
+			const height = busy ? 3 + Math.round(triangle(time * 0.7 + k * 0.31) * (ih - 14)) : 4 + k;
+			R(sx + 3 + k * 5, sy + ih - 3 - height, 3, height, c);
+		});
 	}
 
 	/* The pot level follows the eased fill; the LED is red while brewing. */
@@ -789,7 +915,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		const sw = c.moving ? (walk === 1 ? -1 : walk === 3 ? 1 : 0) : 0;
 		g.globalAlpha = 0.35; R(fx - 9, fy - 1, 18, 2, INK); g.globalAlpha = 1;
 		const { rows, flip, fam } = headFor(c);
-		drawFigure(ox, oy, { color: ORCH_COLOR, walk, sw, sit: false });
+		drawFigure(ox, oy, { color: ORCH_COLOR, walk, sw, sit: c.sit });
 		const map = { K: INK, H: ORCH_HAIR, h: shade(ORCH_HAIR), l: hi(ORCH_HAIR), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep };
 		sprite(rows, map, ox, oy, flip);
 		const blink = !reduced && Math.floor(time * 10) % 37 === 0;
@@ -821,7 +947,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	/* Sprites follow the approved design (design/agent-office/01-overworld-hq.html: drawBody, drawKit), redrawn at 24x36 (T9). */
 	const LEAVE_DELAY = 1.6;
 	const residents = new Map();
-	let deskWorking = cfg.desks.map(() => null);
+	let deskWorking = allDesks.map(() => null);
 	/* Explore: powder blue, safari hat, binoculars. Worker: mint or sky, hard hat, tool belt. Verify: pink, lab coat, glasses, clipboard. */
 	const lookFor = a => {
 		if (a.role === 'explore') return { color: P.blue, hair: P.gold, kit: 'explore' };
@@ -829,7 +955,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		// A worker that takes the lounge's staff member keeps the staff look, so it reads as the same person (S16).
 		return a.claimed || strHash(a.id) % 2 === 0 ? { color: P.green, hair: P.purple, kit: 'worker' } : { color: P.sky, hair: P.steel, kit: 'worker' };
 	};
-	const seatSpot = seat => (seat.zone === 'desk' ? deskSpot(cfg.desks[seat.index]) : benchSpot(seat.index));
+	const seatSpot = seat => (seat.zone === 'verify' ? deskSpot(cfg.verifyDesks[seat.index]) : seat.zone === 'desk' ? deskSpot(cfg.desks[seat.index]) : benchSpot(seat.index));
 	const loungeSpot = role => ({ tx: cfg.lounge[role].x, ty: cfg.lounge[role].y, face: cfg.lounge[role].face });
 	const sameSeat = (a, b) => !!a && !!b && a.zone === b.zone && a.index === b.index;
 	/* Reduced motion: an agent snaps to its seat. Otherwise it walks there. */
@@ -963,7 +1089,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	const SIP_OFFSET = { explore: 1.5, worker: 4.5, verify: 7 };
 	const staffFigures = Object.keys(cfg.lounge).map(role => {
 		const spot = cfg.lounge[role], id = `staff-${role}`;
-		return { id, role, x: FX(spot.x), y: FY(spot.y), face: spot.face, moving: false, sit: false, typing: false, sipping: false, step: 0, ...lookFor({ id, role, claimed: true }) };
+		return { id, role, x: FX(spot.x), y: FY(spot.y), face: spot.face, moving: false, sit: !!spot.sit, typing: false, sipping: false, step: 0, ...lookFor({ id, role, claimed: true }) };
 	});
 	/* The staff members the scene reports present this frame. */
 	let presentStaff = [];
@@ -986,8 +1112,9 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		syncResidents(next.agents || []);
 		const present = new Set((next.staff || []).filter(s => s.present).map(s => s.role));
 		presentStaff = staffFigures.filter(f => present.has(f.role));
-		deskWorking = cfg.desks.map((_, i) => {
-			const owner = (next.agents || []).find(a => a.seat && a.seat.zone === 'desk' && a.seat.index === i && a.status === 'running' && !a.leaving);
+		deskWorking = allDesks.map((_, i) => {
+			const zone = i < cfg.desks.length ? 'desk' : 'verify', index = i < cfg.desks.length ? i : i - cfg.desks.length;
+			const owner = (next.agents || []).find(a => a.seat && a.seat.zone === zone && a.seat.index === index && a.status === 'running' && !a.leaving);
 			return owner ? lookFor(owner).color : null;
 		});
 	}
@@ -1019,14 +1146,14 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 		drawClockHands();
 		drawWhiteboard();
 		const list = [];
-		cfg.desks.forEach((d, i) => {
+		allDesks.forEach((d, i) => {
 			const s = deskSpot(d), chairY = s.py - CHAIR_LIFT;
 			list.push({ k: (d.y + 1) * T - 1, f: () => drawDesk(d, i) });
 			/* Both chair halves sort before the resident on the seat, so a seated figure covers its chair. */
 			list.push({ k: s.py - 0.6, f: () => drawChair(s.px, chairY, false) });
 			list.push({ k: s.py - 0.5, f: () => drawChair(s.px, chairY, true) });
 		});
-		list.push({ k: (tb.y + tb.h) * T - 1, f: drawTable });
+		list.push({ k: (cfg.researchScreen.y + cfg.researchScreen.h) * T - 1, f: drawResearch });
 		list.push({ k: (cf.y + 1) * T - 1, f: drawCoffee });
 		cfg.plants.forEach(p => list.push({ k: (p.y + 1) * T - 1, f: () => drawPlant(p) }));
 		FEATURE_PROPS.forEach(p => list.push({ k: (p.y + p.h) * T - 1, f: () => PROP_DRAWERS[p.feature](p, lit[p.feature]) }));
@@ -1132,6 +1259,7 @@ export function createOfficeEngine(canvas, cfg, hooks = {}) {
 	if (reducedQuery && reducedQuery.addEventListener) reducedQuery.addEventListener('change', onMotionChange);
 
 	paintStatic();
+	paintRooms();
 	/* Start from the rest spot until the first scene arrives; the page calls setScene straight after. */
 	applyIntent('floor');
 	requestAnimationFrame(frame);
