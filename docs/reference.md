@@ -73,7 +73,7 @@ Open the compact layout with `/office dock`, or with "Open the compact window" /
 
 `/office story`, or "Open in story mode" / "Turn on and open in story mode" in the menu, opens the window at `?layout=story` (`design/agent-office/03-story-mode.html`). Story fills the whole window with a close-up of the room:
 
-- **Camera.** The room is drawn at a whole-number zoom (up to 4x), so the pixels stay square. The window is the camera: it eases toward the actor that acted last and never shows past the room's edge. Orchestrator events move it to the orchestrator, a subagent event to that resident, and a feature event to its prop.
+- **Camera.** The room is drawn at a whole-number zoom (up to 4x), so the pixels stay square. The zoom always keeps at least 12 of the room's 15 rows in view: 2x on a 1366×768 window, 3x on 1920×1080, 4x on 2560×1440. The window is the camera: it eases toward the actor that acted last and never shows past the room's edge. Orchestrator events move it to the orchestrator, a subagent event to that resident, and a feature event to its prop.
 - **CONTEXT BREW** (top left): the context left as a rounded percent, with an HP-style bar. It shows "—" until Pi reports usage.
 - **PARTY** (top right): the orchestrator and each resident with its state. The row the camera follows is marked with ▶.
 - **Dialog** (bottom): the narration, or the `ask_user` prompt while one is open. The footer shows the key hint: Space or a click moves to the next line.
