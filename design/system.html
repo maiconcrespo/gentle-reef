@@ -9,6 +9,7 @@
     --bg: #060407; --panel: #100A0F; --user: #2A1523; --sel: #28121E; --border: #563040;
     --text: #F6EFF3; --muted: #A78E9B; --dim: #76616B; --gold: #E0C27A; --blue: #A9C7EE;
     --green: #B4E7C7; --red: #FF718F; --purple: #F095C8; --sand: #F2B86D; --heading: #E0C27A; --pink: #F095C8;
+    --fuchsia: #FF1F9D; --fuchsia-deep: #C2107A; --floor: #8C6272; --floor-alt: #876072; --floor-seam: #6E4D5C;
     --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
@@ -76,7 +77,7 @@
 <body>
 <header>
   <h1>gentle-shell · Gentle Office design system</h1>
-  <p class="lead">Synced from web/office.css. Every value below is recorded from that file; nothing is invented.</p>
+  <p class="lead">Synced from web/office.css (CSS tokens) and web/office-engine.js (canvas tokens). Every value below is recorded from those files; nothing is invented.</p>
 </header>
 
 <section aria-labelledby="colours-h">
@@ -94,7 +95,7 @@
     <div class="sw"><span class="chip" style="background: var(--blue)"></span><div><b>--blue</b><code>#A9C7EE</code><small>explore role, tool lines</small></div></div>
     <div class="sw"><span class="chip" style="background: var(--green)"></span><div><b>--green</b><code>#B4E7C7</code><small>live, worker role, ok</small></div></div>
     <div class="sw"><span class="chip" style="background: var(--red)"></span><div><b>--red</b><code>#FF718F</code><small>fail, live bad</small></div></div>
-    <div class="sw"><span class="chip" style="background: var(--purple)"></span><div><b>--purple · --pink</b><code>#F095C8</code><small>ask tone, verify role, mustache</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--purple)"></span><div><b>--purple · --pink</b><code>#F095C8</code><small>ask tone, verify role</small></div></div>
     <div class="sw"><span class="chip" style="background: var(--sand)"></span><div><b>--sand</b><code>#F2B86D</code><small>coffee, brew, cups</small></div></div>
   </div>
   <h2 style="margin-top: 18px">Literal values (recorded, not tokens)</h2>
@@ -102,6 +103,14 @@
     <div class="sw"><span class="chip" style="background: #C96AA2"></span><div><b>#C96AA2</b><small>header bottom border · office.css:10</small></div></div>
     <div class="sw"><span class="chip" style="background: #151316"></span><div><b>#151316</b><small>live dot ring · office.css:15</small></div></div>
     <div class="sw"><span class="chip" style="background: rgba(6, 4, 7, .7)"></span><div><b>rgba(6, 4, 7, .7)</b><small>story box shadow · office.css:137</small></div></div>
+  </div>
+  <h2 style="margin-top: 18px">Canvas tokens · web/office-engine.js</h2>
+  <div class="grid swatches">
+    <div class="sw"><span class="chip" style="background: var(--fuchsia)"></span><div><b>--fuchsia</b><code>#FF1F9D</code><small>orchestrator mustache, hat rose · engine:117</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--fuchsia-deep)"></span><div><b>--fuchsia-deep</b><code>#C2107A</code><small>mustache underside · engine:117</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--floor)"></span><div><b>--floor</b><code>#8C6272</code><small>floor plank, tone A · engine:100</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--floor-alt)"></span><div><b>--floor-alt</b><code>#876072</code><small>floor plank, tone B · engine:100</small></div></div>
+    <div class="sw"><span class="chip" style="background: var(--floor-seam)"></span><div><b>--floor-seam</b><code>#6E4D5C</code><small>plank seams · engine:101</small></div></div>
   </div>
 </section>
 

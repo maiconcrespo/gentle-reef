@@ -9,6 +9,7 @@
     --bg: #060407; --panel: #100A0F; --user: #2A1523; --sel: #28121E; --border: #563040;
     --text: #F6EFF3; --muted: #A78E9B; --dim: #76616B; --gold: #E0C27A; --blue: #A9C7EE;
     --green: #B4E7C7; --red: #FF718F; --purple: #F095C8; --sand: #F2B86D; --heading: #E0C27A; --pink: #F095C8;
+    --fuchsia: #FF1F9D; --fuchsia-deep: #C2107A; --floor: #8C6272; --floor-alt: #876072; --floor-seam: #6E4D5C;
     --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
@@ -32,7 +33,7 @@
   #coffee-pct { color: var(--sand); }
 
   .main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; min-height: 0; }
-  .col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .col { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
 
   /* Stage band (T18): the real room at 2x, 1440 x 720, centred in the 1560 px chat column; the 60 px margins on each side are the hallway.
      722 px with the rule under it. */
@@ -40,6 +41,47 @@
   .hall { flex: none; width: 60px; height: 720px; }
   .hall canvas { display: block; width: 60px; height: 720px; image-rendering: pixelated; image-rendering: crisp-edges; }
   .stage canvas#room { flex: none; display: block; width: 1440px; height: 720px; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+  /* Stage sizes (S18), cycled by alt+r. small: 40% of the window, the room at 2x with the camera on the acting character (story mode).
+     hidden: no stage; the one-line status strip above the chat carries the crew. */
+  body[data-size="small"] .stage { height: 368px; }
+  body[data-size="small"] .stage canvas#room { height: 368px; }
+  body[data-size="small"] .hall { display: none; }
+  body[data-size="hidden"] .stage { display: none; }
+  .strip { display: none; flex: none; align-items: center; gap: 14px; height: 36px; margin: 8px 18px 0; padding: 0 12px; background: var(--panel); border: 1px solid var(--border); font-size: 12px; white-space: nowrap; overflow: hidden; }
+  body[data-size="hidden"] .strip { display: flex; }
+  .strip .crew { display: flex; align-items: center; gap: 4px; flex: none; }
+  .strip .mini { width: 24px; height: 24px; image-rendering: pixelated; flex: none; }
+  #strip-text { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  .key { padding: 0 6px; background: var(--sel); border: 1px solid var(--border); color: var(--gold); font: inherit; font-size: 12px; }
+
+  /* Reply window (S18): a game window over the chat area, framed like the story box. Page 1 is the text and what it did; page 2 the agents, the context and the cost. */
+  .reply { position: absolute; left: 18px; right: 18px; bottom: 58px; z-index: 6; display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 18px; padding: 14px 18px 12px; background: var(--panel); border: 3px solid var(--text); box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 5px var(--sel), 6px 6px 0 rgba(6, 4, 7, .7); }
+  .reply[hidden], .reply-main .page[hidden] { display: none; }
+  .portrait { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0 10px; background: var(--user); border: 2px solid var(--border); box-shadow: inset 0 0 0 2px var(--bg), inset 0 0 0 3px var(--sel); }
+  .portrait canvas { width: 144px; height: 144px; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .portrait figcaption { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .reply-main { display: flex; flex-direction: column; min-width: 0; }
+  .reply-main .page { display: flex; flex-direction: column; min-height: 0; }
+  .reply-text { margin: 0; font-size: 15px; line-height: 1.45; }
+  .reply h3 { margin: 12px 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+  .tools, .agents { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+  .tools li { display: flex; justify-content: space-between; gap: 12px; }
+  .tools .name { color: var(--blue); }
+  .tools .dur { color: var(--sand); font-weight: 700; }
+  .agents li { display: flex; align-items: center; gap: 10px; }
+  .agents .mini { width: 24px; height: 24px; image-rendering: pixelated; flex: none; }
+  .agents .name { font-weight: 600; }
+  .agents .st { color: var(--muted); }
+  .agents .st.ok { color: var(--green); }
+  .agents .st.run { color: var(--gold); }
+  .deltas { display: flex; gap: 22px; margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+  .deltas b { color: var(--gold); font-weight: 700; }
+  .reply-next { margin: 8px 0 0; font-size: 13px; }
+  .reply-foot { margin-top: auto; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
+  .pager { color: var(--gold); font-weight: 700; }
+  .tri { color: var(--pink); display: inline-block; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
 
   /* ask_user dialog: story-mode box over the stage floor, display only. */
   .ask { position: absolute; left: 78px; bottom: 14px; width: 560px; padding: 12px 16px 14px; background: var(--panel); border: 3px solid var(--text); box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border); }
@@ -52,10 +94,13 @@
   .who { color: var(--gold); font-weight: 700; }
 
   /* Chat under the stage: caption, three lines of log, and the input. */
-  .caption { margin: 6px 18px 0; padding: 6px 12px; background: var(--panel); border: 1px solid var(--border); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .caption { flex: none; margin: 6px 18px 0; padding: 6px 12px; background: var(--panel); border: 1px solid var(--border); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .caption .who { margin-right: 6px; }
-  .log { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding: 6px 18px; overflow: hidden; }
+  .log { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 4px; padding: 6px 18px; overflow-y: auto; scrollbar-width: none; }
+  .log > * { flex: none; }
+  .log > :first-child { margin-top: auto; }
   .msg { margin: 0; max-width: 900px; font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg.answer { white-space: normal; max-width: none; text-overflow: clip; }
   .you { color: var(--pink); }
   .tool { color: var(--blue); font-size: 13px; }
   .ok { color: var(--green); }
@@ -112,10 +157,15 @@
     <div class="box"><span class="lbl">Project</span><b>~/gentle-reef</b><span class="muted">feat/gentle-office</span></div>
     <div class="box"><span class="lbl">Model</span><span class="model">claude-opus-5-5</span><span class="muted">medium</span></div>
     <div class="box"><span class="lbl">Coffee</span><span class="bar" id="coffee-bar" role="img" aria-label="Coffee left"><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></span><b id="coffee-pct">80%</b><span class="muted" id="ctx">ctx 20%</span></div>
+    <div class="box"><span class="lbl">Stage</span><b id="size-name">big</b><kbd class="key">alt+r</kbd></div>
     <div class="box end"><span class="lbl">Profile</span><b>ClaudeGPT</b></div>
   </header>
   <div class="main">
     <section class="col" aria-label="Chat">
+      <div class="strip" aria-label="Office status strip">
+        <span class="crew"><canvas class="mini" data-face="orch" width="24" height="24" aria-hidden="true"></canvas><canvas class="mini" data-face="explore" width="24" height="24" aria-hidden="true"></canvas><canvas class="mini" data-face="worker" width="24" height="24" aria-hidden="true"></canvas><canvas class="mini" data-face="verify" width="24" height="24" aria-hidden="true"></canvas></span>
+        <span id="strip-text"></span>
+      </div>
       <section class="stage" aria-label="Office stage">
         <div class="hall" aria-hidden="true"><canvas id="hall-l" width="30" height="360"></canvas></div>
         <canvas id="room" role="img" aria-label="Office room at 2x: five rooms, a desk island in the work room, lounge sofas by the coffee table, the orchestrator's office, and the verify lab. The orchestrator writes on the whiteboard while a tool runs. Idle staff rest on the sofas and walk to a desk when their role starts work."></canvas>
@@ -128,15 +178,34 @@
         </section>
       </section>
       <p class="caption" aria-live="polite"><span class="who" id="narr-who">orchestrator</span><span id="narr-text">resting in its office.</span></p>
-      <div class="log" aria-label="Conversation">
-        <p class="msg"><span class="you">›</span> que el escenario se llene de lado a lado y que los status sean parte del modulo</p>
-        <p class="msg"><span class="who">✿ orchestrator</span> Hecho: motor real a 2x, sala completa y paneles de juego. Explore espera en el sofá.</p>
-        <p class="msg tool ok">✓ design/terminal-office/02-stage-over-chat.html</p>
-      </div>
+      <div class="log" id="log" aria-label="Conversation"></div>
       <div class="input" role="textbox" aria-readonly="true" aria-label="Prompt input">
         <span class="chip-you">YOU</span><span class="prompt" aria-hidden="true">›</span><span class="placeholder">waiting for input · type your prompt in the terminal</span><span class="caret" aria-hidden="true">▌</span>
-        <span class="hint">enter send · shift+enter newline</span>
+        <span class="hint"><kbd class="key">alt+r</kbd> stage size · enter send · shift+enter newline</span>
       </div>
+      <section class="reply" id="reply" aria-live="polite" aria-label="Reply window" hidden>
+        <figure class="portrait">
+          <canvas id="portrait" width="24" height="24" aria-hidden="true"></canvas>
+          <figcaption><span class="who">orchestrator</span><span class="chip orch">ORCH</span></figcaption>
+        </figure>
+        <div class="reply-main">
+          <div class="page" id="reply-p1">
+            <p class="reply-text" id="reply-text"></p>
+            <h3>What it did</h3>
+            <ul class="tools" id="reply-tools"></ul>
+          </div>
+          <div class="page" id="reply-p2" hidden>
+            <h3>Agents</h3>
+            <ul class="agents" id="reply-agents"></ul>
+            <p class="deltas"><span>context <b id="d-ctx"></b></span><span>cost <b id="d-cost"></b></span></p>
+            <p class="reply-next" id="reply-next"></p>
+          </div>
+          <footer class="reply-foot">
+            <span><span class="tri" aria-hidden="true">▼</span> <span class="pager" id="reply-pager">1/2</span></span>
+            <span id="reply-hint">Enter next page · Esc close back to chat</span>
+          </footer>
+        </div>
+      </section>
     </section>
     <aside class="side" aria-label="Sidebar">
       <section class="box2" aria-labelledby="st-h">
@@ -170,13 +239,14 @@
   <details class="notes" open>
     <summary>Annotations · toggle</summary>
     <ul>
-      <li><b>Stage.</b> The real engine room (HEAD, 30 x 15 tiles) at 2x: 1440 x 720 px, pixels square. The band is 722 px tall and 1560 px wide, so the room sits centred with a 60 px hallway on each side.</li>
-      <li><b>Chat.</b> The title bar is gone (it is not part of the module) so the stage fits. Caption, input and three log lines stay readable under the stage.</li>
-      <li><b>Panels.</b> Status bar, Status, Party and the input box are framed pixel panels. Coffee is the context as an HP bar: what is left of the pot (1 minus context).</li>
+      <li><b>Stage sizes.</b> alt+r cycles big, small, hidden. <b>Big:</b> the real room at 2x (1440 x 720) with a short chat. <b>Small:</b> 40% of the window (368 px); the camera follows the working resident, or the orchestrator, at 2x; about 12 chat lines. <b>Hidden:</b> plain chat with one status line and the crew's tiny avatars.</li>
+      <li><b>Reply window.</b> Each orchestrator reply opens a game window over the chat: the orchestrator portrait (engine head, 6x) beside the text. Page 1 is what it did, with durations; page 2 is the agents, the context and the cost delta. Enter pages, Esc closes. The full reply stays in the chat.</li>
+      <li><b>Walls.</b> Partition walls are 1/3 of a tile (8 px) centred on the tile, as in web/office-engine.js. A wall tile still blocks walkers.</li>
+      <li><b>Palette.</b> The fuchsia mustache and the dusty-rose floor are canvas tokens from design/system.md (--fuchsia, --floor, --floor-alt, --floor-seam), not --pink or --dim.</li>
       <li><b>Idle crew.</b> Explore, Worker and Verify rest on the lounge sofas by the coffee table. A role that acts walks to the pod or the lab and back to its sofa. Extra residents walk in from the door.</li>
       <li><b>Budget.</b> 5 fps (200 ms steps) only while someone walks, writes, types or sips, or a prop animates. Otherwise the page sleeps until the next sip, chat switch, head turn or scene step. Paused on blur, hidden or off-screen. Reduced motion: one still frame, no timers.</li>
       <li><b>ask_user.</b> The dialog opens over the stage floor while the question is open and closes with it. Display only: answers stay in the terminal.</li>
-      <li><b>Pin a moment.</b> Open this file with <b>#t=12</b> (0 to 80 s) to start the loop there.</li>
+      <li><b>Pin a moment.</b> Open with <b>#t=12</b> (0 to 80 s) to start the loop there; add <b>&amp;still</b> to freeze that frame for a capture.</li>
     </ul>
   </details>
 </div>
@@ -671,7 +741,7 @@ const P = {
 	text: TOK('text'), muted: TOK('muted'), dim: TOK('dim'), gold: TOK('gold'), blue: TOK('blue'), green: TOK('green'),
 	sand: TOK('sand'), red: TOK('red'), pink: TOK('pink'), purple: TOK('pink'),
 	sky: TOK('blue'), sec: TOK('text'), softRose: TOK('pink'), deep: TOK('pink'), violet: TOK('pink'), steel: TOK('muted'),
-	floorA: TOK('dim'), floorB: TOK('dim'), seam: TOK('border'), plum: TOK('user'), champagne: TOK('gold')
+	floorA: TOK('floor'), floorB: TOK('floor-alt'), floorSeam: TOK('floor-seam'), seam: TOK('border'), plum: TOK('user'), champagne: TOK('gold')
 };
 /* Nearest token, never a mix: a colour is either the first or the second token. */
 function goMix(a, b, t) { return t >= 0.5 ? b : a; }
@@ -691,7 +761,7 @@ const hi = c => HI_OF[c] || c;
 const INK = P.bg;
 const SKIN = P.sand, SKIN_SH = P.border;
 const ORCH_COLOR = P.gold, ORCH_HAIR = P.bg;
-const STACHE = P.pink, STACHE_S = P.pink;
+const STACHE = TOK('fuchsia'), STACHE_S = TOK('fuchsia-deep');
 const MONOCLE = P.bg, MONOCLE_H = P.user;
 const C = {
 	wood: P.sand, woodH: hi(P.sand), woodS: shade(P.sand),
@@ -964,13 +1034,13 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 				for (let x = -off; x < W; x += 52) {
 					const base = ((Math.floor(x / 52) + p + y) % 3) ? P.floorA : P.floorB;
 					B(Math.max(0, x), py, Math.min(52, W - Math.max(0, x)) - (x < 0 ? -x : 0), 6, base);
-					B(Math.max(0, x), py + 5, Math.min(52, W - Math.max(0, x)), 1, P.seam);
+					B(Math.max(0, x), py + 5, Math.min(52, W - Math.max(0, x)), 1, P.floorSeam);
 					const gx = Math.max(0, x) + 6 + ((p * 11) % 17);
-					if (gx < W) B(gx, py + 2, 10, 1, P.seam);
-					if (gx + 22 < W) B(gx + 22, py + 3, 6, 1, P.seam);
+					if (gx < W) B(gx, py + 2, 10, 1, P.floorSeam);
+					if (gx + 22 < W) B(gx + 22, py + 3, 6, 1, P.floorSeam);
 				}
 			}
-			B(0, top + T - 2, W, 2, P.seam);
+			B(0, top + T - 2, W, 2, P.floorSeam);
 		}
 		/* Baseboard along the bottom of the wall. */
 		B(0, 2 * T - 2, W, 2, P.panel);
@@ -1072,11 +1142,22 @@ function createOfficeEngine(canvas, cfg, hooks = {}) {
 
 	/* ---------- rooms (S17): walls, the pod's cross divider, sofas, armchair, judges' table, research screen frame ---------- */
 	function paintRooms() {
-		/* Walls and partitions: wood panels with a lit top edge and a shadow along the bottom, so no wall reads as floor. */
-		for (const w of cfg.walls) {
-			const x = w.x * T, y = w.y * T, ww = w.w * T, hh = w.h * T;
-			B(x, y, ww, hh, P.border); B(x, y, ww, 1, C.steelH);
-			B(x + ww - 2, y, 2, hh, shade(P.border)); B(x, y + hh - 2, ww, 2, P.sel);
+		/* Walls and partitions (S18): a wall tile still blocks walkers, but the drawn wall is 1/3 of a tile (8 px) on the tile's centre line.
+		   Each wall tile joins its wall neighbours to the east and south, the back wall band above and the front edge below. Exposed edges get the lit top and the shadow right and bottom. */
+		const WALL = T / 3, OFF = (T - WALL) / 2;
+		const wallAt = (x, y) => cfg.walls.some(w => x >= w.x && x < w.x + w.w && y >= w.y && y < w.y + w.h);
+		for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+			if (!wallAt(x, y)) continue;
+			const cx = x * T + OFF, cy = y * T + OFF;
+			const e = wallAt(x + 1, y), s = wallAt(x, y + 1), n = wallAt(x, y - 1);
+			const top = y - 1 < 2 ? y * T : cy, bottom = y + 1 >= ROWS ? ROWS * T : cy + WALL;
+			/* Square (also reaches the back band or the front edge), then a bar toward each wall neighbour to the east and south. */
+			B(cx, top, WALL, bottom - top, P.border);
+			if (!n && y - 1 >= 2) B(cx, top, WALL, 1, C.steelH);
+			if (!e) B(cx + WALL - 2, top, 2, bottom - top, shade(P.border));
+			if (!s && y + 1 < ROWS) B(cx, bottom - 2, WALL, 2, P.sel);
+			if (e) { B(cx + WALL, cy, T - WALL, WALL, P.border); B(cx + WALL, cy, T - WALL, 1, C.steelH); B(cx + WALL, cy + WALL - 2, T - WALL, 2, P.sel); }
+			if (s) { B(cx, cy + WALL, WALL, T - WALL, P.border); B(cx + WALL - 2, cy + WALL, 2, T - WALL, shade(P.border)); }
 		}
 		/* Cross divider of the pod: steel panels between the four monitors. */
 		for (const a of cfg.podArms) {
@@ -1876,9 +1957,9 @@ function paintHall(cv, side) {
 	/* Planks: the room's floor rows, staggered per row, low contrast between boards. */
 	for (let row = 2; row < 15; row++) for (let p = 0; p < 4; p++) {
 		const py = row * 24 + p * 6;
-		B(0, py, W, 6, P.dim);
-		B(0, py + 5, W, 1, P.seam);
-		B(((row * 7 + p * 5) % 13) * 2, py + 2, 8, 1, P.seam);
+		B(0, py, W, 6, (row + p) % 2 ? P.floorB : P.floorA);
+		B(0, py + 5, W, 1, P.floorSeam);
+		B(((row * 7 + p * 5) % 13) * 2, py + 2, 8, 1, P.floorSeam);
 	}
 	/* Window in the wall band, with a sill. */
 	const wx = side === 'left' ? 6 : 5;
@@ -1914,26 +1995,79 @@ const dmTool = (toolName, phase) => dmEv({ type: 'tool', toolName, phase, ok: tr
 const dmFeat = (feature, detail) => dmEv({ type: 'feature', feature, detail });
 const dmComp = phase => dmEv({ type: 'compaction', phase });
 
-/* Scripted run, seconds into the loop. Each beat fires its real events, then sets the page text (caption, cost, usage, ask). */
+/* Stage sizes (S18), cycled by alt+r. big: the room at 2x and a short chat. small: 40% of the window, the camera follows the acting
+   character at 2x (story mode), a longer chat. hidden: plain chat with a one-line status strip. */
+const STAGE_SIZES = ['big', 'small', 'hidden'];
+const SMALL_STAGE = { width: 1440, height: 368, zoom: 2 };
+let stageSize = 'big';
+
+/* Chat under the stage. The user's lines are their own words; the rest is demo copy. Replies stay here after their window closes. */
+const BASE_CHAT = [
+	{ who: 'you', text: 'que el escenario se llene de lado a lado y que los status sean parte del modulo' },
+	{ who: 'orchestrator', text: 'Done: the real engine at 2x with the full room and game panels. Explore waits on its sofa.' },
+	{ who: 'tool', text: '✓ design/terminal-office/02-stage-over-chat.html' },
+	{ who: 'you', text: 'las paredes de division muy anchas, 1/3 de lo que hay' },
+	{ who: 'orchestrator', text: 'Partition walls are drawn at one third of a tile. Walkers still stop at the same tiles.' },
+	{ who: 'tool', text: '✓ web/office-engine.js' },
+	{ who: 'you', text: 'un atajo para cambiar el tamano del escenario' },
+	{ who: 'orchestrator', text: 'Added: alt+r cycles the stage big, small and hidden. Each reply opens a game window.' },
+	{ who: 'tool', text: '✓ design/terminal-office/02-stage-over-chat.html' },
+	{ who: 'you', text: 'dale, ensename la respuesta' },
+	{ who: 'orchestrator', text: 'Here it is. The reply opens in a window over the chat: Enter pages, Esc closes.' }
+];
+let CHAT = [];
+
+/* Replies (S18). Page 1 is the text and what it did; page 2 is the agents, the context and cost delta, and the next step. */
+const REPLY_1 = {
+	caption: 'Explore is done. Worker can take the CSS change when you say go.',
+	text: 'Explore is done. The stage, the HUD and the caption all read one scene view, so the room can shrink without losing any state. Worker can take the CSS change when you say go.',
+	tools: [['codegraph_explore', '10.0s'], ['read web/office-engine.js', '0.4s'], ['subagent · explore', '13s']],
+	agents: [{ role: 'explore', name: 'gentle-ai-explore', status: 'completed', note: '13s' }, { role: 'worker', name: 'gentle-ai-worker', status: 'on break', note: 'sofa' }],
+	ctx: ['20%', '38%'], cost: ['$0.012', '$0.041'], next: 'Next: worker edits web/office.css on feat/gentle-office.'
+};
+const REPLY_2 = {
+	caption: 'Worker finished in 14s. A second worker is at desk 2 for the follow-up.',
+	text: 'Worker changed web/office.css and finished in 14s. A second worker is at desk 2 for the follow-up; verify runs after it.',
+	tools: [['ask_user', '6.2s'], ['edit web/office.css', '2.1s'], ['bash · npm test', '0.9s']],
+	agents: [{ role: 'worker', name: 'gentle-ai-worker', status: 'completed', note: '14s' }, { role: 'worker', name: 'gentle-ai-worker #2', status: 'running', note: 'desk 2' }],
+	ctx: ['38%', '41%'], cost: ['$0.058', '$0.083'], next: 'Next: verify reviews the diff when the second worker is done.'
+};
+const REPLY_3 = {
+	caption: 'Verify passed the diff. Context is compacting; a fresh pot is brewing.',
+	text: 'Verify passed the diff with no failing tests. Context is compacting, so a fresh pot is brewing at the counter.',
+	tools: [['subagent · verify', '10.2s'], ['bash · npm test', '1.1s'], ['compaction', '3.0s']],
+	agents: [{ role: 'verify', name: 'gentle-ai-verify', status: 'completed', note: '10s' }],
+	ctx: ['41%', 'compacting'], cost: ['$0.094', '$0.101'], next: 'Ready for your next prompt.'
+};
+
+/* Scripted run, seconds into the loop. Each beat fires its real events, then sets the page text (caption, cost, usage, ask).
+   Optional per beat: size (alt+r), reply (opens the reply window), key ('next' pages it, 'close' returns to the chat). */
 const BEATS = [
-	{ at: 0, actions: [dmSnap(20)], page: { narr: ['orchestrator', 'resting in its office. Explore, Worker and Verify are on break on the lounge sofas.'], cost: '$0.012', usage: 18, ask: null } },
+	{ at: 0, reset: true, size: 'big', actions: [dmSnap(20)], page: { narr: ['orchestrator', 'resting in its office. Explore, Worker and Verify are on break on the lounge sofas.'], cost: '$0.012', usage: 18, ask: null } },
 	{ at: 4, actions: [dmOrch('thinking')], page: { narr: ['orchestrator', 'planning the explore task on the whiteboard.'] } },
 	{ at: 7, actions: [dmOrch('tool', 'subagent_run'), dmAgent('explore-1', 'explore', 'running')], page: { narr: ['orchestrator', 'gentle-ai-explore leaves its sofa, takes a desk and searches the code.'], cost: '$0.024', usage: 21 } },
 	{ at: 8, actions: [dmFeat('codegraph', 'codegraph_explore')], page: {} },
 	{ at: 18, actions: [dmTool('codegraph_explore', 'end')], page: {} },
 	{ at: 20, actions: [dmAgent('explore-1', 'explore', 'completed')], page: { narr: ['orchestrator', 'Explore finished in 13s and walks back to its sofa.'], cost: '$0.041', usage: 24 } },
 	{ at: 24, actions: [dmCtx(38)], page: { narr: ['orchestrator', 'context is at 38%, so 62% of the coffee pot is left.'] } },
-	{ at: 30, actions: [], page: { narr: ['orchestrator', 'Explore is back on its sofa. Worker is next in line.'] } },
+	{ at: 26, reply: REPLY_1, page: { narr: ['orchestrator', REPLY_1.caption] } },
+	{ at: 30, key: 'next', page: {} },
+	{ at: 33, key: 'close', page: {} },
+	{ at: 35, size: 'small', page: { narr: ['orchestrator', 'alt+r: stage small. The camera follows whoever is acting.'] } },
 	{ at: 36, actions: [dmAgent('worker-1', 'worker', 'running')], page: { narr: ['orchestrator', 'gentle-ai-worker takes a desk and edits web/office.css.'], cost: '$0.058', usage: 27 } },
 	{ at: 44, actions: [dmOrch('waiting-user', 'ask_user'), dmFeat('ask', 'ask_user')], page: { narr: ['ask_user', 'Which branch should the worker use for the CSS change?'], ask: { question: 'Which branch should the worker use for the CSS change?', options: ['feat/gentle-office (current)', 'main'] } } },
-	{ at: 50, actions: [dmTool('ask_user', 'end'), dmOrch('thinking'), dmAgent('worker-1', 'worker', 'completed')], page: { narr: ['orchestrator', 'ask closed. Worker is done and walks back to its sofa.'], cost: '$0.071', usage: 29, ask: null } },
+	{ at: 50, actions: [dmTool('ask_user', 'end'), dmOrch('thinking'), dmAgent('worker-1', 'worker', 'completed'), dmCtx(41)], page: { narr: ['orchestrator', 'ask closed. Worker is done and walks back to its sofa.'], cost: '$0.071', usage: 29, ask: null } },
 	{ at: 52, actions: [dmAgent('worker-2', 'worker', 'running')], page: { narr: ['orchestrator', 'a second worker walks in from the door and takes a free desk.'] } },
-	{ at: 58, actions: [], page: { narr: ['orchestrator', 'Worker is back on its sofa. The second worker is still at its desk.'], cost: '$0.083', usage: 30 } },
+	{ at: 54, reply: REPLY_2, page: { narr: ['orchestrator', REPLY_2.caption] } },
+	{ at: 58, key: 'next', page: { narr: ['orchestrator', 'Worker is back on its sofa. The second worker is still at its desk.'], cost: '$0.083', usage: 30 } },
 	{ at: 60, actions: [dmAgent('worker-2', 'worker', 'completed')], page: { narr: ['orchestrator', 'the second worker finished and walks out the door.'] } },
+	{ at: 61, key: 'close', page: {} },
 	{ at: 62, actions: [dmAgent('verify-1', 'verify', 'running')], page: { narr: ['orchestrator', 'gentle-ai-verify takes the lab desk and reviews the diff.'], cost: '$0.094', usage: 31 } },
-	{ at: 72, actions: [dmAgent('verify-1', 'verify', 'completed')], page: { narr: ['orchestrator', 'verify passed and walks back to its spot by the lab door.'], cost: '$0.101' } },
-	{ at: 74, actions: [dmOrch('idle'), dmComp('start')], page: { narr: ['orchestrator', 'context compacting: a fresh pot is brewing at the counter.'] } },
-	{ at: 79, actions: [dmComp('end')], page: { narr: ['orchestrator', 'fresh pot brewed. Back to the office for your next prompt.'] } }
+	{ at: 63, size: 'hidden', page: { narr: ['orchestrator', 'alt+r: stage hidden. Plain chat, with the crew on one status line.'] } },
+	{ at: 72, actions: [dmAgent('verify-1', 'verify', 'completed')], page: { narr: ['orchestrator', 'verify passed and walks back to its spot by the lab door.'] } },
+	{ at: 73, reply: REPLY_3, page: { narr: ['orchestrator', REPLY_3.caption] } },
+	{ at: 74, actions: [dmOrch('idle'), dmComp('start')], key: 'next', page: { narr: ['orchestrator', 'context compacting: a fresh pot is brewing at the counter.'] } },
+	{ at: 79, actions: [dmComp('end'), dmCtx(6)], key: 'close', page: { narr: ['orchestrator', 'fresh pot brewed. Back to the office for your next prompt.'], usage: 6 } }
 ];
 
 /* Page state the beats set; the HUD, caption, party and ask dialog read it. */
@@ -1942,15 +2076,15 @@ const page = { narr: ['orchestrator', ''], cost: '$0.012', usage: 18, ask: null 
 let scene = initialScene(OFFICE_CONFIG.desks.length, OFFICE_CONFIG.verifyDesks.length);
 let view = sceneView(scene);
 
-/* Faces for the party list: the engine's own head map with a hat per role. */
+/* Faces for the party list, the strip and the reply window: the engine's own head map with a hat per role. */
 function drawFace(cv, kind) {
 	const x = cv.getContext('2d');
 	x.imageSmoothingEnabled = false;
 	const hair = { orch: P.bg, explore: P.gold, worker: P.green, verify: P.border }[kind];
-	const map = { K: INK, H: hair, h: shade(hair), l: hi(hair), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: P.deep };
+	const map = { K: INK, H: hair, h: shade(hair), l: hi(hair), S: SKIN, s: SKIN_SH, E: INK, W: P.text, C: P.softRose, M: kind === 'orch' ? STACHE : P.deep };
 	const put = (c, px, py, w, h) => { x.fillStyle = c; x.fillRect(px, py, w, h); };
 	HEAD_MAPS.down.forEach((row, j) => [...row].forEach((ch, i) => { if (map[ch]) put(map[ch], i, 8 + j, 1, 1); }));
-	if (kind === 'orch') { put(P.bg, 7, 0, 10, 6); put(P.gold, 7, 4, 10, 2); put(P.bg, 3, 6, 18, 2); put(P.pink, 14, 1, 3, 3); }
+	if (kind === 'orch') { put(P.bg, 7, 0, 10, 6); put(P.gold, 7, 4, 10, 2); put(P.bg, 3, 6, 18, 2); put(STACHE, 14, 1, 3, 3); }
 	if (kind === 'explore') { put(P.sand, 6, 3, 12, 4); put(P.gold, 6, 6, 12, 1); put(P.sand, 2, 6, 20, 2); }
 	if (kind === 'worker') { put(P.gold, 5, 3, 14, 5); put(P.text, 7, 4, 3, 1); put(P.gold, 3, 7, 18, 2); }
 	if (kind === 'verify') { put(P.border, 5, 7, 14, 2); }
@@ -1971,6 +2105,15 @@ function roleText(role) {
 	return (agent.status === 'queued' ? 'queued · ' : 'running · ') + where;
 }
 
+/* The story camera follows the resident that is working, else one that is walking back, else the orchestrator. */
+function cameraTarget() {
+	const working = view.agents.find(a => !a.leaving && a.status === 'running');
+	if (working) return { kind: 'resident', id: working.id };
+	const leaving = view.agents.find(a => a.leaving);
+	if (leaving) return { kind: 'resident', id: leaving.id };
+	return { kind: 'orchestrator' };
+}
+
 function renderHud() {
 	const filled = Math.round(view.potLevel * 10);
 	document.querySelectorAll('#coffee-bar .seg').forEach((seg, i) => seg.classList.toggle('on', i < filled));
@@ -1985,6 +2128,11 @@ function renderParty() {
 		li.classList.toggle('on', !/on break|resting/.test(state));
 	});
 }
+/* Hidden stage: one line with the crew and the context. */
+function renderStrip() {
+	const parts = [`orchestrator: ${orchText()}`, `explore: ${roleText('explore')}`, `worker: ${roleText('worker')}`, `verify: ${roleText('verify')}`];
+	$('strip-text').textContent = parts.join('  ·  ') + (view.percent === null ? '' : `  ·  ctx ${view.percent}%`);
+}
 function renderPage() {
 	$('narr-who').textContent = page.narr[0];
 	$('narr-text').textContent = page.narr[1];
@@ -1995,6 +2143,90 @@ function renderPage() {
 		$('ask-q').textContent = page.ask.question;
 		$('ask-opts').replaceChildren(...page.ask.options.map(o => { const li = document.createElement('li'); li.textContent = o; return li; }));
 	}
+}
+
+/* Chat log: the last entries, bottom aligned; the stage size decides how many lines are visible. */
+function entryNode({ who, text, reply }) {
+	const p = document.createElement('p');
+	p.className = who === 'tool' ? 'msg tool ok' : 'msg' + (reply ? ' answer' : '');
+	if (who !== 'tool') {
+		const lead = document.createElement('span');
+		lead.className = who === 'you' ? 'you' : 'who';
+		lead.textContent = who === 'you' ? '› ' : '✿ orchestrator ';
+		p.append(lead);
+	}
+	p.append(text);
+	return p;
+}
+function renderLog() {
+	$('log').replaceChildren(...CHAT.map(entryNode));
+	$('log').scrollTop = $('log').scrollHeight;
+}
+function resetChat() { CHAT = BASE_CHAT.slice(); renderLog(); }
+function pushChat(entry) { CHAT = [...CHAT, entry].slice(-40); renderLog(); }
+
+/* Reply window (S18): opens when the orchestrator replies, pages with Enter, closes with Esc back to the chat. */
+let replyOpen = false, replyPage = 0;
+function agentItem(a) {
+	const li = document.createElement('li');
+	const cv = document.createElement('canvas');
+	cv.className = 'mini'; cv.width = 24; cv.height = 24; cv.setAttribute('aria-hidden', 'true');
+	drawFace(cv, a.role);
+	const name = document.createElement('span');
+	name.className = 'name'; name.textContent = a.name;
+	const st = document.createElement('span');
+	st.className = 'st ' + (a.status === 'completed' ? 'ok' : a.status === 'running' ? 'run' : 'idle');
+	st.textContent = `${a.status} · ${a.note}`;
+	li.append(cv, name, st);
+	return li;
+}
+function openReply(reply) {
+	replyOpen = true;
+	replyPage = 0;
+	$('reply-text').textContent = reply.text;
+	$('reply-tools').replaceChildren(...reply.tools.map(([name, dur]) => {
+		const li = document.createElement('li');
+		const n = document.createElement('span'); n.className = 'name'; n.textContent = name;
+		const d = document.createElement('span'); d.className = 'dur'; d.textContent = dur;
+		li.append(n, d);
+		return li;
+	}));
+	$('reply-agents').replaceChildren(...reply.agents.map(agentItem));
+	$('d-ctx').textContent = reply.ctx.join(' → ');
+	$('d-cost').textContent = reply.cost.join(' → ');
+	$('reply-next').textContent = reply.next;
+	pushChat({ who: 'orchestrator', text: reply.text, reply: true });
+	$('reply').hidden = false;
+	renderReplyPage();
+}
+function renderReplyPage() {
+	$('reply-p1').hidden = replyPage !== 0;
+	$('reply-p2').hidden = replyPage !== 1;
+	$('reply-pager').textContent = `${replyPage + 1}/2`;
+	$('reply-hint').textContent = replyPage === 1 ? 'Enter or Esc: back to chat' : 'Enter next page · Esc close back to chat';
+}
+function nextPage() {
+	if (!replyOpen) return;
+	if (replyPage === 0) { replyPage = 1; renderReplyPage(); } else closeReply();
+}
+function closeReply() {
+	replyOpen = false;
+	$('reply').hidden = true;
+}
+
+/* Stage size (S18): the room at 2x (big), the camera at 2x on the acting character (small), or no stage (hidden). */
+function syncCamera() {
+	if (stageSize === 'small') engine.setCamera({ ...SMALL_STAGE, target: cameraTarget() });
+}
+function setSize(next) {
+	stageSize = next;
+	document.body.dataset.size = next;
+	engine.setCamera(next === 'small' ? { ...SMALL_STAGE, target: cameraTarget() } : null);
+	$('size-name').textContent = next;
+	engine.paintNow();
+}
+function cycleSize() {
+	setSize(STAGE_SIZES[(STAGE_SIZES.indexOf(stageSize) + 1) % STAGE_SIZES.length]);
 }
 
 const engine = createOfficeEngine($('room'), OFFICE_CONFIG, {
@@ -2010,8 +2242,10 @@ function dispatch(action) {
 	scene = next;
 	view = sceneView(scene);
 	engine.setScene(view);
+	syncCamera();
 	renderHud();
 	renderParty();
+	renderStrip();
 }
 
 /* Applies every beat whose time has come. The loop wraps with a fresh snapshot, so the scene resets through the reducer. */
@@ -2019,9 +2253,14 @@ function fire() {
 	while (demoT + 1e-9 >= cycleStart + BEATS[nextBeat].at) {
 		const beat = BEATS[nextBeat];
 		const at = Math.round((cycleStart + beat.at) * 1000);
-		for (const action of beat.actions) dispatch({ ...action, at });
+		if (beat.reset) resetChat();
+		if (beat.size) setSize(beat.size);
+		for (const action of beat.actions ?? []) dispatch({ ...action, at });
 		Object.assign(page, beat.page);
 		renderPage();
+		if (beat.reply) openReply(beat.reply);
+		if (beat.key === 'next') nextPage();
+		if (beat.key === 'close') closeReply();
 		nextBeat += 1;
 		if (nextBeat === BEATS.length) { nextBeat = 0; cycleStart += LOOP; }
 	}
@@ -2060,18 +2299,31 @@ function stop() {
 	timer = 0;
 }
 
+/* alt+r cycles the stage; Enter pages the reply window and Esc closes it. */
+window.addEventListener('keydown', e => {
+	if (e.altKey && e.key.toLowerCase() === 'r') { e.preventDefault(); cycleSize(); return; }
+	if (!replyOpen) return;
+	if (e.key === 'Enter') { e.preventDefault(); nextPage(); }
+	if (e.key === 'Escape') { e.preventDefault(); closeReply(); }
+});
+
 document.querySelectorAll('canvas[data-face]').forEach(cv => drawFace(cv, cv.dataset.face));
+drawFace($('portrait'), 'orch');
 const hashAt = /t=([\d.]+)/.exec(location.hash);
+const frozen = /still/.test(location.hash);
 const startAt = Math.min(LOOP, Math.max(0, hashAt ? parseFloat(hashAt[1]) : (reducedMotion ? 12 : 0)));
+resetChat();
 preroll(startAt);
 renderPage();
+renderStrip();
 engine.paintNow();
-if (!reducedMotion) {
+if (!reducedMotion && !frozen) {
 	start();
 	document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
 	window.addEventListener('blur', stop);
 	window.addEventListener('focus', start);
-	new IntersectionObserver(es => (es[0].isIntersecting ? start() : stop())).observe($('room'));
+	/* The chat column is always visible, so the loop keeps running in every stage size (the room may be hidden). */
+	new IntersectionObserver(es => (es[0].isIntersecting ? start() : stop())).observe(document.querySelector('.col'));
 }
 
 </script>

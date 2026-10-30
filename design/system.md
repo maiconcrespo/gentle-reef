@@ -1,6 +1,6 @@
 # Design system: gentle-shell (Gentle Office)
 
-Synced from `web/office.css`, the only design source in the repo (read-only; nothing was edited). Every entry names its source line. These are project values, not a proposed starter.
+Synced from `web/office.css` (CSS tokens) and `web/office-engine.js` (canvas tokens, see Canvas tokens below). Read-only; nothing was edited in the sources. Every entry names its source line. These are project values, not a proposed starter.
 
 Counts: 17 custom properties on `:root` (16 colour aliases over 14 distinct hex values, plus `--mono`); 3 literal colours outside `:root`; 1 font stack; 10 font sizes; 2 font weights; 6 non-empty `box-shadow` declarations; 0 `border-radius`; 16 spacing values (1 to 30 px).
 
@@ -23,7 +23,7 @@ Counts: 17 custom properties on `:root` (16 colour aliases over 14 distinct hex 
 | `--purple` | `#F095C8` | ask tone (same value as `--pink`) | `web/office.css:4` |
 | `--sand` | `#F2B86D` | coffee and brew: pot, cups, brew number | `web/office.css:4` |
 | `--heading` | `#E0C27A` | card and section headings (same value as `--gold`) | `web/office.css:4` |
-| `--pink` | `#F095C8` | verify role, list bullet, mustache | `web/office.css:4` |
+| `--pink` | `#F095C8` | verify role, list bullet | `web/office.css:4` |
 
 Literal colours outside `:root`, recorded as found (not tokens):
 
@@ -32,6 +32,18 @@ Literal colours outside `:root`, recorded as found (not tokens):
 | `#C96AA2` | header bottom border | `web/office.css:10` |
 | `#151316` | live dot ring | `web/office.css:15` |
 | `rgba(6, 4, 7, .7)` | story box drop shadow | `web/office.css:137` |
+
+## Canvas tokens (web/office-engine.js)
+
+Colours the room paints on its canvas, taken from the engine's palette. They are not in `web/office.css`. Each row names the engine line it came from. Artboards read them as `:root` custom properties with the same name (`--fuchsia` and so on). They paint shapes and floors, not text, so no text-contrast rule applies to them.
+
+| Token | Value | Usage | Source |
+| --- | --- | --- | --- |
+| `--fuchsia` | `#FF1F9D` | orchestrator handlebar mustache and the rose on its hat | `web/office-engine.js:117` (`STACHE`) |
+| `--fuchsia-deep` | `#C2107A` | underside shade of the mustache | `web/office-engine.js:117` (`STACHE_S`) |
+| `--floor` | `#8C6272` | floor plank, first tone | `web/office-engine.js:100` (`P.floorA`) |
+| `--floor-alt` | `#876072` | floor plank, second tone | `web/office-engine.js:100` (`P.floorB`) |
+| `--floor-seam` | `#6E4D5C` | seams between planks and the board ends | `web/office-engine.js:101` (`P.seam`) |
 
 ## Typography
 
