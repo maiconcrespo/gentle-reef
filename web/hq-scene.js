@@ -37,8 +37,6 @@ function floor() {
 	/* Office: pink rug under the orchestrator's desk. */
 	O(286, 92, 148, 58, K.deep); R(290, 96, 140, 50, K.pink); R(294, 100, 132, 42, K.deep);
 	for (let x = 298; x < 424; x += 8) { R(x, 104, 4, 2, K.pink); R(x + 4, 136, 4, 2, K.pink); }
-	/* Lounge rug by the coffee bar. */
-	O(16, 300, 120, 30, K.border); R(20, 304, 112, 22, K.user);
 }
 function walls() {
 	R(0, 0, W, 6, K.border); R(0, 6, W, 38, K.sel);
@@ -138,8 +136,8 @@ function windowWithTelescope() {
 	}
 	N.forEach(([x, y], i) => R(x - 1, y - 1, 3, 3, motion && i === t % N.length ? K.gold : K.blue));
 	R(125, 8, 2, 34, K.border); O(82, 44, 88, 2, K.border);
-	R(178, 70, 1, 18, INK); R(186, 70, 1, 18, INK); R(182, 70, 1, 20, INK);
-	O(172, 62, 16, 5, K.gold); O(168, 61, 4, 7, K.sand); R(172, 62, 16, 1, hi(K.gold));
+	R(130, 70, 1, 18, INK); R(138, 70, 1, 18, INK); R(134, 70, 1, 20, INK);
+	O(124, 62, 16, 5, K.gold); O(120, 61, 4, 7, K.sand); R(124, 62, 16, 1, hi(K.gold));
 }
 
 function codegraphBoard() {}
@@ -159,20 +157,17 @@ function designEasel() {
 	O(16, 170, 32, 2, shade(K.sand));
 }
 
-function coffeeBar() {
-	O(4, 340, 136, 40, shade(K.sand)); R(4, 340, 136, 4, hi(K.sand)); R(4, 372, 136, 8, shade(shade(K.sand)));
-	/* Espresso machine: the context window. Steam while it brews. */
-	O(14, 314, 34, 26, K.muted); R(14, 314, 34, 4, K.text); R(20, 322, 8, 6, INK); R(32, 322, 10, 6, INK);
-	R(22, 336, 4, 4, K.text);
-	if (motion || brewing) for (let i = 0; i < 3; i++) R(20 + i * 6, 306 - ((t + i * 2) % 6), 2, 2, K.text);
+function coffeeCorner() {
+	/* The coffee corner by the window (T4f): a small counter against the wall, the espresso machine and the pot. The pot is the
+	   context window: it drains as context fills, and the machine steams while a compaction brews. Up here the dialog never covers it. */
+	O(172, 62, 38, 10, shade(K.sand)); R(172, 62, 38, 2, hi(K.sand)); R(174, 72, 2, 6, INK); R(206, 72, 2, 6, INK);
+	O(176, 44, 14, 18, K.muted); R(176, 44, 14, 3, K.text); R(179, 50, 8, 4, INK); R(181, 56, 4, 3, INK); R(182, 59, 2, 2, K.text);
+	if (motion || brewing) for (let i = 0; i < 3; i++) R(178 + i * 4, 40 - ((t + i * 2) % 6), 2, 2, K.text);
 	/* Pot gauge: drains as context fills (level = 1 - percent / 100); full while the percent is unknown. */
-	O(60, 318, 18, 22, K.panel);
-	const fill = Math.round(18 * potLevel), top = 338 - fill;
-	if (fill > 0) { R(62, top, 14, fill, K.sand); R(62, top, 14, Math.min(2, fill), K.gold); }
-	/* Cups. */
-	for (let i = 0; i < 4; i++) { O(88 + i * 12, 332, 7, 8, K.text); R(88 + i * 12, 332, 7, 2, K.sand); }
-	/* Stools. */
-	for (const x of [20, 60, 100]) { O(x, 384, 14, 4, K.pink); R(x + 6, 388, 2, 10, INK); }
+	O(194, 50, 10, 16, K.panel);
+	const fill = Math.round(12 * potLevel), top = 64 - fill;
+	if (fill > 0) { R(196, top, 6, fill, K.sand); R(196, top, 6, Math.min(2, fill), K.gold); }
+	O(206, 56, 3, 4, K.text);
 }
 function jukebox() {
 	O(152, 318, 36, 62, K.fdeep); R(152, 318, 36, 18, K.pink); R(156, 322, 28, 10, K.gold);
@@ -187,7 +182,8 @@ function chalkboard() {
 	R(272, 12, 176, 38, INK);
 	/* The ODD steps in chalk, two columns: a marker and a scribble per step. Done green, current gold and underlined, later muted. */
 	for (let i = 0; i < 7; i++) {
-		const x = 276 + Math.floor(i / 4) * 88, y = 15 + (i % 4) * 9;
+		/* Lower on the board: the project sign hangs over its top edge (T4f). */
+		const x = 276 + Math.floor(i / 4) * 88, y = 22 + (i % 4) * 8;
 		const c = oddStep === null ? K.text : i < oddStep ? K.green : i === oddStep ? K.gold : K.muted;
 		R(x, y, 4, 4, c);
 		R(x + 7, y + 1, 18 + ((i * 11) % 5) * 9, 2, c);
@@ -314,7 +310,7 @@ export function drawHq(ctx, frame = {}) {
 		engramVault(); windowWithTelescope(); chalkboard(); mailTube(); jobsWall();
 		mapTable(); questBoard();
 		person(82, 130, EXPLORER, bob(frame.exploring));
-		designEasel(); coffeeBar(); jukebox();
+		designEasel(); coffeeCorner(); jukebox();
 		profileRack(); featureDesk();
 		person(300, 104, ORCH, bob(frame.thinking || frame.waiting));
 		[[244, K.sand], [324, K.hair], [404, K.border]].forEach(([x, hair], i) => { person(x + 46, 228, worker(hair), motion && frame.working && (t + i) % 2 === 0 ? 1 : 0); draftingDesk(x); });

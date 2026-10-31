@@ -190,11 +190,12 @@ export function rowsBelow(open: { askOptions: number | null; prompts: number }):
 }
 
 /* Where each sign sits on the 720 x 408 room (web/hq-scene.js): centre x and row y in room pixels. */
-const SIGN_AT = { project: { x: 360, y: 4 }, brew: { x: 72, y: 362 }, brand: { x: 360, y: 402 } } as const;
+const SIGN_AT = { project: { x: 360, y: 4 }, brew: { x: 191, y: 78 }, brand: { x: 360, y: 402 } } as const;
 
 /**
- * The status as signs in the room (T4f): project and branch above the chalkboard, `BREW nn%` (context left) on the
- * coffee bar, and the pink `✿ GENTLE HQ` plaque under the door. `image` is the room image's size in cells.
+ * The status as signs in the room (T4f): a framed project-and-branch sign hanging over the chalkboard (its text row and
+ * its bottom border), `BREW nn%` (context left) under the coffee corner by the window, and the pink `✿ GENTLE HQ` plaque
+ * under the door. `image` is the room image's size in cells.
  */
 export function sceneSigns(info: { project: string; branch: string | null; percent: number | null }, image: { cols: number; rows: number }): Sign[] {
 	const place = (at: { x: number; y: number }, text: string): Sign => {
@@ -207,8 +208,12 @@ export function sceneSigns(info: { project: string; branch: string | null; perce
 	const left = info.percent === null ? "—" : `${Math.round(100 - Math.min(100, Math.max(0, info.percent)))}%`;
 	const where = info.branch ? `${info.project} · ${info.branch}` : info.project;
 	const room = Math.max(4, image.cols - 2);
+	const label = fit(` ${where} `, Math.min(plainWidth(` ${where} `), room - 2));
+	const hanging = place(SIGN_AT.project, `║${label}║`);
+	const framed = (text: string) => `${PANEL_BG}${BORDER}${text.replaceAll(label, `${GOLD}${BOLD}${label}${RESET}${PANEL_BG}${BORDER}`)}${RESET}`;
 	return [
-		place(SIGN_AT.project, sign(GOLD, PANEL_BG, fit(` ${where} `, Math.min(plainWidth(` ${where} `), room)))),
+		{ ...hanging, text: framed(`║${label}║`) },
+		{ row: Math.min(image.rows - 1, hanging.row + 1), col: hanging.col, text: framed(`╚${"═".repeat(plainWidth(label))}╝`) },
 		place(SIGN_AT.brew, sign(SAND, PANEL_BG, ` BREW ${left} `)),
 		place(SIGN_AT.brand, sign(INK, PINK_BG, " ✿ GENTLE HQ ")),
 	];

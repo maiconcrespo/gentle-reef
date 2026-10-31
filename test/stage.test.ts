@@ -89,20 +89,25 @@ describe("Gentle HQ room shows the session state (T2)", () => {
 	const paint = (frame: Record<string, unknown>) => { const r = createRaster(HQ_WIDTH, HQ_HEIGHT); drawHq(r, frame); return r; };
 	const P = (name: keyof typeof HQ_PALETTE) => HQ_PALETTE[name].toUpperCase();
 
-	it("the coffee pot drains as context fills: full at 0%, empty at 100%, full when unknown", () => {
-		assert.equal(hex(paint({ context: 0 }), 69, 324), P("sand"));
-		assert.equal(hex(paint({ context: 100 }), 69, 324), P("panel"));
-		assert.equal(hex(paint({ context: 50 }), 69, 336), P("sand"), "half: the bottom is still coffee");
-		assert.equal(hex(paint({ context: 50 }), 69, 322), P("panel"), "half: the top is empty");
-		assert.equal(hex(paint({}), 69, 324), P("sand"));
+	it("the coffee pot (by the window, T4f) drains as context fills: full at 0%, empty at 100%, full when unknown", () => {
+		assert.equal(hex(paint({ context: 0 }), 198, 58), P("sand"));
+		assert.equal(hex(paint({ context: 100 }), 198, 58), P("panel"));
+		assert.equal(hex(paint({ context: 50 }), 198, 62), P("sand"), "half: the bottom is still coffee");
+		assert.equal(hex(paint({ context: 50 }), 198, 54), P("panel"), "half: the top is empty");
+		assert.equal(hex(paint({}), 198, 58), P("sand"));
 	});
 
-	it("the chalkboard marks ODD steps: done green, current gold, later muted; no step known draws plain chalk", () => {
+	it("the old coffee bar at the bottom left is gone: floor where the counter stood (the dialog covered it)", () => {
+		const floor = [HQ_PALETTE.floorA, HQ_PALETTE.floorB, HQ_PALETTE.seam].map(c => c.toUpperCase());
+		assert.ok(floor.includes(hex(paint({}), 60, 357)), hex(paint({}), 60, 357));
+	});
+
+	it("the chalkboard marks ODD steps lower on the board, under the project sign: done green, current gold, later muted", () => {
 		const r = paint({ odd: 2 });
-		assert.equal(hex(r, 277, 16), P("green"), "step 1");
-		assert.equal(hex(r, 277, 34), P("gold"), "step 3");
-		assert.equal(hex(r, 365, 16), P("muted"), "step 5");
-		assert.equal(hex(paint({}), 277, 16), P("text"));
+		assert.equal(hex(r, 277, 23), P("green"), "step 1");
+		assert.equal(hex(r, 277, 39), P("gold"), "step 3");
+		assert.equal(hex(r, 365, 23), P("muted"), "step 5");
+		assert.equal(hex(paint({}), 277, 23), P("text"));
 	});
 
 	it("the TODO board has one row per task: done green, current pink, pending outlined; none when empty", () => {
