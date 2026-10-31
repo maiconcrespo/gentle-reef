@@ -14,7 +14,7 @@ Or add the path to the `packages` list in your Pi `settings.json`.
 
 ## Two ways to use it
 
-- **`gentle-reef`: terminal mode.** Starts gentle-shell with the office attached to that session: listeners run from the start, and a one-line status widget sits above the editor, `✿ gentle-reef · terminal mode · <orchestrator state> · <n> agents`. The terminal stage comes later; the widget is the placeholder until then. The launcher is `bin/gentle-reef`. It runs `gentle-shell` with `GENTLE_REEF=1` and passes its arguments through, so it needs `gentle-shell` on your PATH. To put it on your PATH from a checkout (documented here, not run by the package):
+- **`gentle-reef`: terminal mode.** Starts gentle-shell with the office attached to that session: listeners run from the start. In a terminal with Kitty graphics (Ghostty, Kitty) the [terminal game mode](#terminal-game-mode) covers the chat; elsewhere, and after `alt+g`, a one-line status widget sits above the editor, `✿ gentle-reef · terminal mode · <orchestrator state> · <n> agents`. The launcher is `bin/gentle-reef`. It runs `gentle-shell` with `GENTLE_REEF=1` and passes its arguments through, so it needs `gentle-shell` on your PATH. To put it on your PATH from a checkout (documented here, not run by the package):
 
   ```bash
   ln -s $PWD/bin/gentle-reef ~/.local/bin/gentle-reef
@@ -104,6 +104,21 @@ In story the narration is the big bottom box. In full and compact it is a one-li
 - No CORS headers. A Content-Security-Policy allows only same-origin scripts, styles, and the event stream.
 - Only the files in `web/` are served, from a fixed allowlist. No external URLs, CDNs, or fonts.
 
+## Terminal game mode
+
+In `gentle-reef` on a terminal with Kitty graphics, a full-width overlay draws Gentle HQ (`design/reef-quest/02-gentle-hq.html`) over Pi's chat. It is non-capturing: the editor below keeps the focus. Below 60 columns or 8 rows it does not open and plain Pi stays.
+
+- **Layout.** The room on the left, as tall as the overlay and as wide as its 720 x 408 shape allows; a text column on the right gets the rest, never fewer than 32 columns. The overlay leaves 4 rows for the editor. After a terminal resize it repaints once in full.
+- **The room.** One Kitty image (`web/hq-scene.js` drawn in Node into an RGBA raster, encoded as PNG with Node's zlib, shown at 2x). It shows the context as the coffee pot by the window, steam while compacting, the ODD steps on the chalkboard and the TODO rows. It animates at 4 fps only while the orchestrator thinks or waits, an agent works or a compaction brews; an idle session or a hidden overlay costs no redraws. A frame takes about 24 ms.
+- **Signs.** Text drawn over the image (the image sits below cell backgrounds, Kitty z-index): the project and branch in a framed sign over the chalkboard (the branch is read with git every 5 s at most), `BREW nn%` under the coffee corner (`—` until Pi reports usage), and the pink `✿ GENTLE HQ` plaque under the door.
+- **PARTY.** The orchestrator's state, Doing now (the todo task in progress with done/total, read from gentle-pi's `todo` tool and rebuilt from the session on resume) and each agent in flight.
+- **Notices.** A notice from any extension (`ui.notify`, for example a rate-limit warning) shows for 20 s in a `WARNING`, `ERROR` or `NOTICE` box under PARTY. Pi emits no event for it, so game mode wraps the shared `notify` once; Pi still shows the notice as before.
+- **Monitor wall.** Each tool call since your last message lights a screen: a sand bar while it runs, green when it worked, red when it failed; the rest stay off. The chalkboard's TODO rows come from the same todo list.
+- **CHAT.** Read from Pi's `input`, `message_update`, `message_end` and `tool_execution_*` events: `YOU` lines, `ORCH` replies rendered with pi-tui's Markdown and Pi's theme, and one line per tool call (`▸ bash … …` while it runs, then `✓ 0.4s · 69 lines` or `✗ 1.5s`). The newest lines stay at the bottom; the chat starts empty in each session. The keys sit in the frame's bottom border.
+- **Thinking.** The orchestrator's thinking streams under `thinking · live` with a cursor, and stays in the chat as a dashed block. `alt+t` shows or hides it.
+- **Dialog.** The reply since your last message shows in an `ORCHESTRATOR` box over the bottom of the room, sized to its text, with the orchestrator's pixel portrait at its left (a second Kitty image at z=-1: over the box's background, under its text; only when the box has at least 4 rows and 40 columns). An open `ask_user_choice` question shows as `ORCHESTRATOR · asks`, and the dialog is the selector: `↑↓` move the `▶` (wrapping like Pi's list), `Enter` replays the choice into Pi's list, `Esc` cancels, and `Other…` (when the question allows a custom answer) opens Pi's editor and makes room for it. Questions with several parts or several answers keep Pi's own selector, and the overlay frees rows so it stays visible; so does any other Pi prompt (select, confirm, input, editor).
+- **Keys.** `alt+g` switches between the game and plain Pi; `alt+t` shows or hides the thinking.
+
 ## Settings
 
 There is no settings file. `/office on`, `/office off` and the menu change the current session only and nothing is written to disk. The old `<agentDir>/gentle-office.json` is ignored, so a `"enabled": true` left in it does nothing; you can delete it by hand.
@@ -114,7 +129,9 @@ There is no settings file. `/office on`, `/office off` and the menu change the c
 - `src/adapter/`: maps Pi events and gentle-pi task status to contract events, plus the in-memory `OfficeHub`. Pure.
 - `src/server/`: the loopback window server (`office-server.ts`) and the platform browser opener (`open-browser.ts`).
 - `src/toggle.ts`: the per-session on/off controller, the terminal mode switch (`GENTLE_REEF`), and the status widget.
+- `src/stage/`: the terminal game mode, pure and tested: `raster.ts` (the canvas stand-in) and `png.ts` (zlib PNG), `frame.ts` (hub snapshot to room frame, PNG at 2x), `game.ts` (layout, line composition, frames, signs, dialog, rows left for Pi's prompts), `chat.ts` (Pi events to chat lines), `selector.ts` (the dialog as selector), `animator.ts` (the 4 fps timer).
 - `bin/gentle-reef`: launcher that starts gentle-shell with `GENTLE_REEF=1`.
 - `web/`: the page. `scene-reducer.js` is pure and tested from node, and holds the narrator (`narrate`, the dialog queue); `office-engine.js` is the 32-bit canvas engine from `design/agent-office/01-overworld-hq.html`, with an optional story camera (`setCamera`); `app.js` connects the stream to both. The server serves a fixed list of files, so the narrator lives in `scene-reducer.js` rather than a separate module.
-- `extensions/gentle-office.ts`: thin Pi wiring.
+- `web/hq-scene.js`: the Gentle HQ room, drawn with `fillRect` only, so Node and the browser share it.
+- `extensions/gentle-office.ts`: Pi wiring, including the game mode overlay (pi-tui `renderImage`, `Markdown`, input listener) and the `alt+g` / `alt+t` shortcuts.
 - `test/`: `npm test` runs the suite with Node's built-in test runner and TypeScript type stripping. No dependencies to install.
