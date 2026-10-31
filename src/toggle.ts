@@ -10,7 +10,7 @@ const OFFICE_COMMAND_DESCRIPTION = "Open the Gentle Office menu, or run /office 
 /** Set by bin/gentle-reef. Read once, at load; a plain gentle-shell session leaves it unset. */
 export const TERMINAL_MODE_ENV = "GENTLE_REEF";
 const TERMINAL_MODE_AT_LOAD = process.env[TERMINAL_MODE_ENV] === "1";
-/** Key of the one-line status widget. Placeholder until T7 draws the stage. */
+/** Key of the terminal widget: the stage image when the terminal shows Kitty images, else one status line. */
 export const REEF_WIDGET_KEY = "gentle-reef";
 /** Query the window page reads to pick the compact (dock) layout. The token path is unchanged. */
 const COMPACT_LAYOUT_QUERY = "layout=dock";
@@ -35,8 +35,22 @@ export const OFFICE_PI_EVENTS = [
 /** Task states that still count as an agent in flight on the widget. */
 const IN_FLIGHT_STATUSES: ReadonlySet<string> = new Set(["queued", "running", "waiting"]);
 
+/** A Pi widget component factory, `(tui, theme) => Component`; kept structural so src/ never imports pi-tui. */
+export type WidgetFactory = (tui: any, theme: any) => unknown;
+
 interface WidgetUi {
-	setWidget(key: string, content: string[] | undefined): void;
+	setWidget(key: string, content: string[] | WidgetFactory | undefined): void;
+}
+
+/**
+ * The terminal stage (issue #1). Built in extensions/ with pi-tui; `available()` is false on terminals without
+ * Kitty graphics, and the widget falls back to the one status line.
+ */
+export interface TerminalStage {
+	available(): boolean;
+	/** Game mode covers the screen with its own HUD: the widget is cleared instead of repeating it. */
+	covered?(): boolean;
+	widget(snapshot: OfficeSnapshot): WidgetFactory;
 }
 
 interface PiContext {
@@ -74,6 +88,8 @@ export interface OfficeController {
 	isEnabled(): boolean;
 	/** Affects this session only. Nothing is written to disk. */
 	setEnabled(enabled: boolean): void;
+	/** Redraws the terminal widget, e.g. after game mode (alt+g) changes whether the stage image is shown. */
+	refreshWidget(): void;
 }
 
 function usageOf(ctx: PiContext | undefined): UsageReading | undefined {
@@ -94,9 +110,9 @@ export function reefWidgetLine(snapshot: OfficeSnapshot): string {
  */
 export function registerOffice(
 	host: OfficeHost,
-	options: { hub: OfficeHub; server?: OfficeWindow; terminal?: boolean },
+	options: { hub: OfficeHub; server?: OfficeWindow; terminal?: boolean; stage?: TerminalStage },
 ): OfficeController {
-	const { hub, server, terminal = TERMINAL_MODE_AT_LOAD } = options;
+	const { hub, server, terminal = TERMINAL_MODE_AT_LOAD, stage } = options;
 	const identity = new SubagentIdentityBridge();
 	let enabled = false;
 	let detachers: Array<() => void> = [];
@@ -114,10 +130,16 @@ export function registerOffice(
 	};
 
 	// The widget only exists in terminal mode and only once Pi has handed us the session's ui.
+	// It is the stage image when the terminal shows Kitty images, else the one status line.
+	const widgetContent = (): string[] | WidgetFactory | undefined => {
+		if (!enabled || stage?.covered?.()) return undefined;
+		const snapshot = hub.snapshot();
+		return stage?.available() ? stage.widget(snapshot) : [reefWidgetLine(snapshot)];
+	};
 	const renderWidget = (): void => {
 		if (!terminal || widgetUi === undefined) return;
 		try {
-			widgetUi.setWidget(REEF_WIDGET_KEY, enabled ? [reefWidgetLine(hub.snapshot())] : undefined);
+			widgetUi.setWidget(REEF_WIDGET_KEY, widgetContent());
 		} catch {
 			// The widget is display only; a host that cannot draw it must not break a Pi event.
 		}
@@ -164,6 +186,7 @@ export function registerOffice(
 			if (next) attach();
 			else detach();
 		},
+		refreshWidget: () => renderWidget(),
 	};
 
 	if (terminal) {
