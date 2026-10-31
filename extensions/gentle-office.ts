@@ -12,7 +12,7 @@ import { frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from 
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
-import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 import { lastResult } from "../src/stage/memo.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
@@ -116,10 +116,10 @@ interface RoomImage {
  * The room as Kitty lines: a placement on the first row (below cell backgrounds, so the dialog and the signs can cover
  * parts of it) and one empty line per row it spans. The data travels apart, in `transmit` (splitKitty).
  */
-function roomImage(png: string, cols: number, rows: number, imageId: number, placement: number): RoomImage {
+function roomImage(png: string, cols: number, rows: number, imageId: number): RoomImage {
 	const result = renderImage(png, getPngDimensions(png) ?? { widthPx: 1440, heightPx: 816 }, { maxWidthCells: cols, maxHeightCells: rows, imageId, moveCursor: false });
 	if (!result) return { lines: [], cols, rows, transmit: "" };
-	const { transmit, place } = splitKitty(result.sequence, { imageId, columns: result.columns, rows: result.rows, z: ROOM_Z, placement });
+	const { transmit, place } = splitKitty(result.sequence, { imageId, columns: result.columns, rows: result.rows, z: ROOM_Z });
 	return { lines: [place, ...Array.from({ length: Math.max(0, result.rows - 1) }, () => "")], cols: result.columns, rows: result.rows, transmit };
 }
 
@@ -207,7 +207,9 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 		}
 	};
 	const markdown = markdownRenderer();
-	const imageId = allocateImageId();
+	// L29: two ids in turn for the room, so a new frame is placed before the old one is deleted (no blank frame).
+	const roomIds = [allocateImageId(), allocateImageId()] as const;
+	let shownRoom: number | undefined;
 	// T4b: the orchestrator's portrait in the dialog, a second Kitty image drawn over the dialog's panel.
 	const portraitId = allocateImageId();
 	const portraitPng = renderPortraitPng();
@@ -233,7 +235,6 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				terminalRows = tui.terminal.rows;
 				write = data => tui.terminal.write(data);
 				let image: { png: string; cols: number; rows: number; room: RoomImage } | undefined;
-				let placement = 1;
 				const sceneLines = lastResult<string[]>();
 				let lastWidth: number | undefined;
 				// T7: the room moves at a low frame rate only while someone acts, and never while the overlay is hidden.
@@ -292,10 +293,13 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						const png = pngFor({ ...frameFromSnapshot(snapshot), todo: boardRows(todo), jobs: jobsFromChat(chat), motion: animator.running(), t: animator.step() });
 						if (resendRoom || image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
 							resendRoom = false;
-							placement = placement === 1 ? 2 : 1;
-							image = { png, cols: layout.roomCols, rows: layout.bodyRows, room: roomImage(png, layout.roomCols, layout.bodyRows, imageId, placement) };
+							const { id, retire } = nextRoomId(roomIds, shownRoom);
+							shownRoom = id;
+							image = { png, cols: layout.roomCols, rows: layout.bodyRows, room: roomImage(png, layout.roomCols, layout.bodyRows, id) };
 							// T10: the data goes to the terminal now, before Pi writes the lines; the line only places it.
 							write?.(image.room.transmit);
+							// L29: the old room goes only after Pi has written this render, with the new one already placed.
+							if (retire !== undefined) queueMicrotask(() => write?.(deleteKittyImage(retire)));
 						}
 						// T10: typing renders the screen again with nothing new in the scene; reuse the lines until an input changes.
 						const shownNotice = currentNotice(notice, Date.now());
@@ -406,7 +410,8 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 			animate?.(!hide);
 			// A Kitty image stays on screen until it is deleted; the overlay's lines going away does not remove it.
 			if (hide) {
-				write?.(deleteKittyImage(imageId) + deleteKittyImage(portraitId));
+				write?.(deleteKittyImage(roomIds[0]) + deleteKittyImage(roomIds[1]) + deleteKittyImage(portraitId));
+				shownRoom = undefined;
 				resendRoom = true;
 				// Shown again, the portrait must be transmitted again.
 				portrait = undefined;

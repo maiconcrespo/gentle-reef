@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORTRAIT_COLS, aboveBackgrounds, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -227,13 +227,24 @@ describe("the room image sent once (T10)", () => {
 	const sequence = "\x1b_Ga=T,f=100,q=2,C=1,c=162,r=46,i=7,m=1;AAAA\x1b\\\x1b_Gm=0;BBBB\x1b\\";
 
 	it("splits pi-tui's transmit-and-show sequence: the data is transmitted alone, the line keeps a tiny placement", () => {
-		const { transmit, place } = splitKitty(sequence, { imageId: 7, columns: 162, rows: 46, z: -1_073_741_825, placement: 2 });
-		assert.equal(transmit, "\x1b_Ga=d,d=i,i=7,q=2\x1b\\\x1b_Ga=t,f=100,q=2,C=1,c=162,r=46,i=7,m=1;AAAA\x1b\\\x1b_Gm=0;BBBB\x1b\\");
-		assert.equal(place, "\x1b_Ga=p,i=7,p=2,c=162,r=46,C=1,q=2,z=-1073741825\x1b\\");
+		const { transmit, place } = splitKitty(sequence, { imageId: 7, columns: 162, rows: 46, z: -1_073_741_825 });
+		assert.equal(transmit, "\x1b_Ga=t,f=100,q=2,C=1,c=162,r=46,i=7,m=1;AAAA\x1b\\\x1b_Gm=0;BBBB\x1b\\");
+		assert.equal(place, "\x1b_Ga=p,i=7,p=1,c=162,r=46,C=1,q=2,z=-1073741825\x1b\\");
+	});
+
+	it("never deletes the shown room before the new one is placed (no blank frame, L29): the transmission holds no delete", () => {
+		const { transmit } = splitKitty(sequence, { imageId: 7, columns: 162, rows: 46, z: 0 });
+		assert.ok(!transmit.includes("a=d"));
+	});
+
+	it("alternates two image ids: the new frame goes to the id not on screen, and the shown one retires after the swap", () => {
+		assert.deepEqual(nextRoomId([3, 4], undefined), { id: 3, retire: undefined });
+		assert.deepEqual(nextRoomId([3, 4], 3), { id: 4, retire: 3 });
+		assert.deepEqual(nextRoomId([3, 4], 4), { id: 3, retire: 4 });
 	});
 
 	it("the placement is short and still a Kitty line for pi-tui (starts with ESC _G), and takes no cells", () => {
-		const { place } = splitKitty(sequence, { imageId: 7, columns: 162, rows: 46, z: 0, placement: 1 });
+		const { place } = splitKitty(sequence, { imageId: 7, columns: 162, rows: 46, z: 0 });
 		assert.ok(place.length < 80);
 		assert.ok(place.startsWith("\x1b_G"));
 		assert.equal(plainWidth(place), 0);
