@@ -1,12 +1,12 @@
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Image, allocateImageId, deleteKittyImage, getCapabilities, getCellDimensions, type OverlayHandle } from "@earendil-works/pi-tui";
+import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Image, Markdown, allocateImageId, deleteKittyImage, getCapabilities, getCellDimensions, type OverlayHandle } from "@earendil-works/pi-tui";
 import { OfficeHub } from "../src/adapter/hub.ts";
 import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
 import { createAnimator, isActing } from "../src/stage/animator.ts";
-import { chatLines, initialChat, reduceChat, type ChatState } from "../src/stage/chat.ts";
+import { chatLines, initialChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
 import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
 import { composeGame, gameHud, gameLayout, gameSide } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
@@ -77,8 +77,31 @@ function overlayStage(gameVisible: () => boolean): TerminalStage {
 	};
 }
 
-/** Rows left under the overlay for Pi's editor, its frame and the status line. */
-const EDITOR_ROWS = 8;
+/** Rows left under the overlay for Pi's editor and its frame, so the scene reaches it and Pi's chat never shows below. */
+const EDITOR_ROWS = 4;
+
+/**
+ * Replies keep their formatting: pi-tui's Markdown with Pi's own theme, the same renderer as the plain chat. Parsing is
+ * cached per text and width, since the column repaints on every streamed token.
+ */
+function markdownRenderer(): MarkdownRenderer {
+	const cache = new Map<string, string[]>();
+	return (text, width) => {
+		const key = `${width}\u0000${text}`;
+		let lines = cache.get(key);
+		if (!lines) {
+			try {
+				lines = new Markdown(text, 0, 0, getMarkdownTheme()).render(width);
+				while (lines.length > 1 && lines.at(-1)!.replace(/\x1b\[[0-9;]*m/g, "").trim() === "") lines.pop();
+			} catch {
+				lines = text.split("\n");
+			}
+			cache.set(key, lines);
+			if (cache.size > 200) cache.delete(cache.keys().next().value!);
+		}
+		return lines;
+	};
+}
 
 /**
  * Game mode (T3 spike): a full-width, non-capturing overlay over Pi's chat with the Gentle HQ layout (src/stage/game.ts):
@@ -93,6 +116,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let repaint: (() => void) | undefined;
 	let chat: ChatState = initialChat();
 	let thoughtsShown = true;
+	const markdown = markdownRenderer();
 	const imageId = allocateImageId();
 	const project = process.cwd().replace(homedir(), "~");
 
@@ -132,7 +156,8 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							const view = new Image(png, "image/png", { fallbackColor: text => theme.fg("muted", text) }, { maxWidthCells: layout.roomCols, maxHeightCells: layout.bodyRows, imageId });
 							image = { png, cols: layout.roomCols, rows: layout.bodyRows, view };
 						}
-						const side = gameSide(snapshot, chatLines(chat, { width: layout.sideCols, thoughtsShown }), layout.bodyRows);
+						const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
+						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols);
 						return composeGame(layout, { hud: gameHud(snapshot, { project }), room: image.view.render(layout.roomCols + 2), side });
 					},
 					invalidate() {

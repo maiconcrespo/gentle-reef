@@ -110,6 +110,12 @@ describe("chat lines", () => {
 		assert.deepEqual(chatLines(long, { width: 14, thoughtsShown: true }).map(plain), ["ORCH uno dos", "     tres", "     cuatro", "     cinco"]);
 	});
 
+	it("ORCH replies go through the markdown renderer when one is given, indented under the tag", () => {
+		const md = (text: string, width: number) => [`<${text}:${width}>`, "second"];
+		const lines = chatLines({ entries: [{ kind: "orch", text: "## Hola" }], live: null }, { width: 20, thoughtsShown: true, markdown: md }).map(plain);
+		assert.deepEqual(lines, ["ORCH <## Hola:15>", "     second"]);
+	});
+
 	it("wrap splits a word longer than the width", () => {
 		assert.deepEqual(wrap("abcdefghij", 4), ["abcd", "efgh", "ij"]);
 	});

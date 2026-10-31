@@ -7,7 +7,7 @@ export interface GameLayout {
 	readonly bodyRows: number;
 	/** Cells the room image takes, left. */
 	readonly roomCols: number;
-	/** Cells between the room and the text column (" │ "). */
+	/** Blank cells between the room and the framed text column. */
 	readonly gap: number;
 	/** Cells of the text column, right: Doing now, party and chat. */
 	readonly sideCols: number;
@@ -70,7 +70,7 @@ export function composeGame(layout: GameLayout, content: { hud: string; room: re
 	const width = layout.roomCols + layout.gap + layout.sideCols;
 	const lines = [fit(content.hud, width)];
 	for (let row = 0; row < layout.bodyRows; row++) {
-		lines.push(fit(content.room[row] ?? "", layout.roomCols) + " │ " + fit(content.side[row] ?? "", layout.sideCols));
+		lines.push(fit(content.room[row] ?? "", layout.roomCols) + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols));
 	}
 	return lines;
 }
@@ -83,24 +83,39 @@ const GOLD = sgr("#E0C27A"), PINK = sgr("#F095C8"), MUTED = sgr("#A78E9B"), SAND
 const IN_FLIGHT: ReadonlySet<string> = new Set(["queued", "running", "waiting"]);
 const ORCHESTRATOR_TEXT: Record<string, string> = { idle: "resting", thinking: "at the whiteboard", tool: "at the whiteboard", "waiting-user": "waiting for you" };
 
-/** The HUD row: brand, project, context used, and the key back to plain Pi. */
+const bg = (hex: string) => `\x1b[48;2;${Number.parseInt(hex.slice(1, 3), 16)};${Number.parseInt(hex.slice(3, 5), 16)};${Number.parseInt(hex.slice(5, 7), 16)}m`;
+const INK = sgr("#060407"), BORDER = sgr("#C96AA2"), TEXT = sgr("#F6EFF3");
+const PANEL_BG = bg("#100A0F"), BADGE_BG = bg("#E0C27A"), BOLD = "\x1b[1m";
+
+/** The HUD row: the gold badge, the brew cups (context left, like Zelda hearts), the project, and the keys. */
 export function gameHud(snapshot: OfficeSnapshot, info: { project: string }): string {
 	const percent = snapshot.context.percent;
-	const ctx = percent === null ? "ctx —" : `ctx ${Math.round(percent)}%`;
-	return ` ${GOLD}✿ GENTLE HQ${RESET} · ${info.project} · ${SAND}${ctx}${RESET} · ${MUTED}alt+t thoughts · alt+g plain chat${RESET}`;
+	const left = percent === null ? 1 : 1 - Math.min(100, Math.max(0, percent)) / 100;
+	const full = Math.round(left * 10);
+	const cups = `${SAND}${"▮".repeat(full)}${MUTED}${"▯".repeat(10 - full)}${RESET}`;
+	const pct = percent === null ? "—" : `${Math.round(left * 100)}%`;
+	return ` ${BADGE_BG}${INK}${BOLD}✿ GENTLE HQ${RESET}  ${MUTED}BREW${RESET} ${cups} ${SAND}${pct}${RESET}  ${TEXT}${info.project}${RESET}  ${MUTED}alt+t thoughts · alt+g plain chat${RESET}`;
 }
 
-/** The text column: the party (orchestrator first, then each agent in flight), then as much of the chat as fits in `rows`, newest last. */
-export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows: number): string[] {
-	const row = (name: string, text: string) => `${PINK}▶${RESET} ${name.padEnd(14)}${MUTED}${text}${RESET}`;
-	const head = [
-		`${GOLD}PARTY${RESET}`,
+/** A framed panel like the design's boxes: a gold title in the top border, the body padded inside, panel background. */
+export function frame(title: string, body: readonly string[], width: number, height: number): string[] {
+	const inner = Math.max(1, width - 4);
+	const paint = (line: string) => PANEL_BG + line.replaceAll(RESET, RESET + PANEL_BG) + RESET;
+	const top = `${BORDER}╔═ ${GOLD}${BOLD}${title}${RESET}${BORDER} ${"═".repeat(Math.max(0, width - 5 - [...title].length))}╗${RESET}`;
+	const rows = Array.from({ length: Math.max(0, height - 2) }, (_, i) => `${BORDER}║${RESET} ${fit(body[i] ?? "", inner)} ${BORDER}║${RESET}`);
+	return [top, ...rows, `${BORDER}╚${"═".repeat(Math.max(0, width - 2))}╝${RESET}`].map(paint);
+}
+
+/** The text column: a PARTY box (orchestrator, then each agent in flight) and a CHAT box with as much chat as fits, newest last. */
+export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows: number, width: number): string[] {
+	const row = (name: string, text: string) => `${PINK}▶${RESET} ${TEXT}${name.padEnd(14)}${RESET}${MUTED}${text}${RESET}`;
+	const party = [
 		row("orchestrator", ORCHESTRATOR_TEXT[snapshot.orchestrator.state] ?? snapshot.orchestrator.state),
 		...snapshot.agents.filter(agent => IN_FLIGHT.has(agent.status)).map(agent => row(agent.role, agent.status)),
-		"",
-		`${GOLD}CHAT${RESET}`,
 	];
-	const room = Math.max(0, rows - head.length);
-	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-room);
-	return [...head, ...body.slice(0, room)];
+	const partyBox = frame("PARTY", party, width, party.length + 2);
+	const chatHeight = rows - partyBox.length;
+	if (chatHeight < 3) return partyBox.slice(0, rows);
+	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-(chatHeight - 2));
+	return [...partyBox, ...frame("CHAT", body, width, chatHeight)];
 }

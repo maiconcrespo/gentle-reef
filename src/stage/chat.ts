@@ -134,10 +134,14 @@ export function wrap(text: string, width: number): string[] {
 	return out;
 }
 
-/** A speaker tag, then the text wrapped under it with the same indent. */
-function said(tag: string, color: string, text: string, width: number, textColor = TEXT): string[] {
+/** Renders markdown to styled lines of at most `width` cells (game mode passes pi-tui's Markdown with Pi's theme). */
+export type MarkdownRenderer = (text: string, width: number) => string[];
+
+/** A speaker tag, then the text under it with the same indent: through the markdown renderer when given, else wrapped. */
+function said(tag: string, color: string, text: string, width: number, markdown?: MarkdownRenderer): string[] {
 	const indent = [...tag].length + 1;
-	return wrap(text, width - indent).map((line, i) => (i === 0 ? `${color}${tag}${RESET} ${textColor}${line}${RESET}` : `${" ".repeat(indent)}${textColor}${line}${RESET}`));
+	const body = markdown ? markdown(text, width - indent) : wrap(text, width - indent).map(line => `${TEXT}${line}${RESET}`);
+	return body.map((line, i) => (i === 0 ? `${color}${tag}${RESET} ${line}` : `${" ".repeat(indent)}${line}`));
 }
 const thought = (text: string, width: number): string[] => wrap(text, width - 2).map(line => `${PINK}┆${RESET} ${MUTED}${ITALIC}${line}${RESET}`);
 
@@ -151,12 +155,12 @@ function toolLines(entry: ChatEntry, width: number): string[] {
 }
 
 /** The chat column's lines, oldest first. Thoughts show only when `thoughtsShown` (alt+t). */
-export function chatLines(state: ChatState, options: { width: number; thoughtsShown: boolean }): string[] {
-	const { width, thoughtsShown } = options;
+export function chatLines(state: ChatState, options: { width: number; thoughtsShown: boolean; markdown?: MarkdownRenderer }): string[] {
+	const { width, thoughtsShown, markdown } = options;
 	const lines: string[] = [];
 	for (const entry of state.entries) {
 		if (entry.kind === "you") lines.push(...said("YOU", PINK, entry.text, width));
-		else if (entry.kind === "orch") lines.push(...said("ORCH", GOLD, entry.text, width));
+		else if (entry.kind === "orch") lines.push(...said("ORCH", GOLD, entry.text, width, markdown));
 		else if (entry.kind === "tool") lines.push(...toolLines(entry, width));
 		else if (thoughtsShown) lines.push(...thought(entry.text, width));
 	}
@@ -164,6 +168,6 @@ export function chatLines(state: ChatState, options: { width: number; thoughtsSh
 		if (thoughtsShown) lines.push(`${PINK}thinking · live${RESET}`, ...thought(`${state.live.thinking}▌`, width));
 		else lines.push(`${MUTED}… thinking · alt+t to show${RESET}`);
 	}
-	if (state.live?.text) lines.push(...said("ORCH", GOLD, `${state.live.text}▌`, width));
+	if (state.live?.text) lines.push(...said("ORCH", GOLD, `${state.live.text}▌`, width, markdown));
 	return lines;
 }

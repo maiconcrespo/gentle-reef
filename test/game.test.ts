@@ -26,13 +26,13 @@ describe("game mode layout (T3)", () => {
 describe("game mode lines", () => {
 	const layout = { hudRows: 1, bodyRows: 3, roomCols: 6, gap: 3, sideCols: 8 };
 
-	it("HUD on top, then each row: room line padded to its width, the gap, the side text cut to its width", () => {
+	it("HUD on top, then each row: room line padded to its width, a blank gap, the side text cut to its width", () => {
 		const lines = composeGame(layout, { hud: "HQ", room: ["\x1b_Gimg\x1b\\", ""], side: ["DOING NOW", "chat"] });
 		assert.equal(lines.length, 4);
 		assert.equal(lines[0], "HQ".padEnd(17));
-		assert.equal(lines[1], "\x1b_Gimg\x1b\\" + " ".repeat(6) + " │ " + "DOING NO");
-		assert.equal(lines[2], " ".repeat(6) + " │ " + "chat    ");
-		assert.equal(lines[3], " ".repeat(6) + " │ " + " ".repeat(8));
+		assert.equal(lines[1], "\x1b_Gimg\x1b\\" + " ".repeat(6) + "   " + "DOING NO");
+		assert.equal(lines[2], " ".repeat(6) + "   " + "chat    ");
+		assert.equal(lines[3], " ".repeat(6) + "   " + " ".repeat(8));
 	});
 
 	it("every line has the full visible width, escapes not counted", () => {
@@ -44,25 +44,37 @@ describe("game mode lines", () => {
 describe("game mode text", () => {
 	const snapshot = (over: Record<string, unknown> = {}) => ({ v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null, ...over }) as never;
 
-	it("HUD: brand, project, context, and the keys for thoughts and plain Pi", () => {
-		assert.equal(plainText(gameHud(snapshot({ context: { percent: 38 } }), { project: "~/gentle-reef" })), " ✿ GENTLE HQ · ~/gentle-reef · ctx 38% · alt+t thoughts · alt+g plain chat");
-		assert.match(plainText(gameHud(snapshot(), { project: "~/x" })), /ctx — /);
+	it("HUD: badge, brew cups for the context left, project, and the keys", () => {
+		assert.equal(plainText(gameHud(snapshot({ context: { percent: 38 } }), { project: "~/gentle-reef" })), " ✿ GENTLE HQ  BREW ▮▮▮▮▮▮▯▯▯▯ 62%  ~/gentle-reef  alt+t thoughts · alt+g plain chat");
+		assert.match(plainText(gameHud(snapshot(), { project: "~/x" })), /BREW ▮▮▮▮▮▮▮▮▮▮ — /);
 	});
 
-	it("side column: the orchestrator's state, then each agent in flight with its role and status", () => {
+	it("side column: a PARTY box (orchestrator, then agents in flight) and a CHAT box filling the rest, newest at the bottom", () => {
 		const side = gameSide(snapshot({
-			orchestrator: { state: "waiting-user" },
 			agents: [
 				{ v: 1, type: "subagent", id: "a", agent: "gentle-ai-worker", role: "worker", label: "gentle-ai-worker", status: "running" },
 				{ v: 1, type: "subagent", id: "b", agent: "gentle-ai-explore", role: "explore", label: "gentle-ai-explore", status: "completed" },
 			],
-		}), [], 10).map(plainText);
-		assert.deepEqual(side.slice(0, 6), ["PARTY", "▶ orchestrator  waiting for you", "▶ worker        running", "", "CHAT", "Write below; the orchestrator answers here."]);
+		}), ["c1", "c2", "c3", "c4", "c5"], 9, 30).map(plainText);
+		assert.deepEqual(side, [
+			"╔═ PARTY ════════════════════╗",
+			"║ ▶ orchestrator  resting    ║",
+			"║ ▶ worker        running    ║",
+			"╚════════════════════════════╝",
+			"╔═ CHAT ═════════════════════╗",
+			"║ c3                         ║",
+			"║ c4                         ║",
+			"║ c5                         ║",
+			"╚════════════════════════════╝",
+		]);
 	});
 
-	it("the chat fills the rows left under the party, newest at the bottom", () => {
-		const chat = ["c1", "c2", "c3", "c4", "c5"];
-		const side = gameSide(snapshot(), chat, 7).map(plainText);
-		assert.deepEqual(side, ["PARTY", "▶ orchestrator  resting", "", "CHAT", "c3", "c4", "c5"]);
+	it("an empty chat says where to write", () => {
+		const side = gameSide(snapshot(), [], 7, 52).map(plainText);
+		assert.equal(side[4], "║ Write below; the orchestrator answers here.      ║");
+	});
+
+	it("every side line has the column width", () => {
+		for (const line of gameSide(snapshot(), ["x".repeat(40)], 8, 24)) assert.equal(plainWidth(line), 24);
 	});
 });
