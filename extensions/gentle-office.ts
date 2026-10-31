@@ -12,7 +12,8 @@ import { frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from 
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
-import { PORTRAIT_COLS, aboveBackgrounds, belowBackgrounds, composeGame, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
+import { lastResult } from "../src/stage/memo.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
@@ -107,16 +108,19 @@ interface RoomImage {
 	readonly lines: string[];
 	readonly cols: number;
 	readonly rows: number;
+	/** The image data for the terminal, written once when the PNG changes (T10); empty without Kitty. */
+	readonly transmit: string;
 }
 
 /**
- * The room as Kitty lines: the image on the first row (below cell backgrounds, so the dialog and the signs can cover
- * parts of it) and one empty line per row it spans, as pi-tui's Image component returns them.
+ * The room as Kitty lines: a placement on the first row (below cell backgrounds, so the dialog and the signs can cover
+ * parts of it) and one empty line per row it spans. The data travels apart, in `transmit` (splitKitty).
  */
-function roomImage(png: string, cols: number, rows: number, imageId: number): RoomImage {
+function roomImage(png: string, cols: number, rows: number, imageId: number, placement: number): RoomImage {
 	const result = renderImage(png, getPngDimensions(png) ?? { widthPx: 1440, heightPx: 816 }, { maxWidthCells: cols, maxHeightCells: rows, imageId, moveCursor: false });
-	if (!result) return { lines: [], cols, rows };
-	return { lines: [belowBackgrounds(result.sequence), ...Array.from({ length: Math.max(0, result.rows - 1) }, () => "")], cols: result.columns, rows: result.rows };
+	if (!result) return { lines: [], cols, rows, transmit: "" };
+	const { transmit, place } = splitKitty(result.sequence, { imageId, columns: result.columns, rows: result.rows, z: ROOM_Z, placement });
+	return { lines: [place, ...Array.from({ length: Math.max(0, result.rows - 1) }, () => "")], cols: result.columns, rows: result.rows, transmit };
 }
 
 /** The current git branch for the project sign, read at most every 5 s; null outside a repository. */
@@ -209,6 +213,8 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	const portraitPng = renderPortraitPng();
 	let portrait: { rows: number; image: string } | undefined;
 	let portraitShown = false;
+	// T10: hiding game mode frees the room's image data in the terminal; the next render sends it again.
+	let resendRoom = false;
 	const portraitFor = (rows: number): string => {
 		if (portrait?.rows !== rows) {
 			const result = renderImage(portraitPng, { widthPx: 96, heightPx: 96 }, { maxWidthCells: PORTRAIT_COLS, maxHeightCells: rows, imageId: portraitId, moveCursor: false });
@@ -227,6 +233,8 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				terminalRows = tui.terminal.rows;
 				write = data => tui.terminal.write(data);
 				let image: { png: string; cols: number; rows: number; room: RoomImage } | undefined;
+				let placement = 1;
+				const sceneLines = lastResult<string[]>();
 				let lastWidth: number | undefined;
 				// T7: the room moves at a low frame rate only while someone acts, and never while the overlay is hidden.
 				const animator = createAnimator({ onTick: () => tui.requestRender() });
@@ -282,33 +290,42 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						if (!layout) return [];
 						const snapshot = hub.snapshot();
 						const png = pngFor({ ...frameFromSnapshot(snapshot), todo: boardRows(todo), jobs: jobsFromChat(chat), motion: animator.running(), t: animator.step() });
-						if (image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
-							image = { png, cols: layout.roomCols, rows: layout.bodyRows, room: roomImage(png, layout.roomCols, layout.bodyRows, imageId) };
+						if (resendRoom || image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
+							resendRoom = false;
+							placement = placement === 1 ? 2 : 1;
+							image = { png, cols: layout.roomCols, rows: layout.bodyRows, room: roomImage(png, layout.roomCols, layout.bodyRows, imageId, placement) };
+							// T10: the data goes to the terminal now, before Pi writes the lines; the line only places it.
+							write?.(image.room.transmit);
 						}
-						const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
-						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: currentNotice(notice, Date.now()), chatShown });
-						// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
-						const reply = currentReply(chat);
-						const question = snapshot.ask?.questions[0];
-						const driving = selector?.choice.active() === true;
-						const ask = question && !editing
-							? { question: question.question, options: question.options, custom: question.custom === true && driving, selected: driving ? selector!.choice.index() : 0, interactive: driving }
-							: null;
-						const dialogWidth = layout.roomCols - 4;
-						// T4b: with room for the portrait the text starts after it, and the box keeps the portrait's 4 rows.
-						const withPortrait = portraitFits(Number.POSITIVE_INFINITY, dialogWidth);
-						const replyLines = reply ? markdown(reply, dialogWidth - 4 - (withPortrait ? PORTRAIT_COLS + 1 : 0)) : [];
-						const wanted = (ask ? ask.options.length + (ask.custom ? 1 : 0) + (ask.interactive ? 1 : 0) + 1 : replyLines.length) + 2;
-						const dialogHeight = Math.min(Math.max(4, Math.floor(layout.bodyRows * 0.35)), Math.max(withPortrait ? 4 : 3, wanted));
-						const showPortrait = Boolean(reply || ask) && portraitFits(dialogHeight, dialogWidth);
-						dialogView = reply && !ask ? { total: replyLines.length, rows: dialogHeight - 2 } : undefined;
-						const dialog = reply || ask ? gameDialog({ reply: replyLines, ask, top: dialogTop }, dialogWidth, dialogHeight, showPortrait ? { image: portraitFor(dialogHeight - 2) } : undefined) : undefined;
-						// A Kitty image stays until deleted: when the dialog goes away, so must its portrait.
-						if (portraitShown && !showPortrait) queueMicrotask(() => write?.(deleteKittyImage(portraitId)));
-						portraitShown = showPortrait;
-						// T4f: project and branch, the context left and the brand are signs in the room, not a HUD row.
-						const signs = sceneSigns({ project, branch: branch(), percent: snapshot.context.percent }, image.room);
-						return composeGame(layout, { hud: "", room: image.room.lines, side, dialog, signs });
+						// T10: typing renders the screen again with nothing new in the scene; reuse the lines until an input changes.
+						const shownNotice = currentNotice(notice, Date.now());
+						const inputs = [width, layout.bodyRows, layout.roomCols, image.room.lines[0], JSON.stringify(snapshot), chat, todo, shownNotice, chatShown, thoughtsShown, dialogTop, editing, selector?.choice.active(), selector?.choice.index(), branch()];
+						return sceneLines(inputs, () => {
+							const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
+							const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: shownNotice, chatShown });
+							// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
+							const reply = currentReply(chat);
+							const question = snapshot.ask?.questions[0];
+							const driving = selector?.choice.active() === true;
+							const ask = question && !editing
+								? { question: question.question, options: question.options, custom: question.custom === true && driving, selected: driving ? selector!.choice.index() : 0, interactive: driving }
+								: null;
+							const dialogWidth = layout.roomCols - 4;
+							// T4b: with room for the portrait the text starts after it, and the box keeps the portrait's 4 rows.
+							const withPortrait = portraitFits(Number.POSITIVE_INFINITY, dialogWidth);
+							const replyLines = reply ? markdown(reply, dialogWidth - 4 - (withPortrait ? PORTRAIT_COLS + 1 : 0)) : [];
+							const wanted = (ask ? ask.options.length + (ask.custom ? 1 : 0) + (ask.interactive ? 1 : 0) + 1 : replyLines.length) + 2;
+							const dialogHeight = Math.min(Math.max(4, Math.floor(layout.bodyRows * 0.35)), Math.max(withPortrait ? 4 : 3, wanted));
+							const showPortrait = Boolean(reply || ask) && portraitFits(dialogHeight, dialogWidth);
+							dialogView = reply && !ask ? { total: replyLines.length, rows: dialogHeight - 2 } : undefined;
+							const dialog = reply || ask ? gameDialog({ reply: replyLines, ask, top: dialogTop }, dialogWidth, dialogHeight, showPortrait ? { image: portraitFor(dialogHeight - 2) } : undefined) : undefined;
+							// A Kitty image stays until deleted: when the dialog goes away, so must its portrait.
+							if (portraitShown && !showPortrait) queueMicrotask(() => write?.(deleteKittyImage(portraitId)));
+							portraitShown = showPortrait;
+							// T4f: project and branch, the context left and the brand are signs in the room, not a HUD row.
+							const signs = sceneSigns({ project, branch: branch(), percent: snapshot.context.percent }, image.room);
+							return composeGame(layout, { hud: "", room: image.room.lines, side, dialog, signs });
+						});
 					},
 					invalidate() {
 						image = undefined;
@@ -390,6 +407,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 			// A Kitty image stays on screen until it is deleted; the overlay's lines going away does not remove it.
 			if (hide) {
 				write?.(deleteKittyImage(imageId) + deleteKittyImage(portraitId));
+				resendRoom = true;
 				// Shown again, the portrait must be transmitted again.
 				portrait = undefined;
 				portraitShown = false;

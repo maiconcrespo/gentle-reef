@@ -106,6 +106,22 @@ export function composeGame(layout: GameLayout, content: { hud: string; room: re
 /* Kitty z-index below cells with a background colour: panel cells drawn over the room hide it, plain cells show it. */
 const BELOW_BACKGROUNDS = -1_073_741_825;
 
+/**
+ * The room image sent once (T10). pi-tui's sequence transmits and shows the image in one go, so the PNG's base64 (about
+ * 150 KB) sat in the overlay's first line, which Pi measures and composites on every keystroke. Split it: `transmit`
+ * drops the old placements and sends the data (`a=t`, written to the terminal only when the PNG changes); `place` is the
+ * line's tiny placement (`a=p`). A new `placement` number changes the line, so Pi redraws it after a transmission.
+ */
+export function splitKitty(sequence: string, options: { imageId: number; columns: number; rows: number; z: number; placement: number }): { transmit: string; place: string } {
+	const { imageId, columns, rows, z, placement } = options;
+	const transmit = `\x1b_Ga=d,d=i,i=${imageId},q=2\x1b\\` + sequence.replace("\x1b_Ga=T,", "\x1b_Ga=t,");
+	const place = `\x1b_Ga=p,i=${imageId},p=${placement},c=${columns},r=${rows},C=1,q=2,z=${z}\x1b\\`;
+	return { transmit, place };
+}
+
+/** The z-index that puts the room below cell backgrounds (see belowBackgrounds). */
+export const ROOM_Z = BELOW_BACKGROUNDS;
+
 /** Puts a pi-tui Kitty sequence below cell backgrounds, so the dialog's panel can be drawn over the room. */
 export function belowBackgrounds(sequence: string): string {
 	return sequence.replace("\x1b_Ga=T,", `\x1b_Ga=T,z=${BELOW_BACKGROUNDS},`);
