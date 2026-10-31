@@ -66,13 +66,26 @@ export function fit(line: string, width: number): string {
  * The overlay's lines: the HUD across the top, then per body row the room line (the first carries the Kitty image, the
  * rest are the rows it covers), the gap, and the text column cut to its width.
  */
-export function composeGame(layout: GameLayout, content: { hud: string; room: readonly string[]; side: readonly string[] }): string[] {
+export function composeGame(layout: GameLayout, content: { hud: string; room: readonly string[]; side: readonly string[]; dialog?: readonly string[] }): string[] {
 	const width = layout.roomCols + layout.gap + layout.sideCols;
 	const lines = [fit(content.hud, width)];
+	const dialog = content.dialog ?? [];
+	// The dialog sits on the room's bottom rows, 2 cells in; never on row 0, which carries the image.
+	const dialogStart = Math.max(1, layout.bodyRows - dialog.length);
 	for (let row = 0; row < layout.bodyRows; row++) {
-		lines.push(fit(content.room[row] ?? "", layout.roomCols) + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols));
+		const over = row >= dialogStart ? dialog[row - dialogStart] : undefined;
+		const room = over === undefined ? fit(content.room[row] ?? "", layout.roomCols) : "  " + fit(over, layout.roomCols - 2);
+		lines.push(room + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols));
 	}
 	return lines;
+}
+
+/* Kitty z-index below cells with a background colour: panel cells drawn over the room hide it, plain cells show it. */
+const BELOW_BACKGROUNDS = -1_073_741_825;
+
+/** Puts a pi-tui Kitty sequence below cell backgrounds, so the dialog's panel can be drawn over the room. */
+export function belowBackgrounds(sequence: string): string {
+	return sequence.replace("\x1b_Ga=T,", `\x1b_Ga=T,z=${BELOW_BACKGROUNDS},`);
 }
 
 /* Truecolor SGR from the Gentleman-Cute tokens (design/system.md). */
@@ -118,4 +131,16 @@ export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows
 	if (chatHeight < 3) return partyBox.slice(0, rows);
 	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-(chatHeight - 2));
 	return [...partyBox, ...frame("CHAT", body, width, chatHeight)];
+}
+
+/** The dialog over the room: the current reply in a framed ORCHESTRATOR panel (tail when long), or an open question with its options. */
+export function gameDialog(content: { reply: readonly string[]; ask: { question: string; options: readonly string[] } | null }, width: number, height: number): string[] {
+	if (content.ask) {
+		const body = [
+			`${TEXT}${content.ask.question}${RESET}`,
+			...content.ask.options.map((option, i) => (i === 0 ? `${PINK}▶${RESET} ${TEXT}${option}${RESET}` : `  ${MUTED}${option}${RESET}`)),
+		];
+		return frame("ORCHESTRATOR · asks", body, width, height);
+	}
+	return frame("ORCHESTRATOR", content.reply.slice(-(height - 2)), width, height);
 }

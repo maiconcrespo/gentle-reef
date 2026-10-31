@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { composeGame, gameHud, gameLayout, gameSide, plainWidth } from "../src/stage/game.ts";
+import { belowBackgrounds, composeGame, gameDialog, gameHud, gameLayout, gameSide, plainWidth } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -76,5 +76,31 @@ describe("game mode text", () => {
 
 	it("every side line has the column width", () => {
 		for (const line of gameSide(snapshot(), ["x".repeat(40)], 8, 24)) assert.equal(plainWidth(line), 24);
+	});
+});
+
+describe("dialog over the room (T4d)", () => {
+	it("moves the room image below cell backgrounds, so the dialog's panel cells cover it and the rest shows through", () => {
+		assert.equal(belowBackgrounds("\x1b_Ga=T,f=100,q=2,C=1,i=7,m=1;AAAA\x1b\\\x1b_Gm=0;BB\x1b\\"), "\x1b_Ga=T,z=-1073741825,f=100,q=2,C=1,i=7,m=1;AAAA\x1b\\\x1b_Gm=0;BB\x1b\\");
+		assert.equal(belowBackgrounds("plain"), "plain");
+	});
+
+	it("draws the dialog over the bottom of the room, 2 cells in, leaving the image's first row alone", () => {
+		const layout = { hudRows: 1, bodyRows: 6, roomCols: 10, gap: 1, sideCols: 2 };
+		const lines = composeGame(layout, { hud: "", room: ["IMG"], side: [], dialog: ["d1", "d2"] });
+		assert.equal(lines[1], "IMG" + " ".repeat(7) + "   ", "row 0 keeps the image");
+		assert.equal(lines[5], "  d1      " + "   ");
+		assert.equal(lines[6], "  d2      " + "   ");
+		assert.equal(lines[4], " ".repeat(10) + "   ");
+	});
+
+	it("dialog box: the reply in a framed ORCHESTRATOR panel, tail first when it does not fit", () => {
+		const box = gameDialog({ reply: ["l1", "l2", "l3", "l4"], ask: null }, 20, 5).map(plainText);
+		assert.deepEqual(box, ["╔═ ORCHESTRATOR ═══╗", "║ l2               ║", "║ l3               ║", "║ l4               ║", "╚══════════════════╝"]);
+	});
+
+	it("an open question shows instead of the reply, with its options and ▶ on the first", () => {
+		const box = gameDialog({ reply: ["old"], ask: { question: "Push now?", options: ["Yes", "Not yet"] } }, 24, 6).map(plainText);
+		assert.deepEqual(box.slice(0, 5), ["╔═ ORCHESTRATOR · asks ╗", "║ Push now?            ║", "║ ▶ Yes                ║", "║   Not yet            ║", "║                      ║"]);
 	});
 });

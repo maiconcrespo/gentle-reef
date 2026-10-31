@@ -1,14 +1,14 @@
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Image, Markdown, allocateImageId, deleteKittyImage, getCapabilities, getCellDimensions, type OverlayHandle } from "@earendil-works/pi-tui";
+import { Markdown, allocateImageId, deleteKittyImage, getCapabilities, getCellDimensions, getPngDimensions, renderImage, type OverlayHandle } from "@earendil-works/pi-tui";
 import { OfficeHub } from "../src/adapter/hub.ts";
 import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
 import { createAnimator, isActing } from "../src/stage/animator.ts";
-import { chatLines, initialChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
+import { chatLines, currentReply, initialChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
 import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
-import { composeGame, gameHud, gameLayout, gameSide } from "../src/stage/game.ts";
+import { belowBackgrounds, composeGame, gameDialog, gameHud, gameLayout, gameSide } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
@@ -77,6 +77,16 @@ function overlayStage(gameVisible: () => boolean): TerminalStage {
 	};
 }
 
+/**
+ * The room as Kitty lines: the image on the first row (below cell backgrounds, so the dialog can cover part of it) and
+ * one empty line per row it spans, as pi-tui's Image component returns them.
+ */
+function roomLines(png: string, cols: number, rows: number, imageId: number): string[] {
+	const result = renderImage(png, getPngDimensions(png) ?? { widthPx: 1440, heightPx: 816 }, { maxWidthCells: cols, maxHeightCells: rows, imageId, moveCursor: false });
+	if (!result) return [];
+	return [belowBackgrounds(result.sequence), ...Array.from({ length: Math.max(0, result.rows - 1) }, () => "")];
+}
+
 /** Rows left under the overlay for Pi's editor and its frame, so the scene reaches it and Pi's chat never shows below. */
 const EDITOR_ROWS = 4;
 
@@ -124,10 +134,10 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 		if (handle || opening) return;
 		opening = true;
 		void ctx.ui.custom<void>(
-			(tui, theme) => {
+			tui => {
 				terminalRows = tui.terminal.rows;
 				write = data => tui.terminal.write(data);
-				let image: { png: string; cols: number; rows: number; view: Image } | undefined;
+				let image: { png: string; cols: number; rows: number; lines: string[] } | undefined;
 				let lastWidth: number | undefined;
 				// T7: the room moves at a low frame rate only while someone acts, and never while the overlay is hidden.
 				const animator = createAnimator({ onTick: () => tui.requestRender() });
@@ -153,15 +163,23 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						const snapshot = hub.snapshot();
 						const png = pngFor({ ...frameFromSnapshot(snapshot), motion: animator.running(), t: animator.step() });
 						if (image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
-							const view = new Image(png, "image/png", { fallbackColor: text => theme.fg("muted", text) }, { maxWidthCells: layout.roomCols, maxHeightCells: layout.bodyRows, imageId });
-							image = { png, cols: layout.roomCols, rows: layout.bodyRows, view };
+							image = { png, cols: layout.roomCols, rows: layout.bodyRows, lines: roomLines(png, layout.roomCols, layout.bodyRows, imageId) };
 						}
 						const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
 						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols);
-						return composeGame(layout, { hud: gameHud(snapshot, { project }), room: image.view.render(layout.roomCols + 2), side });
+						// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
+						const reply = currentReply(chat);
+						const question = snapshot.ask?.questions[0];
+						const ask = question ? { question: question.question, options: question.options } : null;
+						const dialogWidth = layout.roomCols - 4;
+						const replyLines = reply ? markdown(reply, dialogWidth - 4) : [];
+						const wanted = (ask ? ask.options.length + 1 : replyLines.length) + 2;
+						const dialogHeight = Math.min(Math.max(4, Math.floor(layout.bodyRows * 0.35)), Math.max(3, wanted));
+						const dialog = reply || ask ? gameDialog({ reply: replyLines, ask }, dialogWidth, dialogHeight) : undefined;
+						return composeGame(layout, { hud: gameHud(snapshot, { project }), room: image.lines, side, dialog });
 					},
 					invalidate() {
-						image?.view.invalidate();
+						image = undefined;
 					},
 					dispose() {
 						repaint = undefined;

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { CHAT_LIMIT, chatLines, initialChat, reduceChat, wrap } from "../src/stage/chat.ts";
+import { CHAT_LIMIT, chatLines, currentReply, initialChat, reduceChat, wrap } from "../src/stage/chat.ts";
 
 const plain = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 const assistant = (content: unknown[]) => ({ role: "assistant", content });
@@ -118,5 +118,17 @@ describe("chat lines", () => {
 
 	it("wrap splits a word longer than the width", () => {
 		assert.deepEqual(wrap("abcdefghij", 4), ["abcd", "efgh", "ij"]);
+	});
+});
+
+describe("current reply (what the dialog shows)", () => {
+	it("is the orchestrator's text since your last message, plus what is streaming now", () => {
+		assert.equal(currentReply(initialChat()), null);
+		const s = { entries: [{ kind: "orch", text: "old" }, { kind: "you", text: "hola" }, { kind: "tool", text: "read x" }, { kind: "orch", text: "Primero" }], live: { thinking: "", text: "y después" } } as const;
+		assert.equal(currentReply(s), "Primero\n\ny después▌");
+	});
+
+	it("is null right after you write, until the reply starts", () => {
+		assert.equal(currentReply({ entries: [{ kind: "orch", text: "old" }, { kind: "you", text: "hola" }], live: { thinking: "pensando", text: "" } }), null);
 	});
 });

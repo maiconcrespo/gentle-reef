@@ -171,3 +171,15 @@ export function chatLines(state: ChatState, options: { width: number; thoughtsSh
 	if (state.live?.text) lines.push(...said("ORCH", GOLD, `${state.live.text}▌`, width, markdown));
 	return lines;
 }
+
+/**
+ * What the dialog over the room shows (T4d): the orchestrator's text since your last message, plus what streams now
+ * (with a cursor). Null until the reply starts, so the dialog closes while it thinks.
+ */
+export function currentReply(state: ChatState): string | null {
+	let since = 0;
+	state.entries.forEach((entry, i) => { if (entry.kind === "you") since = i + 1; });
+	const parts = state.entries.slice(since).filter(entry => entry.kind === "orch").map(entry => entry.text);
+	if (state.live?.text) parts.push(`${state.live.text}▌`);
+	return parts.length ? parts.join("\n\n") : null;
+}
