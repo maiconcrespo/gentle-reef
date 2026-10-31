@@ -140,6 +140,8 @@ export interface SideExtras {
 	readonly doing?: { readonly title: string; readonly done: number; readonly total: number } | null;
 	/** The newest notice from any extension (src/stage/notice.ts), while it is fresh. */
 	readonly notice?: { readonly text: string; readonly level: "info" | "warning" | "error" } | null;
+	/** False hides the CHAT box (alt+c, T9): the dialog over the room already shows the reply. */
+	readonly chatShown?: boolean;
 }
 
 const NOTICE_TITLE = { info: "NOTICE", warning: "WARNING", error: "ERROR" } as const;
@@ -157,10 +159,14 @@ export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows
 	// A notice gets its own box under PARTY, only while CHAT still keeps its frame and one line.
 	const noticeBody = extras.notice ? wrap(extras.notice.text, width - 4).slice(0, NOTICE_LINES).map(line => `${extras.notice!.level === "info" ? TEXT : SAND}${line}${RESET}`) : [];
 	const noticeBox = noticeBody.length && rows - partyBox.length - (noticeBody.length + 2) >= 3 ? frame(NOTICE_TITLE[extras.notice!.level], noticeBody, width, noticeBody.length + 2) : [];
+	if (extras.chatShown === false) {
+		const lines = [...partyBox, ...noticeBox, fit(`  ${MUTED}alt+c chat · alt+g plain chat${RESET}`, width)];
+		return [...lines, ...Array<string>(Math.max(0, rows - lines.length)).fill(" ".repeat(width))].slice(0, rows);
+	}
 	const chatHeight = rows - partyBox.length - noticeBox.length;
 	if (chatHeight < 3) return partyBox.slice(0, rows);
 	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-(chatHeight - 2));
-	return [...partyBox, ...noticeBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat")];
+	return [...partyBox, ...noticeBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat · alt+c hide chat")];
 }
 
 /** What an open question shows: its options, which one the ▶ is on, and whether the dialog drives the answer (T4e). */
@@ -196,15 +202,39 @@ export function aboveBackgrounds(sequence: string): string {
  * The dialog over the room: the current reply in a framed ORCHESTRATOR panel (tail when long), or an open question as a
  * selector. With `portrait`, its Kitty image starts on the first inner row and every line moves PORTRAIT_COLS + 1 right.
  */
-export function gameDialog(content: { reply: readonly string[]; ask: DialogAsk | null }, width: number, height: number, portrait?: { image: string }): string[] {
+export function gameDialog(content: DialogContent, width: number, height: number, portrait?: { image: string }): string[] {
 	const boxed = gameDialogBody(content, width, height);
-	if (!portrait) return frame(boxed.title, boxed.body, width, height);
+	if (!portrait) return frame(boxed.title, boxed.body, width, height, boxed.footer);
 	const pad = " ".repeat(PORTRAIT_COLS + 1);
 	const rows = Array.from({ length: Math.max(0, height - 2) }, (_, i) => (i === 0 ? portrait.image : "") + pad + (boxed.body[i] ?? ""));
-	return frame(boxed.title, rows, width, height);
+	return frame(boxed.title, rows, width, height, boxed.footer);
 }
 
-function gameDialogBody(content: { reply: readonly string[]; ask: DialogAsk | null }, _width: number, height: number): { title: string; body: string[] } {
+/** What the dialog shows: the reply's lines, or an open question. `top` is the reply's first line shown; null follows the tail (T9). */
+export interface DialogContent {
+	readonly reply: readonly string[];
+	readonly ask: DialogAsk | null;
+	readonly top?: number | null;
+}
+
+/** The first reply line shown: `top` kept inside the text, or the tail when null. */
+export function dialogStart(view: { total: number; rows: number }, top: number | null): number {
+	const last = Math.max(0, view.total - view.rows);
+	return top === null ? last : Math.min(Math.max(0, top), last);
+}
+
+export type DialogScrollKey = "line-up" | "line-down" | "page-up" | "page-down";
+
+/** Moves a long reply in the dialog (T9): by one line or by the rows shown. Back at the end it follows the tail again (null). */
+export function scrollDialog(top: number | null, view: { total: number; rows: number }, key: DialogScrollKey): number | null {
+	const last = Math.max(0, view.total - view.rows);
+	if (last === 0) return null;
+	const step = key.startsWith("page") ? Math.max(1, view.rows) : 1;
+	const next = dialogStart(view, top) + (key.endsWith("up") ? -step : step);
+	return next >= last ? null : Math.max(0, next);
+}
+
+function gameDialogBody(content: DialogContent, _width: number, height: number): { title: string; body: string[]; footer?: string } {
 	const ask = content.ask;
 	if (ask) {
 		const items = ask.custom ? [...ask.options, "Other… (write your own)"] : [...ask.options];
@@ -216,7 +246,12 @@ function gameDialogBody(content: { reply: readonly string[]; ask: DialogAsk | nu
 		];
 		return { title: "ORCHESTRATOR · asks", body };
 	}
-	return { title: "ORCHESTRATOR", body: content.reply.slice(-(height - 2)) };
+	const view = { total: content.reply.length, rows: Math.max(1, height - 2) };
+	const start = dialogStart(view, content.top ?? null);
+	const below = Math.max(0, view.total - start - view.rows);
+	const marks = [...(start > 0 ? [`↑${start}`] : []), ...(below > 0 ? [`↓${below}`] : [])];
+	const footer = marks.length ? [...marks, "PgUp PgDn"].join(" · ") : undefined;
+	return { title: "ORCHESTRATOR", body: content.reply.slice(start, start + view.rows), footer };
 }
 
 const EDITOR_ROWS = 4;

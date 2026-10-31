@@ -12,7 +12,7 @@ import { frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from 
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
-import { PORTRAIT_COLS, aboveBackgrounds, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, belowBackgrounds, composeGame, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
@@ -53,6 +53,10 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 		description: "Gentle HQ: show or hide the orchestrator's thinking",
 		handler: () => game.toggleThoughts(),
 	});
+	pi.registerShortcut("alt+c", {
+		description: "Gentle HQ: show or hide the CHAT box (the dialog over the room keeps the reply)",
+		handler: () => game.toggleChat(),
+	});
 	pi.registerShortcut("alt+g", {
 		description: "Gentle HQ: switch between game mode and plain chat",
 		handler: ctx => {
@@ -60,6 +64,15 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 			controller.refreshWidget();
 		},
 	});
+}
+
+/** The dialog's scroll keys (T9): PgUp/PgDn move a page, shift+up/down a line. */
+function dialogScrollKey(data: string): DialogScrollKey | undefined {
+	if (matchesKey(data, "pageUp")) return "page-up";
+	if (matchesKey(data, "pageDown")) return "page-down";
+	if (matchesKey(data, "shift+up")) return "line-up";
+	if (matchesKey(data, "shift+down")) return "line-down";
+	return undefined;
 }
 
 const kitty = (): boolean => getCapabilities().images === "kitty";
@@ -161,6 +174,10 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let todo: readonly TodoTask[] = [];
 	let notice: Notice | null = null;
 	let thoughtsShown = true;
+	let chatShown = true;
+	// T9: the reply's first line shown in the dialog (null follows the tail) and the size of the last reply dialog drawn.
+	let dialogTop: number | null = null;
+	let dialogView: { total: number; rows: number } | undefined;
 	let prompts = 0;
 	let forceRepaint: (() => void) | undefined;
 	// T4e: the dialog is the selector for a single-select question. `editing` is Pi's "Other…" editor after it.
@@ -223,7 +240,15 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				const replay = (tui as unknown as { handleTerminalInput?: (data: string) => void }).handleTerminalInput?.bind(tui);
 				const stopKeys = tui.addInputListener(data => {
 					const choice = selector?.choice;
-					if (!choice?.active() || handle?.isHidden() || isKeyRelease(data)) return undefined;
+					if (handle?.isHidden() || isKeyRelease(data)) return undefined;
+					// T9: a reply longer than the dialog scrolls with PgUp/PgDn and shift+up/down; other keys stay Pi's.
+					if (!choice?.active()) {
+						const scroll = dialogScrollKey(data);
+						if (!scroll || !dialogView || dialogView.total <= dialogView.rows) return undefined;
+						dialogTop = scrollDialog(dialogTop, dialogView, scroll);
+						tui.requestRender();
+						return { consume: true };
+					}
 					const key: SelectorKey = matchesKey(data, "up") ? "up" : matchesKey(data, "down") ? "down" : matchesKey(data, "enter") || matchesKey(data, "return") ? "enter" : "other";
 					const step = choice.key(key);
 					if (step.done) {
@@ -261,7 +286,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							image = { png, cols: layout.roomCols, rows: layout.bodyRows, room: roomImage(png, layout.roomCols, layout.bodyRows, imageId) };
 						}
 						const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
-						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: currentNotice(notice, Date.now()) });
+						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: currentNotice(notice, Date.now()), chatShown });
 						// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
 						const reply = currentReply(chat);
 						const question = snapshot.ask?.questions[0];
@@ -276,7 +301,8 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						const wanted = (ask ? ask.options.length + (ask.custom ? 1 : 0) + (ask.interactive ? 1 : 0) + 1 : replyLines.length) + 2;
 						const dialogHeight = Math.min(Math.max(4, Math.floor(layout.bodyRows * 0.35)), Math.max(withPortrait ? 4 : 3, wanted));
 						const showPortrait = Boolean(reply || ask) && portraitFits(dialogHeight, dialogWidth);
-						const dialog = reply || ask ? gameDialog({ reply: replyLines, ask }, dialogWidth, dialogHeight, showPortrait ? { image: portraitFor(dialogHeight - 2) } : undefined) : undefined;
+						dialogView = reply && !ask ? { total: replyLines.length, rows: dialogHeight - 2 } : undefined;
+						const dialog = reply || ask ? gameDialog({ reply: replyLines, ask, top: dialogTop }, dialogWidth, dialogHeight, showPortrait ? { image: portraitFor(dialogHeight - 2) } : undefined) : undefined;
 						// A Kitty image stays until deleted: when the dialog goes away, so must its portrait.
 						if (portraitShown && !showPortrait) queueMicrotask(() => write?.(deleteKittyImage(portraitId)));
 						portraitShown = showPortrait;
@@ -324,6 +350,8 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				todo = tasks;
 				repaint?.();
 			}
+			// A new message from you starts a new reply: the dialog follows its tail again.
+			if (event.type === "input") dialogTop = null;
 			const next = reduceChat(chat, { ...event, at: Date.now() });
 			if (next === chat) return;
 			chat = next;
@@ -344,6 +372,10 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 		/** The todo list rebuilt from the session (resume); null keeps the current one. */
 		restoreTodo(tasks: readonly TodoTask[] | null): void {
 			if (tasks) todo = tasks;
+		},
+		toggleChat(): void {
+			chatShown = !chatShown;
+			repaint?.();
 		},
 		toggleThoughts(): void {
 			thoughtsShown = !thoughtsShown;

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORTRAIT_COLS, aboveBackgrounds, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, scrollDialog, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -95,10 +95,27 @@ describe("game mode text", () => {
 		assert.equal(side[3], "╔═ CHAT ═════════════════════╗");
 	});
 
+	it("chat hidden (alt+c): PARTY stays, CHAT gives way to one line with the keys, the rest is blank", () => {
+		const side = gameSide(snapshot(), ["c1", "c2"], 6, 34, { chatShown: false }).map(plainText);
+		assert.deepEqual(side, [
+			"╔═ PARTY ════════════════════════╗",
+			"║ ▶ orchestrator  resting        ║",
+			"╚════════════════════════════════╝",
+			"  alt+c chat · alt+g plain chat   ",
+			" ".repeat(34),
+			" ".repeat(34),
+		]);
+	});
+
+	it("the CHAT frame names alt+c to hide it", () => {
+		const side = gameSide(snapshot(), ["c1"], 6, 70).map(plainText);
+		assert.match(side.at(-1)!, /alt\+t thoughts · alt\+g plain chat · alt\+c hide chat/);
+	});
+
 	it("an empty chat says where to write", () => {
-		const side = gameSide(snapshot(), [], 7, 52).map(plainText);
-		assert.equal(side[4], "║ Write below; the orchestrator answers here.      ║");
-		assert.equal(side[6], "╚═ alt+t thoughts · alt+g plain chat " + "═".repeat(14) + "╝", "the keys live in the CHAT frame's bottom border");
+		const side = gameSide(snapshot(), [], 7, 66).map(plainText);
+		assert.equal(side[4], "║ " + "Write below; the orchestrator answers here.".padEnd(62) + " ║");
+		assert.equal(side[6], "╚═ alt+t thoughts · alt+g plain chat · alt+c hide chat " + "═".repeat(10) + "╝", "the keys live in the CHAT frame's bottom border");
 	});
 
 	it("every side line has the column width", () => {
@@ -157,7 +174,36 @@ describe("dialog over the room (T4d)", () => {
 
 	it("dialog box: the reply in a framed ORCHESTRATOR panel, tail first when it does not fit", () => {
 		const box = gameDialog({ reply: ["l1", "l2", "l3", "l4"], ask: null }, 20, 5).map(plainText);
-		assert.deepEqual(box, ["╔═ ORCHESTRATOR ═══╗", "║ l2               ║", "║ l3               ║", "║ l4               ║", "╚══════════════════╝"]);
+		assert.deepEqual(box, ["╔═ ORCHESTRATOR ═══╗", "║ l2               ║", "║ l3               ║", "║ l4               ║", "╚═ ↑1 · PgUp PgDn ═╝"]);
+	});
+
+	it("a scrolled reply (T9): `top` picks the first line shown; the bottom border counts the lines above and below and names the keys", () => {
+		const box = gameDialog({ reply: ["l1", "l2", "l3", "l4", "l5"], ask: null, top: 1 }, 40, 4).map(plainText);
+		assert.deepEqual(box, [
+			"╔═ ORCHESTRATOR ═══════════════════════╗",
+			"║ l2                                   ║",
+			"║ l3                                   ║",
+			"╚═ ↑1 · ↓2 · PgUp PgDn ════════════════╝",
+		]);
+	});
+
+	it("a reply that fits has no scroll footer; a top past the end shows the tail", () => {
+		assert.equal(plainText(gameDialog({ reply: ["l1"], ask: null }, 20, 4).at(-1)!), "╚══════════════════╝");
+		const tail = gameDialog({ reply: ["l1", "l2", "l3"], ask: null, top: 9 }, 30, 4).map(plainText);
+		assert.deepEqual(tail.slice(1, 3), ["║ l2                         ║", "║ l3                         ║"]);
+		assert.match(tail[3]!, /↑1 · PgUp PgDn/);
+	});
+
+	it("scrollDialog: null follows the tail; up leaves it, down back at the end follows it again, pages move by the rows shown", () => {
+		const view = { total: 10, rows: 3 };
+		assert.equal(scrollDialog(null, view, "line-up"), 6);
+		assert.equal(scrollDialog(6, view, "line-up"), 5);
+		assert.equal(scrollDialog(1, view, "page-up"), 0);
+		assert.equal(scrollDialog(0, view, "line-down"), 1);
+		assert.equal(scrollDialog(5, view, "page-down"), null);
+		assert.equal(scrollDialog(6, view, "line-down"), null);
+		assert.equal(scrollDialog(null, view, "line-down"), null);
+		assert.equal(scrollDialog(null, { total: 2, rows: 3 }, "line-up"), null);
 	});
 
 	it("as the selector: ▶ on the chosen option, Other… when a custom answer is allowed, and the keys", () => {
