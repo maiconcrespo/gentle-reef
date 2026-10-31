@@ -1,5 +1,6 @@
 import type { OfficeSnapshot } from "../adapter/hub.ts";
 import { HQ_HEIGHT, HQ_WIDTH } from "../../web/hq-scene.js";
+import { wrap } from "./chat.ts";
 
 /** Game mode (T3): the Gentle HQ layout drawn over Pi's chat. Row 0 is the HUD; below it, the room and a text column. */
 export interface GameLayout {
@@ -137,7 +138,12 @@ export function frame(title: string, body: readonly string[], width: number, hei
 /** Extra lines in the text column: the todo task in progress (T4b). */
 export interface SideExtras {
 	readonly doing?: { readonly title: string; readonly done: number; readonly total: number } | null;
+	/** The newest notice from any extension (src/stage/notice.ts), while it is fresh. */
+	readonly notice?: { readonly text: string; readonly level: "info" | "warning" | "error" } | null;
 }
+
+const NOTICE_TITLE = { info: "NOTICE", warning: "WARNING", error: "ERROR" } as const;
+const NOTICE_LINES = 3;
 
 /** The text column: a PARTY box (orchestrator, Doing now, then each agent in flight) and a CHAT box with as much chat as fits, newest last. */
 export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows: number, width: number, extras: SideExtras = {}): string[] {
@@ -148,10 +154,13 @@ export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows
 		...snapshot.agents.filter(agent => IN_FLIGHT.has(agent.status)).map(agent => row(agent.role, agent.status)),
 	];
 	const partyBox = frame("PARTY", party, width, party.length + 2);
-	const chatHeight = rows - partyBox.length;
+	// A notice gets its own box under PARTY, only while CHAT still keeps its frame and one line.
+	const noticeBody = extras.notice ? wrap(extras.notice.text, width - 4).slice(0, NOTICE_LINES).map(line => `${extras.notice!.level === "info" ? TEXT : SAND}${line}${RESET}`) : [];
+	const noticeBox = noticeBody.length && rows - partyBox.length - (noticeBody.length + 2) >= 3 ? frame(NOTICE_TITLE[extras.notice!.level], noticeBody, width, noticeBody.length + 2) : [];
+	const chatHeight = rows - partyBox.length - noticeBox.length;
 	if (chatHeight < 3) return partyBox.slice(0, rows);
 	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-(chatHeight - 2));
-	return [...partyBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat")];
+	return [...partyBox, ...noticeBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat")];
 }
 
 /** What an open question shows: its options, which one the ▶ is on, and whether the dialog drives the answer (T4e). */

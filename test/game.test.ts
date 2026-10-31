@@ -75,6 +75,26 @@ describe("game mode text", () => {
 		assert.equal(gameSide(snapshot(), [], 8, 40, { doing: null }).map(plainText)[2], "╚══════════════════════════════════════╝", "no task in progress: no row");
 	});
 
+	it("notices (T4b): a WARNING box between PARTY and CHAT, wrapped to at most 3 lines; CHAT keeps the rest", () => {
+		const side = gameSide(snapshot(), ["c1", "c2", "c3"], 12, 30, { notice: { text: "Claude rate limit warning: 78% used (seven_day) and more words to wrap past three lines here", level: "warning" } }).map(plainText);
+		assert.deepEqual(side.slice(3, 8), [
+			"╔═ WARNING ══════════════════╗",
+			"║ Claude rate limit warning: ║",
+			"║ 78% used (seven_day) and   ║",
+			"║ more words to wrap past    ║",
+			"╚════════════════════════════╝",
+		]);
+		assert.equal(side[8], "╔═ CHAT ═════════════════════╗");
+		assert.equal(side.length, 12);
+		assert.equal(gameSide(snapshot(), [], 12, 30, { notice: { text: "x", level: "error" } }).map(plainText)[3], "╔═ ERROR ════════════════════╗");
+		assert.equal(gameSide(snapshot(), [], 12, 30, { notice: { text: "x", level: "info" } }).map(plainText)[3], "╔═ NOTICE ═══════════════════╗");
+	});
+
+	it("a notice box never squeezes CHAT below its frame: no room, no box", () => {
+		const side = gameSide(snapshot(), ["c1"], 7, 30, { notice: { text: "a b c d e f g h i j k l m n o p", level: "warning" } }).map(plainText);
+		assert.equal(side[3], "╔═ CHAT ═════════════════════╗");
+	});
+
 	it("an empty chat says where to write", () => {
 		const side = gameSide(snapshot(), [], 7, 52).map(plainText);
 		assert.equal(side[4], "║ Write below; the orchestrator answers here.      ║");

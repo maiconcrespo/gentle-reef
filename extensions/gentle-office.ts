@@ -10,6 +10,7 @@ import { createAnimator, isActing } from "../src/stage/animator.ts";
 import { chatLines, currentReply, initialChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
 import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
+import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
 import { belowBackgrounds, composeGame, gameDialog, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
@@ -34,6 +35,8 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 		try {
 			// T4b: a resumed session shows its todo list from the start, not after the next todo call.
 			game.restoreTodo(todoFromEntries(ctx.sessionManager?.getBranch?.() ?? []));
+			// T4b: warnings from any extension (ui.notify) also show in a box in the scene; Pi still shows them as before.
+			wrapNotify(ctx.ui, notice => game.notice(notice));
 			if (kitty()) game.open(ctx);
 		} catch {
 			// Game mode is display only; plain Pi stays if it cannot open.
@@ -156,6 +159,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let repaint: (() => void) | undefined;
 	let chat: ChatState = initialChat();
 	let todo: readonly TodoTask[] = [];
+	let notice: Notice | null = null;
 	let thoughtsShown = true;
 	let prompts = 0;
 	let forceRepaint: (() => void) | undefined;
@@ -245,7 +249,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							image = { png, cols: layout.roomCols, rows: layout.bodyRows, room: roomImage(png, layout.roomCols, layout.bodyRows, imageId) };
 						}
 						const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
-						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo) });
+						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: currentNotice(notice, Date.now()) });
 						// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
 						const reply = currentReply(chat);
 						const question = snapshot.ask?.questions[0];
@@ -311,6 +315,12 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 			prompts = Math.max(0, prompts + change);
 			forceRepaint?.();
 			repaint?.();
+		},
+		/** The newest notice from any extension: shown now, and repainted away after NOTICE_MS. */
+		notice(next: Notice): void {
+			notice = next;
+			repaint?.();
+			setTimeout(() => repaint?.(), NOTICE_MS).unref?.();
 		},
 		/** The todo list rebuilt from the session (resume); null keeps the current one. */
 		restoreTodo(tasks: readonly TodoTask[] | null): void {
