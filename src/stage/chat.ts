@@ -28,6 +28,15 @@ const TOOL_DETAIL_LIMIT = 60;
 /* The argument that best says what a tool call does, in this order. */
 const TOOL_DETAIL_KEYS = ["path", "file_path", "command", "pattern", "query", "url", "agent", "operation"];
 
+const JOB_SCREENS = 12;
+
+/** The monitor wall's jobs (T4b): each tool call since your last message, oldest first, one screen each, at most 12. */
+export function jobsFromChat(state: ChatState): Array<"running" | "ok" | "fail"> {
+	let start = 0;
+	state.entries.forEach((entry, i) => { if (entry.kind === "you") start = i + 1; });
+	return state.entries.slice(start).filter(entry => entry.kind === "tool").map(entry => entry.status ?? "running").slice(-JOB_SCREENS);
+}
+
 export function initialChat(): ChatState {
 	return { entries: [], live: null };
 }

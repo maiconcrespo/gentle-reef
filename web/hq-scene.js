@@ -18,7 +18,7 @@ const INK = K.bg, SKIN = K.sand, SKIN_SH = shade(K.sand);
 const W = HQ_WIDTH, H = HQ_HEIGHT;
 
 /* The frame being painted. Set by drawHq for the duration of one synchronous call. */
-let g = null, motion = false, t = 0, potLevel = 1, brewing = false, oddStep = null, todo = [];
+let g = null, motion = false, t = 0, potLevel = 1, brewing = false, oddStep = null, todo = [], jobs = [];
 const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 const O = (x, y, w, h, c) => { R(x - 1, y - 1, w + 2, h + 2, INK); R(x, y, w, h, c); };
 
@@ -280,12 +280,15 @@ function verifyLab() {
 	O(612, 326, 30, 22, K.border); R(614, 328, 26, 18, INK); R(620, 338, 3, 3, K.green); R(623, 341, 3, 3, K.green); R(626, 334, 3, 7, K.green); R(629, 331, 3, 4, K.green);
 }
 function jobsWall() {
+	/* One screen per tool call since the user's last message (T4b): a sand bar while it runs, green when it worked, red
+	   when it failed. Screens without a job are switched off, with a standby dot. */
 	for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++) {
-		const x = 518 + c * 32, y = 8 + r * 22;
+		const x = 518 + c * 32, y = 8 + r * 22, job = jobs[r * 6 + c];
 		O(x, y, 28, 18, K.border); R(x + 2, y + 2, 24, 14, INK);
-		const k = (t + c * 3 + r * 5) % 7;
-		if ((c + r) % 4 === 1) { R(x + 4, y + 7, 20, 4, K.sel); R(x + 4, y + 7, 4 + (t * 2 + c) % 17, 4, K.sand); }
-		else for (let i = 0; i < 3; i++) R(x + 4, y + 4 + i * 4, ((k + i * 3) % 5) * 4 + 4, 1, i === 2 && k === 3 ? K.red : K.blue);
+		if (job === "running") { R(x + 4, y + 7, 20, 4, K.sel); R(x + 4, y + 7, motion ? 4 + (t * 3 + c) % 17 : 10, 4, K.sand); }
+		else if (job === "ok") for (let i = 0; i < 3; i++) R(x + 4, y + 5 + i * 4, 20 - i * 6, 2, K.green);
+		else if (job === "fail") for (let i = 0; i < 3; i++) R(x + 4, y + 5 + i * 4, 20 - i * 6, 2, K.red);
+		else R(x + 22, y + 13, 2, 1, K.dim);
 	}
 }
 
@@ -294,7 +297,7 @@ function jobsWall() {
  * `frame.t` is the animation step (4 per second), `frame.motion` false draws a still frame, and the flags say who is acting:
  * `thinking`/`waiting` (the orchestrator), `working` (the writers), `exploring` (the explorer).
  * State shown: `context` percent (the coffee pot), `brewing` (compaction steam), `odd` (current ODD step, 0-6, on the
- * chalkboard) and `todo` ([{ done, now }] rows on the TODO board). Readable text lives in the terminal UI, not the image.
+ * chalkboard), `todo` ([{ done, now }] rows on the TODO board) and `jobs` ("running" | "ok" | "fail", one monitor each). Readable text lives in the terminal UI, not the image.
  */
 export function drawHq(ctx, frame = {}) {
 	g = ctx; t = frame.t ?? 0; motion = frame.motion ?? false;
@@ -303,6 +306,7 @@ export function drawHq(ctx, frame = {}) {
 	brewing = frame.brewing === true;
 	oddStep = Number.isInteger(frame.odd) ? frame.odd : null;
 	todo = Array.isArray(frame.todo) ? frame.todo : [];
+	jobs = Array.isArray(frame.jobs) ? frame.jobs : [];
 	const bob = on => (motion && on ? t % 2 : 0);
 	try {
 		R(0, 0, W, H, K.panel);

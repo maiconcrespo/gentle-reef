@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { CHAT_LIMIT, chatLines, currentReply, initialChat, reduceChat, wrap } from "../src/stage/chat.ts";
+import { CHAT_LIMIT, chatLines, currentReply, initialChat, jobsFromChat, reduceChat, wrap } from "../src/stage/chat.ts";
 
 const plain = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 const assistant = (content: unknown[]) => ({ role: "assistant", content });
@@ -51,6 +51,14 @@ describe("chat log (T4): Pi events in, entries out", () => {
 		assert.equal(s.entries[1]!.status, "fail");
 		assert.equal(s.entries[1]!.lines, 1);
 		assert.equal(reduceChat(s, { type: "tool_execution_end", toolName: "x", toolCallId: "nope", isError: false }), s, "unknown call: no change");
+	});
+
+	it("the monitor wall's jobs (T4b): each tool call since your last message, oldest first, at most 12", () => {
+		const tool = (status: "running" | "ok" | "fail") => ({ kind: "tool" as const, text: "bash x", status });
+		const entries = [tool("ok"), { kind: "you" as const, text: "go" }, tool("ok"), tool("fail"), { kind: "orch" as const, text: "hm" }, tool("running")];
+		assert.deepEqual(jobsFromChat({ entries, live: null }), ["ok", "fail", "running"]);
+		assert.deepEqual(jobsFromChat({ entries: [{ kind: "you", text: "go" }], live: null }), []);
+		assert.equal(jobsFromChat({ entries: Array.from({ length: 15 }, () => tool("ok")), live: null }).length, 12);
 	});
 
 	it("tool lines show … while running, then ✓ time · lines or ✗", () => {

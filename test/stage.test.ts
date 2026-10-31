@@ -97,6 +97,16 @@ describe("Gentle HQ room shows the session state (T2)", () => {
 		assert.equal(hex(paint({}), 198, 58), P("sand"));
 	});
 
+	it("the monitor wall lights one screen per job (T4b): running sand bar, ok green, fail red, the rest switched off", () => {
+		const r = paint({ jobs: ["running", "ok", "fail"] });
+		assert.equal(hex(r, 524, 17), P("sand"), "screen 1: running");
+		assert.equal(hex(r, 556, 17), P("green"), "screen 2: ok");
+		assert.equal(hex(r, 588, 17), P("red"), "screen 3: fail");
+		assert.equal(hex(r, 620, 17), P("bg"), "screen 4: off");
+		assert.equal(hex(r, 524, 39), P("bg"), "second row: off");
+		assert.equal(hex(paint({}), 524, 17), P("bg"), "no jobs: every screen off");
+	});
+
 	it("the old coffee bar at the bottom left is gone: floor where the counter stood (the dialog covered it)", () => {
 		const floor = [HQ_PALETTE.floorA, HQ_PALETTE.floorB, HQ_PALETTE.seam].map(c => c.toUpperCase());
 		assert.ok(floor.includes(hex(paint({}), 60, 357)), hex(paint({}), 60, 357));

@@ -7,7 +7,7 @@ import { OfficeHub } from "../src/adapter/hub.ts";
 import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
 import { createAnimator, isActing } from "../src/stage/animator.ts";
-import { chatLines, currentReply, initialChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
+import { chatLines, currentReply, initialChat, jobsFromChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
 import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
@@ -244,7 +244,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						const layout = gameLayout(width, Math.max(1, terminalRows - reserved()), getCellDimensions());
 						if (!layout) return [];
 						const snapshot = hub.snapshot();
-						const png = pngFor({ ...frameFromSnapshot(snapshot), todo: boardRows(todo), motion: animator.running(), t: animator.step() });
+						const png = pngFor({ ...frameFromSnapshot(snapshot), todo: boardRows(todo), jobs: jobsFromChat(chat), motion: animator.running(), t: animator.step() });
 						if (image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
 							image = { png, cols: layout.roomCols, rows: layout.bodyRows, room: roomImage(png, layout.roomCols, layout.bodyRows, imageId) };
 						}

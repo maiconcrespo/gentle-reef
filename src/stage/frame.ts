@@ -19,6 +19,8 @@ export interface HqFrame {
 	readonly odd?: number;
 	/** TODO rows, first four drawn. */
 	readonly todo?: ReadonlyArray<{ readonly done?: boolean; readonly now?: boolean }>;
+	/** Tool calls since the user's last message, one monitor each on the jobs wall. */
+	readonly jobs?: ReadonlyArray<"running" | "ok" | "fail">;
 }
 
 /** What the room shows for a hub snapshot: who acts, the context and compaction. A still frame until T3 animates it. */
