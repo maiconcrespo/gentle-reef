@@ -2,10 +2,11 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Image, allocateImageId, deleteKittyImage, getCapabilities, getCellDimensions, type OverlayHandle } from "@earendil-works/pi-tui";
-import { OfficeHub, type OfficeSnapshot } from "../src/adapter/hub.ts";
+import { OfficeHub } from "../src/adapter/hub.ts";
 import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
-import { frameFromSnapshot, renderHqPng } from "../src/stage/frame.ts";
+import { createAnimator, isActing } from "../src/stage/animator.ts";
+import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
 import { composeGame, gameHud, gameLayout, gameSide } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
@@ -44,11 +45,10 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 
 const kitty = (): boolean => getCapabilities().images === "kitty";
 
-/** The room PNG for a snapshot, re-encoded only when what the room shows changes. */
-function roomPng(): (snapshot: OfficeSnapshot) => string {
+/** The room PNG for a frame, re-encoded only when what the room shows changes (a new animation step included). */
+function roomPng(): (frame: HqFrame) => string {
 	let last: { key: string; png: string } | undefined;
-	return snapshot => {
-		const frame = frameFromSnapshot(snapshot);
+	return frame => {
 		const key = JSON.stringify(frame);
 		if (last?.key !== key) last = { key, png: renderHqPng(frame) };
 		return last.png;
@@ -74,11 +74,12 @@ const EDITOR_ROWS = 8;
  * Game mode (T3 spike): a full-width, non-capturing overlay over Pi's chat with the Gentle HQ layout (src/stage/game.ts):
  * HUD, the room on the left, the party and chat column on the right. The editor below keeps the focus.
  */
-function gameMode(hub: OfficeHub, pngFor: (snapshot: OfficeSnapshot) => string) {
+function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let handle: OverlayHandle | undefined;
 	let opening = false;
 	let terminalRows = 40;
 	let write: ((data: string) => void) | undefined;
+	let animate: ((on: boolean) => void) | undefined;
 	const imageId = allocateImageId();
 	const project = process.cwd().replace(homedir(), "~");
 
@@ -91,7 +92,15 @@ function gameMode(hub: OfficeHub, pngFor: (snapshot: OfficeSnapshot) => string) 
 				write = data => tui.terminal.write(data);
 				let image: { png: string; cols: number; rows: number; view: Image } | undefined;
 				let lastWidth: number | undefined;
-				const unsubscribe = hub.subscribe(() => tui.requestRender());
+				// T7: the room moves at a low frame rate only while someone acts, and never while the overlay is hidden.
+				const animator = createAnimator({ onTick: () => tui.requestRender() });
+				const acting = (): boolean => isActing(frameFromSnapshot(hub.snapshot()));
+				animate = on => animator.update(on && acting());
+				const unsubscribe = hub.subscribe(() => {
+					animator.update(!(handle?.isHidden() ?? false) && acting());
+					tui.requestRender();
+				});
+				animator.update(acting());
 				return {
 					render(width: number): string[] {
 						// After a resize Pi repaints only the lines that changed, which leaves the old chat showing through
@@ -104,7 +113,7 @@ function gameMode(hub: OfficeHub, pngFor: (snapshot: OfficeSnapshot) => string) 
 						const layout = gameLayout(width, Math.max(1, terminalRows - EDITOR_ROWS), getCellDimensions());
 						if (!layout) return [];
 						const snapshot = hub.snapshot();
-						const png = pngFor(snapshot);
+						const png = pngFor({ ...frameFromSnapshot(snapshot), motion: animator.running(), t: animator.step() });
 						if (image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
 							const view = new Image(png, "image/png", { fallbackColor: text => theme.fg("muted", text) }, { maxWidthCells: layout.roomCols, maxHeightCells: layout.bodyRows, imageId });
 							image = { png, cols: layout.roomCols, rows: layout.bodyRows, view };
@@ -115,6 +124,7 @@ function gameMode(hub: OfficeHub, pngFor: (snapshot: OfficeSnapshot) => string) 
 						image?.view.invalidate();
 					},
 					dispose() {
+						animator.stop();
 						unsubscribe();
 					},
 				};
@@ -143,6 +153,7 @@ function gameMode(hub: OfficeHub, pngFor: (snapshot: OfficeSnapshot) => string) 
 			if (!handle) return open(ctx);
 			const hide = !handle.isHidden();
 			handle.setHidden(hide);
+			animate?.(!hide);
 			// A Kitty image stays on screen until it is deleted; the overlay's lines going away does not remove it.
 			if (hide) write?.(deleteKittyImage(imageId));
 		},
