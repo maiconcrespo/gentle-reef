@@ -81,6 +81,8 @@ export interface AskQuestion {
 	readonly question: string;
 	readonly options: readonly string[];
 	readonly multiSelect: boolean;
+	/** ask_user_choice with allowCustomResponse: Pi's list ends with "Other…" for a free-text answer. */
+	readonly custom?: boolean;
 }
 
 export type AskEvent =

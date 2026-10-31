@@ -43,7 +43,8 @@ function askQuestion(raw: unknown): AskQuestion | undefined {
 		.slice(0, MAX_ASK_OPTIONS);
 	const header = askText(raw.header);
 	const multiSelect = raw.multiSelect === true;
-	return header === undefined ? { question, options, multiSelect } : { header, question, options, multiSelect };
+	const base = header === undefined ? { question, options, multiSelect } : { header, question, options, multiSelect };
+	return raw.allowCustomResponse === true ? { ...base, custom: true } : base;
 }
 
 /** ask_user_question carries `questions`; ask_user_choice is a single question at the top level. */

@@ -77,6 +77,11 @@ describe("piEventToOffice", () => {
 		});
 	});
 
+	it("marks an ask_user_choice question that allows a custom answer, so the game dialog can offer Other… (T4e)", () => {
+		const out = piEventToOffice({ type: "tool_execution_start", toolName: "ask_user_choice", args: { question: "Push?", options: [{ label: "Yes" }, { label: "No" }], allowCustomResponse: true } });
+		assert.deepEqual(out.at(-1), { v: 1, type: "ask", phase: "open", questions: [{ question: "Push?", options: ["Yes", "No"], multiSelect: false, custom: true }] });
+	});
+
 	it("opens an ask dialog from ask_user_choice args, without a header", () => {
 		const out = piEventToOffice({
 			type: "tool_execution_start",

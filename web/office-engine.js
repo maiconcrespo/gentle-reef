@@ -47,10 +47,13 @@ export const OFFICE_CONFIG = {
 	plants: [{ x: 0, y: 13 }, { x: 5, y: 13 }, { x: 10, y: 2 }, { x: 15, y: 13 }, { x: 23, y: 2 }, { x: 17, y: 7 }, { x: 19, y: 9 }, { x: 23, y: 13 }, { x: 25, y: 13 }, { x: 27, y: 7 }, { x: 29, y: 13 }]
 };
 
-/* Story layout (T14): the room is shown zoomed by a whole number, so pixels stay square. Taller windows zoom in further, never past 4x. */
+/* Story layout (T14): the room is shown zoomed by a whole number, so pixels stay square. The zoom keeps at least
+   STORY_MIN_ROWS rows of the room in view (#10), so taller windows zoom in further, never past 4x. */
 export const STORY_ZOOM_MAX = 4;
+export const STORY_MIN_ROWS = 12;
 export function storyZoom(width, height) {
-	return Math.max(1, Math.min(STORY_ZOOM_MAX, Math.floor(Math.min(height / 200, width / 160))));
+	const byRows = height / (STORY_MIN_ROWS * OFFICE_CONFIG.tile);
+	return Math.max(1, Math.min(STORY_ZOOM_MAX, Math.floor(Math.min(byRows, width / 160))));
 }
 
 /* One prop per gentle-shell feature (S8). Each footprint is tiles walkers cannot stand on. The rack is the existing one (cfg.rack).

@@ -329,9 +329,19 @@ describe("story camera: an optional view transform", () => {
 
 	it("the zoom is an integer that fits the window, at least 1", () => {
 		assert.equal(typeof engineModule.storyZoom, "function", "storyZoom is exported");
-		assert.equal(engineModule.storyZoom(1860, 900), 4);
+		assert.equal(engineModule.storyZoom(1860, 900), 3);
 		assert.equal(engineModule.storyZoom(520, 900), 3);
 		assert.equal(engineModule.storyZoom(200, 150), 1);
+	});
+
+	it("the story zoom keeps at least 12 rows of the room in view (#10)", () => {
+		const rowsInView = (width: number, height: number) => height / engineModule.storyZoom(width, height) / OFFICE_CONFIG.tile;
+		assert.equal(engineModule.storyZoom(1366, 768), 2);
+		assert.equal(engineModule.storyZoom(1920, 1080), 3);
+		assert.equal(engineModule.storyZoom(2560, 1440), 4);
+		for (const [width, height] of [[1366, 768], [1920, 1080], [2560, 1440]]) {
+			assert.ok(rowsInView(width, height) >= 12, `${width}x${height} shows at least 12 rows`);
+		}
 	});
 
 	it("without a camera nothing is transformed and the canvas keeps the room size", () => {

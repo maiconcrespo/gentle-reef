@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gentle HQ: the new office with chat, live thoughts, notices and confirmations</title>
+<style>
+  :root {
+    --bg: #060407; --panel: #100A0F; --user: #2A1523; --sel: #28121E; --border: #563040;
+    --text: #F6EFF3; --muted: #A78E9B; --dim: #76616B; --gold: #E0C27A; --blue: #A9C7EE;
+    --green: #B4E7C7; --red: #FF718F; --pink: #F095C8; --sand: #F2B86D; --heading: #E0C27A;
+    --fuchsia: #FF1F9D; --fuchsia-deep: #C2107A;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 100vw; height: 100vh; overflow: hidden; background: var(--bg); color: var(--text); font: 13px/1.45 var(--mono); }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  /* A 1920 x 920 terminal (Ghostty), scaled to fit any window so nothing is cut off. */
+  .art { position: absolute; left: 0; top: 0; width: 1920px; height: 920px; transform-origin: 0 0; display: grid; grid-template-rows: 44px 816px 60px; }
+  .art::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 40; box-shadow: inset 0 0 0 4px var(--bg), inset 0 0 0 5px var(--sel); }
+  .pbox { background: var(--panel); border: 3px solid var(--text); box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 5px var(--sel), 6px 6px 0 rgba(6, 4, 7, .7); }
+  .slab { background: var(--panel); border: 2px solid var(--border); box-shadow: inset 0 0 0 2px var(--bg), inset 0 0 0 3px var(--sel); }
+  .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+
+  /* HUD */
+  .hud { display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--panel); border-bottom: 2px solid var(--border); white-space: nowrap; }
+  .badge { padding: 3px 10px; background: var(--gold); color: var(--bg); font-weight: 800; letter-spacing: .06em; box-shadow: inset 0 -3px 0 var(--sand); }
+  .cups { display: flex; gap: 3px; } .cup { width: 11px; height: 14px; background: var(--sel); } .cup.on { background: var(--sand); box-shadow: inset 0 3px 0 var(--gold); }
+  .hud .pct { color: var(--sand); font-weight: 700; }
+  .hud .path { font-weight: 700; } .hud .branch { color: var(--pink); } .hud .model { color: var(--blue); font-weight: 700; } .hud .cost { color: var(--green); font-weight: 700; }
+  .hud .perm { display: flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--border); } .hud .perm i { width: 8px; height: 8px; background: var(--green); }
+  .spacer { flex: 1; }
+
+  .mid { display: grid; grid-template-columns: 1440px 480px; min-height: 0; }
+  .view { position: relative; width: 1440px; height: 816px; overflow: hidden; }
+  canvas#hq { display: block; width: 1440px; height: 816px; image-rendering: pixelated; }
+
+  /* Room labels (off by default here; the scene now carries the UI). */
+  .tag { position: absolute; transform: translate(-50%, -100%); padding: 2px 7px; background: var(--panel); border: 2px solid var(--text); box-shadow: 3px 3px 0 rgba(6, 4, 7, .7); font-size: 11px; white-space: nowrap; cursor: help; z-index: 5; }
+  .tag b { color: var(--gold); margin-right: 4px; } .tag span { color: var(--muted); }
+  .labels-off .tag { display: none; }
+
+  /* Live thought: streams above the orchestrator while it writes. */
+  .thought { position: absolute; left: 668px; top: 150px; width: 340px; padding: 10px 14px 12px; background: var(--panel); border: 2px dashed var(--pink); box-shadow: 4px 4px 0 rgba(6, 4, 7, .7); z-index: 6; }
+  .thought::before { content: ""; position: absolute; left: -22px; top: 6px; width: 10px; height: 10px; background: var(--panel); border: 2px dashed var(--pink); }
+  .thought::after { content: ""; position: absolute; left: -36px; top: 0; width: 6px; height: 6px; background: var(--panel); border: 2px dashed var(--pink); }
+  .thought .lbl { color: var(--pink); }
+  .thought p { margin: 4px 0 0; font-style: italic; min-height: 38px; }
+  .thought p::after { content: "\258C"; color: var(--pink); margin-left: 2px; animation: blink .6s steps(2) infinite; }
+  .chip { position: absolute; left: 668px; top: 150px; padding: 5px 10px; background: var(--panel); border: 2px solid var(--border); color: var(--muted); font-size: 12px; z-index: 6; }
+  .chip b { color: var(--pink); }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Notices: game toasts, newest on top, gone after a few seconds. */
+  .toasts { position: absolute; right: 18px; top: 470px; width: 380px; display: flex; flex-direction: column; gap: 8px; z-index: 7; }
+  .toast { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: center; padding: 8px 12px; background: var(--panel); border: 2px solid var(--text); box-shadow: 4px 4px 0 rgba(6, 4, 7, .7); animation: drop .3s steps(3); }
+  .toast i { display: grid; place-items: center; width: 26px; height: 26px; font-style: normal; font-weight: 800; color: var(--bg); }
+  .toast.ok i { background: var(--green); } .toast.warn i { background: var(--sand); } .toast.err i { background: var(--red); } .toast.info i { background: var(--blue); }
+  .toast b { display: block; font-size: 12px; } .toast span { color: var(--muted); font-size: 12px; }
+  @keyframes drop { from { transform: translateY(-10px); opacity: 0; } }
+
+  /* Dialog: the orchestrator speaks to you, over the front of the room; questions carry their choices inside. */
+  .dialog { position: absolute; left: 220px; right: 220px; bottom: 14px; display: grid; grid-template-columns: 120px 1fr auto; gap: 16px; padding: 14px 18px; z-index: 8; }
+  .dialog canvas { width: 120px; height: 120px; image-rendering: pixelated; background: var(--user); border: 3px solid var(--text); }
+  .dialog .who { color: var(--gold); font-weight: 800; letter-spacing: .08em; font-size: 12px; text-transform: uppercase; }
+  .dialog .who span { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; }
+  .dialog p { margin: 6px 0 0; font-size: 17px; line-height: 1.5; min-height: 76px; }
+  .dialog .caret { position: absolute; right: 16px; bottom: 8px; color: var(--pink); animation: bob .8s steps(2) infinite; }
+  @keyframes bob { 50% { transform: translateY(3px); } }
+  .choices { align-self: center; min-width: 250px; padding: 10px 14px; border: 2px solid var(--pink); background: var(--sel); }
+  .choices .lbl { color: var(--pink); }
+  .choices ul { margin: 6px 0 0; padding: 0; list-style: none; font-size: 15px; font-weight: 700; }
+  .choices li { padding: 2px 0 2px 20px; position: relative; } .choices li.sel::before { content: "\25B6"; position: absolute; left: 0; color: var(--pink); }
+  .choices .hint { margin-top: 6px; font-size: 11px; color: var(--muted); }
+
+  /* Right column: what it is doing (todo) and the chat. */
+  .col { display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--panel); border-left: 2px solid var(--border); min-height: 0; }
+  .col h2 { margin: 0; font-size: 12px; color: var(--heading); letter-spacing: .12em; text-transform: uppercase; display: flex; justify-content: space-between; }
+  .col h2 span { color: var(--muted); letter-spacing: 0; text-transform: none; font-weight: 400; }
+  .todo { padding: 10px 12px; }
+  .todo ul { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .todo li { display: grid; grid-template-columns: 16px 1fr; gap: 6px; color: var(--muted); }
+  .todo li::before { content: "\25A1"; } .todo li.done { color: var(--green); } .todo li.done::before { content: "\25A0"; }
+  .todo li.now { color: var(--text); font-weight: 700; } .todo li.now::before { content: "\25B6"; color: var(--pink); }
+  .todo li .doing { grid-column: 2; display: block; font-weight: 400; color: var(--pink); font-size: 12px; }
+  .todo .bar { margin-top: 8px; height: 8px; padding: 1px; border: 1px solid var(--border); background: var(--bg); } .todo .bar i { display: block; height: 100%; background: var(--green); transition: width .4s steps(4); }
+  .chat { flex: 1; min-height: 0; padding: 10px 12px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
+  .chat ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .chat li { font-size: 13px; }
+  .chat .you b { background: var(--pink); color: var(--bg); padding: 0 6px; margin-right: 6px; }
+  .chat .orch b, .chat .ask b { color: var(--gold); margin-right: 6px; }
+  .chat .tool { color: var(--muted); font-size: 12px; padding-left: 12px; }
+  .chat .tool::before { content: "\25B8 "; color: var(--blue); }
+  .chat .think { color: var(--muted); font-style: italic; font-size: 12px; border-left: 2px dashed var(--pink); padding-left: 10px; }
+  .chat .ask { color: var(--pink); }
+  .chat.hide-think .think { display: none; }
+
+  .input { display: flex; align-items: center; gap: 10px; padding: 0 14px; background: var(--panel); border-top: 2px solid var(--border); }
+  .you-tag { padding: 2px 10px; background: var(--pink); color: var(--bg); font-weight: 800; }
+  .prompt { flex: 1; color: var(--text); }
+  .prompt.empty { color: var(--muted); }
+  .prompt::after { content: "\2588"; margin-left: 2px; animation: blink 1s steps(2) infinite; }
+  .hk { display: flex; align-items: center; gap: 6px; padding: 4px 9px; background: var(--user); border: 1px solid var(--border); cursor: pointer; font-size: 12px; color: var(--muted); }
+  .hk kbd { font: inherit; color: var(--gold); font-weight: 700; } .hk b { color: var(--text); font-weight: 600; }
+  .hk[aria-pressed="true"] { border-color: var(--gold); background: var(--sel); }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="art" id="art">
+  <header class="hud" aria-label="Session status">
+    <span class="badge">✿ GENTLE HQ</span>
+    <span class="lbl">Brew</span><span class="cups" id="cups"></span><span class="pct" id="pct">62%</span>
+    <span class="path">~/gentle-reef</span><span class="branch">fix/10-story-zoom</span>
+    <span class="spacer"></span>
+    <span class="model">opus-5-5</span><span class="lbl">medium</span>
+    <span class="lbl">ClaudeGPT</span>
+    <span class="perm" title="Permission mode (also the plaque by the door)"><i aria-hidden="true"></i>NORMAL</span>
+    <span class="cost" id="cost">$0.041</span>
+  </header>
+  <div class="mid">
+    <main class="view labels-off" id="stage" aria-label="Office">
+      <canvas id="hq" width="1440" height="816" role="img" aria-label="Gentle HQ in pixel art: the orchestrator in a pink suit at a black chalkboard, writers at drafting desks, the TODO board, Engram drawers, review lens desks, the Judgment Day bench and the verify lab."></canvas>
+      <div class="thought" id="thought" hidden><span class="lbl">Thinking · live</span><p id="thought-text"></p></div>
+      <div class="chip" id="chip" hidden><b>…</b> thinking · alt+t to show</div>
+      <div class="toasts" id="toasts" aria-live="polite"></div>
+      <section class="dialog pbox" id="dialog" aria-live="polite" hidden>
+        <canvas id="portrait" width="24" height="24" aria-hidden="true"></canvas>
+        <div><div class="who">Orchestrator <span id="dlg-kind">· to you</span></div><p id="dlg-text"></p></div>
+        <div class="choices" id="choices" hidden><span class="lbl">Confirm</span><ul id="choice-list"></ul><div class="hint">↑↓ choose · enter confirm</div></div>
+        <span class="caret" aria-hidden="true">▼</span>
+      </section>
+    </main>
+    <aside class="col" aria-label="Todo and chat">
+      <h2>Doing now <span id="todo-count">0/4</span></h2>
+      <section class="todo slab"><ul id="todo"></ul><div class="bar"><i id="todo-bar"></i></div></section>
+      <h2>Chat <span>alt+j full journal</span></h2>
+      <section class="chat slab"><ol id="chat" aria-live="polite"></ol></section>
+    </aside>
+  </div>
+  <footer class="input">
+    <span class="you-tag">YOU</span>
+    <span class="prompt empty" id="prompt">type to the orchestrator</span>
+    <button class="hk" id="hk-thoughts" aria-pressed="true"><kbd>alt+t</kbd> thoughts <b id="thoughts-state">shown</b></button>
+    <button class="hk" id="hk-labels" aria-pressed="false"><kbd>alt+l</kbd> labels <b id="labels-state">off</b></button>
+    <button class="hk" id="hk-motion" aria-pressed="true">motion <b id="motion-state">on</b></button>
+    <span class="hk"><kbd>enter</kbd> send / next</span>
+  </footer>
+</div>
+<script>
+(() => {
+const K = { bg: '#060407', panel: '#100A0F', user: '#2A1523', sel: '#28121E', border: '#563040', text: '#F6EFF3', muted: '#A78E9B', dim: '#76616B',
+	gold: '#E0C27A', blue: '#A9C7EE', green: '#B4E7C7', red: '#FF718F', pink: '#F095C8', sand: '#F2B86D', fuchsia: '#FF1F9D', fdeep: '#C2107A',
+	deep: '#C96AA2', floorA: '#8C6272', floorB: '#876072', seam: '#6E4D5C', hair: '#16101A' };
+const mix = (a, b, t) => { const p = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)); const A = p(a), B = p(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+const shade = c => mix(c, K.user, 0.4), hi = c => mix(c, K.text, 0.3);
+const INK = K.bg, SKIN = K.sand, SKIN_SH = shade(K.sand);
+const W = 720, H = 408, S = 2;
+
+const base = document.createElement('canvas'); base.width = W; base.height = H;
+let g = base.getContext('2d');
+const out = document.getElementById('hq').getContext('2d');
+out.imageSmoothingEnabled = false;
+const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+const O = (x, y, w, h, c) => { R(x - 1, y - 1, w + 2, h + 2, INK); R(x, y, w, h, c); };
+/* Motion state and frame counter. */
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let motion = !reduced, t = 0;
+
+/* ---------- room shell ---------- */
+function floor() {
+	for (let y = 60; y < H; y += 6) {
+		const row = (y - 60) / 6;
+		R(0, y, W, 6, row % 2 ? K.floorB : K.floorA);
+		R(0, y + 5, W, 1, K.seam);
+		for (let x = (row * 37) % 64; x < W; x += 64) R(x, y, 1, 5, K.seam);
+	}
+	/* Archive wing: darker boards. */
+	for (let y = 60; y < 300; y += 6) { R(0, y, 216, 6, (y / 6) % 2 ? shade(K.floorB) : shade(K.floorA)); R(0, y + 5, 216, 1, shade(K.seam)); }
+	/* Review wing: courthouse checker tiles. */
+	for (let y = 60; y < H; y += 12) for (let x = 510; x < W; x += 12) R(x, y, 12, 12, ((x - 510) / 12 + (y - 60) / 12) % 2 ? K.user : K.sel);
+	/* Office: pink rug under the orchestrator's desk. */
+	O(286, 92, 148, 58, K.deep); R(290, 96, 140, 50, K.pink); R(294, 100, 132, 42, K.deep);
+	for (let x = 298; x < 424; x += 8) { R(x, 104, 4, 2, K.pink); R(x + 4, 136, 4, 2, K.pink); }
+	/* Lounge rug by the coffee bar. */
+	O(16, 300, 120, 30, K.border); R(20, 304, 112, 22, K.user);
+}
+function walls() {
+	R(0, 0, W, 6, K.border); R(0, 6, W, 38, K.sel);
+	for (let x = 0; x < W; x += 16) R(x + 7, 6, 2, 38, K.user);
+	R(0, 44, W, 4, K.border); R(0, 48, W, 12, K.panel);
+	for (let x = 0; x < W; x += 12) R(x, 50, 1, 10, K.border);
+	R(0, 58, W, 2, INK);
+	/* Partitions with doorways. */
+	const part = (x, y1, y2) => { O(x, y1, 4, y2 - y1, K.border); R(x, y1, 4, 2, K.muted); };
+	part(214, 60, 160); part(214, 214, 300);
+	part(506, 60, 150); part(506, 196, 288); part(506, 340, 408);
+	/* Bottom wall with the front door. */
+	R(0, 400, 336, 8, K.border); R(384, 400, 336, 8, K.border); R(0, 400, W, 1, INK);
+	O(336, 398, 48, 10, K.user); R(344, 402, 32, 6, K.gold);
+}
+function plant(x, y) {
+	O(x, y - 8, 10, 8, K.sand); R(x, y - 8, 10, 2, K.gold);
+	const L = [[1, -18, 3, 10], [4, -22, 3, 14], [7, -17, 3, 9], [-2, -14, 3, 6], [10, -13, 3, 5]];
+	for (const [lx, ly, lw, lh] of L) { R(x + lx, y + ly, lw, lh, K.green); R(x + lx + lw - 1, y + ly, 1, lh, shade(K.green)); }
+}
+
+/* ---------- people: 12 px wide, about 28 px tall, feet at (cx, fy) ---------- */
+function person(cx, fy, o, bob = 0) {
+	fy -= bob;
+	g.globalAlpha = 0.35; R(cx - 7, fy + bob - 1, 14, 3, INK); g.globalAlpha = 1;
+	if (!o.seated) {
+		O(cx - 4, fy - 7, 3, 6, o.pants); O(cx + 1, fy - 7, 3, 6, o.pants);
+		R(cx - 5, fy - 2, 4, 2, o.shoes || INK); R(cx + 1, fy - 2, 4, 2, o.shoes || INK);
+	}
+	O(cx - 6, fy - 17, 12, 10, o.coat); R(cx + 4, fy - 17, 2, 10, shade(o.coat)); R(cx - 6, fy - 17, 1, 10, hi(o.coat));
+	O(cx - 8, fy - 16, 2, 8, o.coat); O(cx + 6, fy - 16, 2, 8, o.coat);
+	R(cx - 8, fy - 8, 2, 2, SKIN); R(cx + 6, fy - 8, 2, 2, SKIN);
+	O(cx - 5, fy - 27, 10, 10, SKIN); R(cx + 3, fy - 27, 2, 10, SKIN_SH);
+	R(cx - 3, fy - 23, 1, 2, INK); R(cx + 2, fy - 23, 1, 2, INK);
+	R(cx - 4, fy - 20, 1, 1, K.pink); R(cx + 3, fy - 20, 1, 1, K.pink);
+	if (o.hair) { R(cx - 5, fy - 27, 10, 3, o.hair); R(cx - 5, fy - 25, 1, 4, o.hair); R(cx + 4, fy - 25, 1, 4, o.hair); }
+	if (o.extra) o.extra(cx, fy);
+}
+/* The orchestrator: pink suit, black top hat with a gold band and a fuchsia rose, handlebar mustache, monocle, cane. */
+const ORCH = { coat: K.pink, pants: K.deep, shoes: INK, hair: K.hair, extra(cx, fy) {
+	R(cx - 2, fy - 17, 4, 7, K.text); R(cx - 3, fy - 17, 1, 6, K.deep); R(cx + 2, fy - 17, 1, 6, K.deep);
+	R(cx - 2, fy - 17, 4, 2, K.fuchsia); R(cx - 1, fy - 17, 2, 2, K.fdeep);
+	R(cx - 1, fy - 12, 1, 1, K.gold); R(cx - 1, fy - 10, 1, 1, K.gold);
+	R(cx - 5, fy - 15, 2, 2, K.fuchsia);
+	O(cx - 4, fy - 37, 8, 9, K.hair); O(cx - 7, fy - 29, 14, 2, K.hair); R(cx - 4, fy - 31, 8, 2, K.gold);
+	R(cx + 1, fy - 35, 3, 3, K.fuchsia); R(cx + 2, fy - 34, 1, 1, K.fdeep); R(cx + 4, fy - 33, 2, 1, K.green);
+	R(cx - 5, fy - 20, 3, 1, K.fuchsia); R(cx + 2, fy - 20, 3, 1, K.fuchsia); R(cx - 6, fy - 21, 1, 1, K.fuchsia); R(cx + 5, fy - 21, 1, 1, K.fuchsia); R(cx - 2, fy - 20, 4, 1, K.fdeep);
+	R(cx + 1, fy - 25, 3, 1, K.gold); R(cx + 1, fy - 21, 3, 1, K.gold); R(cx, fy - 24, 1, 3, K.gold); R(cx + 4, fy - 24, 1, 3, K.gold); R(cx + 4, fy - 20, 1, 5, K.gold);
+	R(cx + 10, fy - 13, 1, 13, INK); R(cx + 9, fy - 14, 3, 2, K.gold);
+} };
+const EXPLORER = { coat: K.blue, pants: K.sand, hair: K.gold, extra(cx, fy) {
+	R(cx - 6, fy - 30, 12, 4, K.sand); R(cx - 7, fy - 27, 14, 1, shade(K.sand)); R(cx - 1, fy - 30, 2, 1, K.green);
+	R(cx - 6, fy - 13, 12, 2, shade(K.sand));
+	O(cx + 8, fy - 11, 4, 5, K.gold); R(cx + 9, fy - 10, 2, 3, K.text);
+} };
+const worker = hair => ({ coat: K.green, pants: K.border, hair, seated: true, extra(cx, fy) {
+	R(cx - 3, fy - 17, 6, 10, shade(K.green)); R(cx - 3, fy - 17, 1, 3, K.text); R(cx + 2, fy - 17, 1, 3, K.text);
+	R(cx - 6, fy - 26, 1, 5, INK); R(cx + 5, fy - 26, 1, 5, INK); R(cx - 5, fy - 29, 10, 1, INK); R(cx - 7, fy - 22, 2, 2, K.fuchsia);
+} });
+const reviewer = lens => ({ coat: K.border, pants: K.user, hair: K.hair, extra(cx, fy) {
+	O(cx - 5, fy - 31, 10, 4, K.hair); O(cx - 7, fy - 28, 14, 1, K.hair); R(cx - 5, fy - 29, 10, 1, lens);
+	R(cx - 4, fy - 14, 3, 3, lens);
+	R(cx + 8, fy - 13, 1, 4, K.sand); O(cx + 7, fy - 17, 4, 4, K.blue);
+} });
+const JUDGE = { coat: K.hair, pants: K.hair, extra(cx, fy) {
+	R(cx - 6, fy - 29, 12, 4, K.text); R(cx - 7, fy - 27, 2, 8, K.text); R(cx + 5, fy - 27, 2, 8, K.text);
+	R(cx - 7, fy - 25, 2, 1, K.muted); R(cx + 5, fy - 23, 2, 1, K.muted);
+	R(cx - 2, fy - 17, 4, 3, K.text); R(cx - 1, fy - 14, 2, 1, K.gold);
+} };
+const VERIFIER = { coat: K.text, pants: K.border, hair: K.border, seated: true, extra(cx, fy) {
+	R(cx - 6, fy - 17, 1, 10, K.pink); R(cx + 5, fy - 17, 1, 10, K.pink); R(cx - 1, fy - 17, 2, 4, K.pink);
+	O(cx - 5, fy - 27, 10, 2, K.blue); R(cx - 3, fy - 27, 2, 2, K.text); R(cx + 1, fy - 27, 2, 2, K.text);
+} };
+const FIXER = { coat: K.sand, pants: K.border, hair: K.deep, extra(cx, fy) {
+	R(cx - 3, fy - 17, 6, 10, shade(K.sand)); O(cx + 8, fy - 14, 2, 8, K.muted); R(cx + 7, fy - 15, 4, 2, K.muted);
+} };
+
+/* ---------- objects ---------- */
+function engramVault() {
+	/* Engram drawers: a compact cabinet; drawer #417 glows after a save, the owl answers mem_search. */
+	O(8, 10, 58, 70, shade(K.sand)); R(8, 10, 58, 3, K.gold);
+	for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+		const x = 12 + c * 18, y = 16 + r * 21;
+		O(x, y, 16, 18, K.sand); R(x, y, 16, 2, hi(K.sand)); R(x + 5, y + 8, 6, 3, K.border); R(x + 6, y + 9, 4, 1, K.gold);
+	}
+	R(30, 75, 16, 1, motion && t % 4 < 2 ? K.fuchsia : K.fdeep);
+	O(48, 0, 12, 10, K.muted); R(50, 2, 3, 3, K.text); R(55, 2, 3, 3, K.text); R(51, 3, 1, 1, INK); R(56, 3, 1, 1, INK); R(53, 6, 2, 2, K.gold);
+}
+
+function windowWithTelescope() {
+	/* The window shows the codegraph sky: symbols are stars, calls are lines. A small telescope by it is web search. */
+	O(84, 6, 84, 38, K.border); R(86, 8, 80, 34, INK);
+	const N = [[94, 16], [110, 12], [130, 20], [116, 28], [146, 14], [150, 32], [100, 34]];
+	for (const [a, b] of [[0, 1], [1, 2], [1, 3], [2, 4], [2, 5], [3, 6], [3, 5]]) {
+		const [x1, y1] = N[a], [x2, y2] = N[b], n = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
+		for (let i = 0; i <= n; i += 2) R(Math.round(x1 + (x2 - x1) * i / n), Math.round(y1 + (y2 - y1) * i / n), 1, 1, shade(K.blue));
+	}
+	N.forEach(([x, y], i) => R(x - 1, y - 1, 3, 3, motion && i === t % N.length ? K.gold : K.blue));
+	R(125, 8, 2, 34, K.border); O(82, 44, 88, 2, K.border);
+	R(178, 70, 1, 18, INK); R(186, 70, 1, 18, INK); R(182, 70, 1, 20, INK);
+	O(172, 62, 16, 5, K.gold); O(168, 61, 4, 7, K.sand); R(172, 62, 16, 1, hi(K.gold));
+}
+
+function codegraphBoard() {}
+
+function mapTable() {
+	O(16, 104, 52, 22, shade(K.sand)); R(16, 104, 52, 2, hi(K.sand));
+	O(20, 107, 44, 15, K.text);
+	for (let i = 0; i < 6; i++) R(24 + i * 6, 111 + (i % 3) * 3, 3, 1, K.red);
+	R(54, 114, 3, 3, K.fuchsia); R(26, 119, 22, 1, K.blue);
+	R(19, 126, 2, 6, INK); R(63, 126, 2, 6, INK);
+}
+
+function designEasel() {
+	R(24, 172, 2, 16, INK); R(38, 172, 2, 16, INK); R(31, 170, 2, 18, INK);
+	O(18, 148, 28, 22, K.text); R(21, 151, 22, 16, hi(K.pink));
+	R(23, 153, 9, 6, K.pink); R(34, 156, 7, 9, K.blue); R(23, 161, 8, 4, K.gold);
+	O(16, 170, 32, 2, shade(K.sand));
+}
+
+function coffeeBar() {
+	O(4, 340, 136, 40, shade(K.sand)); R(4, 340, 136, 4, hi(K.sand)); R(4, 372, 136, 8, shade(shade(K.sand)));
+	/* Espresso machine: the context window. Steam while it brews. */
+	O(14, 314, 34, 26, K.muted); R(14, 314, 34, 4, K.text); R(20, 322, 8, 6, INK); R(32, 322, 10, 6, INK);
+	R(22, 336, 4, 4, K.text);
+	if (motion) for (let i = 0; i < 3; i++) R(20 + i * 6, 306 - ((t + i * 2) % 6), 2, 2, K.text);
+	/* Pot gauge: 62% left. */
+	O(60, 318, 18, 22, K.panel); R(62, 320 + 8, 14, 12, K.sand); R(62, 320 + 8, 14, 2, K.gold);
+	/* Cups. */
+	for (let i = 0; i < 4; i++) { O(88 + i * 12, 332, 7, 8, K.text); R(88 + i * 12, 332, 7, 2, K.sand); }
+	/* Stools. */
+	for (const x of [20, 60, 100]) { O(x, 384, 14, 4, K.pink); R(x + 6, 388, 2, 10, INK); }
+}
+function jukebox() {
+	O(152, 318, 36, 62, K.fdeep); R(152, 318, 36, 18, K.pink); R(156, 322, 28, 10, K.gold);
+	R(158, 340, 24, 18, INK);
+	for (let i = 0; i < 4; i++) R(160 + i * 6, 342 + ((t + i) % 2) * 2, 4, 14 - ((t + i) % 3) * 4, [K.blue, K.green, K.pink, K.gold][i]);
+	R(156, 362, 28, 14, shade(K.fdeep));
+	if (motion) { const y = 300 - (t % 8) * 2; R(196, y, 2, 6, K.gold); R(198, y, 3, 2, K.gold); R(146, y + 6, 2, 6, K.pink); R(143, y + 10, 3, 2, K.pink); }
+}
+function chalkboard() {
+	O(266, 6, 188, 50, shade(K.sand)); R(266, 6, 188, 2, hi(K.sand));
+	R(270, 10, 180, 42, '#0E0A0E');
+	R(272, 12, 176, 38, INK);
+	O(290, 56, 140, 3, shade(K.sand));
+	R(300, 54, 6, 2, K.text); R(312, 54, 4, 2, K.pink); R(410, 53, 10, 3, K.muted);
+}
+function featureDesk() {
+	O(320, 108, 96, 22, shade(K.sand)); R(320, 108, 96, 3, hi(K.sand)); R(324, 130, 4, 8, INK); R(408, 130, 4, 8, INK);
+	/* Feature document scroll and the Engram mirror stamp. */
+	O(334, 100, 34, 12, K.text); R(334, 100, 34, 2, K.sand); for (let i = 0; i < 4; i++) R(338, 104 + i * 2, 20 - i * 4, 1, K.muted); R(360, 106, 5, 4, K.fuchsia);
+	/* Quill and inkwell. */
+	O(374, 104, 6, 6, INK); R(378, 94, 1, 12, K.text); R(379, 94, 3, 5, K.pink);
+	/* Bell: audio notifications. */
+	O(392, 102, 12, 6, K.gold); R(396, 98, 4, 4, K.gold); R(397, 97, 2, 1, K.sand);
+	if (motion && t % 8 < 2) { R(388, 96, 2, 1, K.gold); R(406, 96, 2, 1, K.gold); }
+}
+function profileRack() {
+	R(452, 70, 3, 52, INK); O(444, 120, 19, 3, INK);
+	R(446, 72, 16, 2, INK);
+	/* Hats = profiles: top hat, cap, beret. */
+	O(442, 60, 8, 8, K.hair); O(440, 67, 12, 2, K.hair); R(442, 64, 8, 1, K.gold);
+	O(456, 64, 9, 5, K.blue); R(456, 68, 11, 1, shade(K.blue));
+	O(447, 78, 10, 4, K.fuchsia);
+}
+function mailTube() {
+	O(476, 0, 8, 96, K.muted); R(477, 0, 2, 96, hi(K.muted));
+	O(470, 96, 20, 22, K.border); R(474, 100, 12, 10, INK);
+	const y = motion ? (t * 9) % 90 : 40; O(477, y, 6, 8, K.gold);
+	R(472, 112, 16, 3, K.green);
+}
+function questBoard() {
+	/* The TODO board: big enough to read what is being done right now (text drawn at stage scale in todoText). */
+	O(98, 144, 110, 62, shade(K.sand)); R(101, 147, 104, 56, K.sand); R(101, 147, 104, 2, hi(K.sand));
+	R(104, 150, 98, 50, mix(K.sand, K.text, 0.55));
+	R(106, 148, 3, 3, K.red); R(196, 148, 3, 3, K.red);
+	R(112, 206, 2, 12, INK); R(192, 206, 2, 12, INK);
+}
+
+function draftingDesk(x) {
+	O(x, 222, 64, 16, shade(K.sand)); R(x, 222, 64, 3, hi(K.sand)); R(x + 4, 238, 3, 10, INK); R(x + 57, 238, 3, 10, INK);
+	O(x + 4, 206, 26, 18, K.border); R(x + 6, 208, 22, 14, INK);
+	for (let i = 0; i < 4; i++) R(x + 8, 210 + i * 3, ((t + i + x) % 4) * 4 + 4, 1, K.green);
+	R(x + 15, 224, 4, 2, K.border);
+	O(x + 36, 226, 12, 4, K.text); R(x + 50, 225, 6, 5, K.pink);
+}
+function doorAndPermissions() {
+	/* Permission mode is a brass plaque on the wall by the door, not a street light. */
+	O(392, 389, 34, 9, K.gold); R(394, 391, 30, 5, K.panel); R(396, 392, 3, 3, K.green);
+	O(338, 384, 44, 12, K.fdeep); R(342, 388, 36, 4, K.pink);
+}
+
+function installerCrates() {
+	const crate = (x, y, c) => { O(x, y, 22, 18, shade(K.sand)); R(x, y, 22, 2, hi(K.sand)); R(x + 2, y + 8, 18, 2, shade(shade(K.sand))); R(x + 7, y + 4, 8, 4, c); };
+	crate(240, 370, K.muted); crate(264, 370, K.blue); crate(252, 350, K.green);
+}
+function reviewStations() {
+	const lenses = [K.red, K.green, K.blue, K.gold];
+	lenses.forEach((c, i) => {
+		const x = 520 + i * 48;
+		O(x, 104, 30, 16, K.border); R(x, 104, 30, 3, c);
+		R(x + 4, 110, 22, 1, K.muted);
+		/* Desk lamp in the lens colour. */
+		R(x + 24, 94, 1, 10, INK); O(x + 20, 90, 8, 4, c);
+		if (motion) { g.globalAlpha = 0.18 + 0.08 * ((t + i) % 2); R(x + 14, 94, 20, 10, c); g.globalAlpha = 1; }
+	});
+}
+function judgmentBench() {
+	O(534, 210, 160, 30, K.hair); R(534, 210, 160, 4, K.border); R(538, 218, 152, 1, K.border);
+	R(606, 214, 16, 20, K.fuchsia); R(608, 216, 12, 16, K.fdeep); R(612, 220, 4, 4, K.gold);
+	/* Gavel on its block. */
+	O(574, 204, 10, 4, shade(K.sand)); const up = motion && t % 6 === 0;
+	O(570, up ? 194 : 198, 10, 5, K.sand); R(578, up ? 196 : 200, 10, 2, shade(K.sand));
+	/* Two scales: A and B. */
+	O(642, 200, 2, 10, K.gold); R(636, 200, 14, 1, K.gold); R(634, 202, 4, 2, K.gold); R(648, 202, 4, 2, K.gold);
+}
+function verifyLab() {
+	O(520, 350, 180, 26, K.text); R(520, 350, 180, 3, K.muted); R(520, 370, 180, 6, K.muted);
+	/* Test tubes: green means passing. */
+	for (let i = 0; i < 6; i++) { const x = 530 + i * 9; O(x, 334, 4, 16, K.text); R(x, 342, 4, 8, i === 4 && t % 4 < 2 ? K.gold : K.green); }
+	O(526, 348, 52, 3, K.border);
+	/* Microscope. */
+	O(660, 330, 6, 20, K.muted); O(654, 346, 18, 4, K.border); O(664, 326, 10, 5, K.muted);
+	/* Check mark screen. */
+	O(612, 326, 30, 22, K.border); R(614, 328, 26, 18, INK); R(620, 338, 3, 3, K.green); R(623, 341, 3, 3, K.green); R(626, 334, 3, 7, K.green); R(629, 331, 3, 4, K.green);
+}
+function jobsWall() {
+	for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++) {
+		const x = 518 + c * 32, y = 8 + r * 22;
+		O(x, y, 28, 18, K.border); R(x + 2, y + 2, 24, 14, INK);
+		const k = (t + c * 3 + r * 5) % 7;
+		if ((c + r) % 4 === 1) { R(x + 4, y + 7, 20, 4, K.sel); R(x + 4, y + 7, 4 + (t * 2 + c) % 17, 4, K.sand); }
+		else for (let i = 0; i < 3; i++) R(x + 4, y + 4 + i * 4, ((k + i * 3) % 5) * 4 + 4, 1, i === 2 && k === 3 ? K.red : K.blue);
+	}
+}
+
+
+/* ---------- labels (alt+l): each object and the gentle-shell feature it stands for, in stage pixels ---------- */
+const LABELS = [
+	[850, 34, 'Chalkboard', 'ODD', 'The orchestrator writes the ODD steps in chalk; the current step is underlined.'],
+	[600, 128, 'Orchestrator', 'el Gentleman', 'Pink suit, top hat with the rose, fuchsia mustache, monocle and cane.'],
+	[735, 328, 'Feature desk', 'odd/tasks + bell', 'The feature document with its Engram stamp, and the bell for audio notifications.'],
+	[905, 124, 'Hat rack', 'profiles', 'Each hat is a session-bound profile.'],
+	[962, 186, 'Mail tube', 'cross-session', 'Capsules travel between sessions.'],
+	[74, 18, 'Engram drawers', 'memory', 'Observations in drawers; #417 glows after a save.'],
+	[252, 106, 'Window', 'codegraph + web search', 'The codegraph sky through the window, and the telescope for the web.'],
+	[84, 204, 'Map table', 'explore', 'The read-only explorer maps the code before anyone writes.'],
+	[64, 290, 'Easel', 'gentle-design', 'Artboards and canvas comments.'],
+	[306, 284, 'TODO board', 'todo', 'What is being done right now, readable from across the room.'],
+	[90, 624, 'Espresso bar', 'context', 'The pot is the context window. Compaction brews a fresh one.'],
+	[340, 632, 'Jukebox', 'Gentle Music', 'Plays while you work.'],
+	[712, 394, 'Drafting desks', 'writers', 'Parallel workers, each with its own allowed edit surface.'],
+	[525, 696, 'Crates', 'installers', 'macOS, Windows and Linux installers.'],
+	[818, 770, 'Door plaque', 'permissions', 'NORMAL, AUTO or YOLO, engraved by the door.'],
+	[1224, 120, 'Monitor wall', 'jobs + monitor', 'One screen per background job.'],
+	[1216, 262, 'Lens desks', '4R native review', 'Risk, resilience, readability and reliability.'],
+	[1228, 371, 'The bench', 'Judgment Day', 'Two blind judges and a fixer.'],
+	[1220, 651, 'Lab', 'verify', 'The independent verifier runs the tests.'],
+];
+function placeLabels() {
+	const stage = document.getElementById('stage');
+	LABELS.forEach(([x, y, name, feature, text], i) => {
+		const el = document.createElement('span');
+		el.className = 'tag'; el.style.left = x + 'px'; el.style.top = y + 'px'; el.title = text;
+		el.innerHTML = `<b>${i + 1}</b>${name} <span>· ${feature}</span>`;
+		stage.append(el);
+	});
+}
+
+/* ---------- session state the scene and the panels read ---------- */
+const TODO = [
+	{ text: 'Map the engine canvas calls', doing: 'reading web/office-engine.js' },
+	{ text: 'Draw one frame in Ghostty', doing: 'worker writes src/stage/canvas.ts' },
+	{ text: 'Live stage from events', doing: 'waiting for your feedback' },
+	{ text: 'Stage sizes with alt+r', doing: '' },
+];
+const S2 = { done: 0, now: 0, doing: TODO[0].doing, odd: 1, thinking: false, working: false, waiting: false, brew: 0.62 };
+
+/* ---------- text drawn at stage scale: chalk and the TODO board ---------- */
+const ODD = ['authorize', 'explore', 'resolve', 'classify', 'track', 'implement', 'close'];
+const FONT = () => getComputedStyle(document.body).fontFamily;
+const clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+function chalk() {
+	out.font = 'bold 10px ' + FONT();
+	out.fillStyle = K.text; out.fillText('ODD · terminal-stage', 556, 40);
+	ODD.forEach((s, i) => {
+		const x = 556 + (i % 4) * 88, y = 62 + Math.floor(i / 4) * 18;
+		out.fillStyle = i < S2.odd ? K.green : i === S2.odd ? K.gold : K.muted;
+		out.fillText(`${i + 1} ${s}${i < S2.odd ? ' ✓' : ''}`, x, y);
+		if (i === S2.odd) { out.fillStyle = K.gold; out.fillRect(x, y + 3, 64, 2); }
+	});
+}
+function todoText() {
+	out.font = 'bold 11px ' + FONT();
+	out.fillStyle = K.fdeep; out.fillText('TODO', 214, 318);
+	out.fillStyle = K.border; out.fillText(`${S2.done}/${TODO.length}`, 380, 318);
+	let y = 338;
+	TODO.forEach((item, i) => {
+		const done = i < S2.done, now = i === S2.now;
+		out.fillStyle = done ? '#3F7A5B' : now ? K.panel : K.border;
+		out.font = (now ? 'bold ' : '') + '11px ' + FONT();
+		out.fillText(`${done ? '■' : now ? '▶' : '□'} ${clip(item.text, 27)}`, 214, y);
+		y += 16;
+		if (now && S2.doing) { out.fillStyle = K.fdeep; out.font = 'italic 10px ' + FONT(); out.fillText(`  ${clip(S2.doing, 29)}`, 214, y - 2); y += 14; }
+	});
+}
+
+/* ---------- frame ---------- */
+function draw() {
+	g = base.getContext('2d');
+	R(0, 0, W, H, K.panel);
+	floor(); walls();
+	engramVault(); windowWithTelescope(); chalkboard(); mailTube(); jobsWall();
+	mapTable(); questBoard();
+	person(82, 130, EXPLORER, motion && S2.done === 0 && S2.thinking ? t % 2 : 0);
+	designEasel(); coffeeBar(); jukebox();
+	profileRack(); featureDesk();
+	person(300, 104, ORCH, motion && (S2.thinking || S2.waiting) ? (t % 2) : 0);
+	[[244, K.sand], [324, K.hair], [404, K.border]].forEach(([x, hair], i) => { person(x + 46, 228, worker(hair), motion && S2.working && (t + i) % 2 === 0 ? 1 : 0); draftingDesk(x); });
+	reviewStations();
+	[K.red, K.green, K.blue, K.gold].forEach((c, i) => person(535 + i * 48, 100, reviewer(c), 0));
+	person(560, 214, JUDGE, 0); person(668, 214, JUDGE, 0);
+	judgmentBench();
+	person(600, 284, FIXER, 0);
+	person(590, 354, VERIFIER, 0);
+	verifyLab();
+	installerCrates(); doorAndPermissions();
+	plant(196, 300); plant(486, 140); plant(486, 396); plant(222, 300); plant(700, 300);
+	out.drawImage(base, 0, 0, W * S, H * S);
+	chalk(); todoText();
+	out.font = 'bold 9px ' + FONT(); out.fillStyle = K.green; out.fillText('NORMAL', 802, 791);
+}
+
+/* Portrait: the orchestrator's hat, face and collar, from the same sprite. */
+function portrait() {
+	const pc = document.getElementById('portrait').getContext('2d');
+	const keep = g; g = pc; person(12, 38, ORCH); g = keep;
+}
+
+/* ---------- panels ---------- */
+const $ = id => document.getElementById(id);
+const cups = Array.from({ length: 10 }, () => { const c = document.createElement('span'); c.className = 'cup'; return c; });
+$('cups').replaceChildren(...cups);
+function renderHud() {
+	cups.forEach((c, i) => c.classList.toggle('on', i < Math.round(S2.brew * 10)));
+	$('pct').textContent = Math.round(S2.brew * 100) + '%';
+}
+function renderTodo() {
+	$('todo').replaceChildren(...TODO.map((item, i) => {
+		const li = document.createElement('li');
+		li.className = i < S2.done ? 'done' : i === S2.now ? 'now' : '';
+		li.append(item.text);
+		if (i === S2.now && S2.doing) { const d = document.createElement('span'); d.className = 'doing'; d.textContent = 'doing: ' + S2.doing; li.append(d); }
+		return li;
+	}));
+	$('todo-count').textContent = `${S2.done}/${TODO.length}`;
+	$('todo-bar').style.width = (S2.done / TODO.length * 100) + '%';
+}
+function chat(kind, text, who) {
+	const li = document.createElement('li'); li.className = kind;
+	if (who) { const b = document.createElement('b'); b.textContent = who; li.append(b); }
+	li.append(text);
+	$('chat').append(li);
+	while ($('chat').children.length > 14) $('chat').firstChild.remove();
+	return li;
+}
+function toast(kind, title, sub) {
+	const el = document.createElement('div'); el.className = 'toast ' + kind;
+	el.innerHTML = `<i>${{ ok: '✓', warn: '!', err: '×', info: 'i' }[kind]}</i><div><b></b><span></span></div>`;
+	el.querySelector('b').textContent = title; el.querySelector('span').textContent = sub;
+	$('toasts').prepend(el);
+	while ($('toasts').children.length > 3) $('toasts').lastChild.remove();
+	if (!still) setTimeout(() => el.remove(), 6000);
+}
+
+/* Live thought: streams character by character while the orchestrator writes; the chat keeps a dim copy. */
+let thoughtsShown = true, streamTimer = 0, thinkEntry = null;
+function think(text) {
+	S2.thinking = true;
+	clearInterval(streamTimer);
+	thinkEntry = chat('think', '');
+	let n = still ? text.length : 0;
+	const paint = () => { $('thought-text').textContent = text.slice(0, n); thinkEntry.textContent = text.slice(0, n); };
+	paint(); renderThought();
+	if (!still) streamTimer = setInterval(() => { n += 1; paint(); if (n >= text.length) clearInterval(streamTimer); }, 32);
+}
+function stopThinking() { S2.thinking = false; clearInterval(streamTimer); renderThought(); }
+function renderThought() {
+	$('thought').hidden = !(S2.thinking && thoughtsShown);
+	$('chip').hidden = !(S2.thinking && !thoughtsShown);
+	$('chat').classList.toggle('hide-think', !thoughtsShown);
+	$('thoughts-state').textContent = thoughtsShown ? 'shown' : 'hidden';
+	$('hk-thoughts').setAttribute('aria-pressed', String(thoughtsShown));
+}
+
+/* Dialog: a message to you, or a question with its choices. */
+let typeTimer = 0;
+function speak(text, choices) {
+	$('dialog').hidden = false;
+	$('dlg-kind').textContent = choices ? '· asks you' : '· to you';
+	$('choices').hidden = !choices;
+	if (choices) $('choice-list').replaceChildren(...choices.map((c, i) => { const li = document.createElement('li'); li.textContent = c; if (i === 0) li.className = 'sel'; return li; }));
+	clearInterval(typeTimer);
+	let n = still ? text.length : 0;
+	$('dlg-text').textContent = text.slice(0, n);
+	if (!still) typeTimer = setInterval(() => { n += 1; $('dlg-text').textContent = text.slice(0, n); if (n >= text.length) clearInterval(typeTimer); }, 26);
+}
+function closeDialog() { $('dialog').hidden = true; }
+function typePrompt(text, done) {
+	const p = $('prompt'); p.classList.remove('empty');
+	let n = still ? text.length : 0; p.textContent = text.slice(0, n);
+	if (still) return done();
+	const id = setInterval(() => { n += 1; p.textContent = text.slice(0, n); if (n >= text.length) { clearInterval(id); setTimeout(done, 400); } }, 60);
+}
+function clearPrompt() { const p = $('prompt'); p.textContent = 'type to the orchestrator'; p.classList.add('empty'); }
+
+/* ---------- scripted session ---------- */
+const BEATS = [
+	[0, () => {
+		$('chat').replaceChildren(); $('toasts').replaceChildren(); closeDialog(); stopThinking();
+		Object.assign(S2, { done: 0, now: 0, doing: TODO[0].doing, odd: 1, working: false, waiting: false, brew: 0.62 });
+		chat('you', 'el escenario me gusta, sigamos con la terminal', 'YOU');
+		chat('orch', 'Then the first step is proving the room can render outside the browser.', 'ORCH');
+		typePrompt('start the one-frame spike in Ghostty', () => { chat('you', 'start the one-frame spike in Ghostty', 'YOU'); clearPrompt(); });
+	}],
+	[4, () => think('They want one frame in Ghostty first. The engine only calls fillRect and drawImage, so a small canvas stand-in should do. I will check what pi-tui exports for images before writing anything.')],
+	[9, () => { chat('tool', 'read web/office-engine.js · 0.4s'); chat('tool', 'grep encodeKitty @earendil-works/pi-tui · 0.2s'); toast('info', 'Explore joined the party', 'mapping the canvas calls'); }],
+	[13, () => { toast('ok', 'Explore finished', '13s · 4 files read · no DOM needed'); S2.done = 1; S2.now = 1; S2.doing = 'waiting for your confirmation'; S2.odd = 2; }],
+	[14, () => {
+		stopThinking(); S2.waiting = true;
+		chat('ask', 'Asks you: write a canvas stand-in in src/stage/canvas.ts?', 'ORCH');
+		speak('I will add a small canvas stand-in in src/stage/canvas.ts, with no native dependency. Shall I write it?', ['Yes, write it', 'Show me the plan first']);
+		toast('warn', 'Waiting for you', 'one question in the dialog');
+	}],
+	[20, () => {
+		S2.waiting = false; S2.working = true; S2.doing = TODO[1].doing; S2.odd = 5; closeDialog();
+		chat('you', 'Yes, write it', 'YOU');
+		think('Writing the stand-in: fillRect into an RGBA buffer, then encodeKitty. Keep it under 150 lines and test the size math first.');
+	}],
+	[25, () => { chat('tool', 'write src/stage/canvas.ts · 132 lines'); chat('tool', 'bash npm test · 276 passed'); toast('ok', 'Tests passed', '276 / 276'); }],
+	[28, () => { S2.brew = 0.36; toast('warn', 'Context at 64%', 'a fresh pot brews at 85%'); }],
+	[30, () => {
+		stopThinking(); S2.working = false; S2.done = 2; S2.now = 2; S2.doing = TODO[2].doing; S2.odd = 6;
+		chat('orch', 'Done: the room renders as one Kitty image in Ghostty.', 'ORCH');
+		speak('Done: the room renders as one Kitty image in Ghostty. Take a look and tell me what to change before we make it live.');
+	}],
+];
+const LOOP_S = 40;
+const pin = /t=([\d.]+)/.exec(location.hash);
+const still = reduced || Boolean(pin);
+let start = 0, next = 0, timer = 0;
+function tick() {
+	const now = (performance.now() - start) / 1000;
+	while (next < BEATS.length && now >= BEATS[next][0]) BEATS[next++][1]();
+	if (now >= LOOP_S) { start = performance.now(); next = 0; }
+	t += 1; renderHud(); renderTodo(); draw();
+}
+
+/* ---------- controls ---------- */
+function fit() { const k = Math.min(innerWidth / 1920, innerHeight / 920); $('art').style.transform = `translate(${(innerWidth - 1920 * k) / 2}px, ${(innerHeight - 920 * k) / 2}px) scale(${k})`; }
+fit(); addEventListener('resize', fit);
+function toggleThoughts() { thoughtsShown = !thoughtsShown; renderThought(); }
+function toggleLabels() { const off = $('stage').classList.toggle('labels-off'); $('labels-state').textContent = off ? 'off' : 'on'; $('hk-labels').setAttribute('aria-pressed', String(!off)); }
+function setMotion(on) {
+	motion = on; $('motion-state').textContent = on ? 'on' : 'off'; $('hk-motion').setAttribute('aria-pressed', String(on));
+	clearInterval(timer); if (on && !still) timer = setInterval(tick, 250);
+	draw();
+}
+$('hk-thoughts').addEventListener('click', toggleThoughts);
+$('hk-labels').addEventListener('click', toggleLabels);
+$('hk-motion').addEventListener('click', () => setMotion(!motion));
+addEventListener('keydown', e => {
+	if (e.altKey && e.key.toLowerCase() === 't') { e.preventDefault(); toggleThoughts(); }
+	if (e.altKey && e.key.toLowerCase() === 'l') { e.preventDefault(); toggleLabels(); }
+});
+
+placeLabels(); portrait();
+if (/labels/.test(location.hash)) toggleLabels();
+if (/hidden/.test(location.hash)) toggleThoughts();
+if (still) {
+	/* Still frame: play the script up to the pinned second (default 16 s, the question). */
+	const to = pin ? parseFloat(pin[1]) : 16;
+	for (const [at, run] of BEATS) if (at <= to) run();
+	renderHud(); renderTodo(); draw();
+} else {
+	start = performance.now();
+	setMotion(true);
+	tick();
+}
+})();
+</script>
+</body>
+</html>
