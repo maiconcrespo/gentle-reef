@@ -40,7 +40,7 @@ const captionEl = $("caption");
 const capWho = $("capWho");
 const capText = $("capText");
 
-const ROLE_LABEL = { explore: "Explore", worker: "Worker", verify: "Verify" };
+const ROLE_LABEL = { explore: "Explore", worker: "Worker", verify: "Verify", inspector: "Inspector" };
 const STATUS_LABEL = {
 	queued: "queued, waiting for a desk",
 	running: "typing",
@@ -80,6 +80,8 @@ const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {
 	onPot: ({ level, brewing, time }) => drawPot(potCtx, level, time, brewing),
 	// An agent has walked out of the door: its seat frees up for the next one in the bench.
 	onDeparted: (id) => dispatch({ type: "departed", id }),
+	// Both review inspectors have walked out: the review is over on screen.
+	onReviewGone: () => dispatch({ type: "review-gone" }),
 });
 
 // Layout: "full" is the desk window, "dock" the narrow pane (design/agent-office/02-dock-pane.html), "story" the close-up
@@ -302,11 +304,13 @@ function renderParty() {
 				li.className = "on-break";
 				return li;
 			}
+			// The inspectors are marked together while the camera is on them; a resident is marked by its id.
+			const current = row.kind === "inspector" ? follow.kind === "inspector" : follow.kind === "resident" && follow.id === row.id;
 			return partyRow(
 				row.role,
 				row.label || ROLE_LABEL[row.role],
 				`${ROLE_LABEL[row.role]} · ${STATUS_LABEL[row.status] ?? row.status}`,
-				follow.kind === "resident" && follow.id === row.id,
+				current,
 			);
 		}),
 	];

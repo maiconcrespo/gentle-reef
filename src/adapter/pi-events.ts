@@ -57,6 +57,82 @@ function askQuestions(args: unknown): AskQuestion[] {
 		.slice(0, MAX_ASK_QUESTIONS);
 }
 
+// Review bounds: the args and results come from the model and from review output (which can carry whole diffs).
+const REVIEW_TOOL = "gentle_review";
+const REVIEW_CAPTURE_TOOLS: ReadonlySet<string> = new Set(["gentle_review_capture", "gentle_review_capture_group"]);
+// The lens names gentle-pi's review start accepts. Anything else in the start input is ignored.
+const REVIEW_LENS_NAMES: ReadonlySet<string> = new Set(["risk", "resilience", "readability", "reliability"]);
+const MAX_REVIEW_LENSES = 4;
+const MAX_REVIEW_INPUT = 8_000;
+const MAX_REVIEW_TEXT = 20_000;
+// Markers gentle-pi writes into review results (the forecast runs nothing, so it is never a verdict).
+const FORECAST_MARKER = "reviewer-model-run-forecast";
+const ACKNOWLEDGED_MARKER = "native-approved-acknowledgement-completed";
+const CORRECTION_MARKER = "correction_required";
+const APPROVED_STATE = /"state"\s*:\s*"approved"/;
+
+const jsonText = (value: unknown): string => {
+	try {
+		return JSON.stringify(value) ?? "";
+	} catch {
+		return "";
+	}
+};
+
+/** The text a tool result carries: its text parts and its details, each bounded. Unknown shapes give "". */
+function resultText(result: unknown): string {
+	if (typeof result === "string") return result.slice(0, MAX_REVIEW_TEXT);
+	if (!isRecord(result)) return "";
+	const parts = Array.isArray(result.content) ? result.content : [];
+	const texts = parts.flatMap(part => (isRecord(part) && typeof part.text === "string" ? [part.text.slice(0, MAX_REVIEW_TEXT)] : []));
+	return [...texts, jsonText(result.details).slice(0, MAX_REVIEW_TEXT)].join("\n");
+}
+
+function reviewLenses(input: unknown): string[] {
+	let value: unknown = input;
+	if (typeof input === "string") {
+		if (input.length > MAX_REVIEW_INPUT) return [];
+		try {
+			value = JSON.parse(input);
+		} catch {
+			return [];
+		}
+	}
+	if (!isRecord(value) || !Array.isArray(value.lenses)) return [];
+	const names = value.lenses.filter((lens): lens is string => typeof lens === "string" && REVIEW_LENS_NAMES.has(lens));
+	return [...new Set(names)].slice(0, MAX_REVIEW_LENSES);
+}
+
+/** A review start: `gentle_review` start or inspect arrives; a capture inspects only when it runs (acknowledged). */
+function reviewStart(toolName: string, args: unknown): OfficeEvent | undefined {
+	if (!isRecord(args)) return undefined;
+	if (toolName === REVIEW_TOOL) {
+		if (args.operation !== "start" && args.operation !== "inspect") return undefined;
+		const names = reviewLenses(args.input);
+		return names.length > 0
+			? { v: OFFICE_EVENT_VERSION, type: "review", phase: "arrive", names }
+			: { v: OFFICE_EVENT_VERSION, type: "review", phase: "arrive" };
+	}
+	if (!REVIEW_CAPTURE_TOOLS.has(toolName) || args.reviewerRunAcknowledged !== true) return undefined;
+	// A single capture runs one lens; a group runs one per binding.
+	const bindings = toolName === "gentle_review_capture" ? 1 : Array.isArray(args.collectBindings) ? args.collectBindings.length : 0;
+	const count = Math.min(bindings, MAX_REVIEW_LENSES);
+	return count > 0 ? { v: OFFICE_EVENT_VERSION, type: "review", phase: "inspect", count } : undefined;
+}
+
+/** A review end: a capture's verdict from its result, or the acknowledgement that completed. Unknown shapes give nothing. */
+function reviewEnd(toolName: string, isError: boolean, result: unknown): OfficeEvent | undefined {
+	// Only review tools read their result, so other tools never pay for serializing it.
+	if (toolName !== REVIEW_TOOL && !REVIEW_CAPTURE_TOOLS.has(toolName)) return undefined;
+	const text = resultText(result);
+	if (toolName === REVIEW_TOOL) {
+		return !isError && text.includes(ACKNOWLEDGED_MARKER) ? { v: OFFICE_EVENT_VERSION, type: "review", phase: "acknowledged" } : undefined;
+	}
+	if (text.includes(FORECAST_MARKER)) return undefined;
+	const verdict = isError ? "failed" : text.includes(CORRECTION_MARKER) ? "correction" : APPROVED_STATE.test(text) ? "approved" : undefined;
+	return verdict === undefined ? undefined : { v: OFFICE_EVENT_VERSION, type: "review", phase: "verdict", verdict };
+}
+
 const orchestrator = (state: OrchestratorState, toolName?: string): OfficeEvent =>
 	toolName === undefined
 		? { v: OFFICE_EVENT_VERSION, type: "orchestrator", state }
@@ -85,6 +161,8 @@ export function piEventToOffice(event: PiEvent, usage?: UsageReading): OfficeEve
 				const questions = askQuestions(event.args);
 				if (questions.length > 0) out.push({ v: OFFICE_EVENT_VERSION, type: "ask", phase: "open", questions });
 			}
+			const review = reviewStart(event.toolName, event.args);
+			if (review) out.push(review);
 			return out;
 		}
 		case "tool_execution_end": {
@@ -93,6 +171,8 @@ export function piEventToOffice(event: PiEvent, usage?: UsageReading): OfficeEve
 				orchestrator("thinking"),
 			];
 			if (event.toolName.startsWith(ASK_TOOL_PREFIX)) out.push({ v: OFFICE_EVENT_VERSION, type: "ask", phase: "close" });
+			const review = reviewEnd(event.toolName, event.isError, event.result);
+			if (review) out.push(review);
 			return out;
 		}
 		case "session_before_compact":

@@ -79,7 +79,7 @@ gentle-reef                                             # gentle-shell with the 
 - [x] `gentle-reef` launcher and per-session modes
 - [x] **Terminal game mode** (Gentle HQ): the room as a Kitty image, chat, live thinking, the dialog as selector with the orchestrator's portrait, signs in the scene, notices, Doing now and the monitor wall [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
 - [ ] Gentle HQ in the web window, with mouse-wheel zoom [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
-- [ ] Review inspectors that visit during native review (T4) [#2](https://github.com/maiconcrespo/gentle-reef/issues/2)
+- [x] Review inspectors that visit during native review (T4) [#2](https://github.com/maiconcrespo/gentle-reef/issues/2)
 - [ ] Judgment-day judges debating at their table (T5) [#3](https://github.com/maiconcrespo/gentle-reef/issues/3)
 - [ ] A boss character you move with the keyboard, which sends prompts over an authenticated channel (T8, security-sensitive) [#4](https://github.com/maiconcrespo/gentle-reef/issues/4)
 - [ ] Music radio tied to gentle-shell music [#5](https://github.com/maiconcrespo/gentle-reef/issues/5)

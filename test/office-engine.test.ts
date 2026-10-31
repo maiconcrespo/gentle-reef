@@ -380,6 +380,24 @@ describe("story camera: an optional view transform", () => {
 		engine.destroy();
 	});
 
+	it("the camera follows the review inspectors to the midpoint of their check spots, and holds once none are on the floor", () => {
+		const { canvas, transforms } = onScreen();
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
+		const review = (phase: string, extra: Record<string, unknown> = {}) => ({ ...view([], {}, []), review: { phase, count: 2, verdict: null, labels: ["Risk", "Reliability"], ...extra } });
+		engine.setScene(review("arriving"));
+		run(8);
+		// The check spots are (9,12) and (13,12): their feet are at x 228 and 324, y 308. The midpoint is x 276, lifted 20 px to the figures' middle.
+		engine.setCamera({ zoom: 2, width: 200, height: 120, target: { kind: "inspector" } });
+		run(5);
+		assert.deepEqual(transforms.at(-1), [2, 0, 0, 2, -452, -516]);
+		engine.setScene(review("leaving", { verdict: "correction" }));
+		run(40);
+		const held = transforms.at(-1);
+		run(3);
+		assert.deepEqual(transforms.at(-1), held, "once they are out the camera holds where it was");
+		engine.destroy();
+	});
+
 	it("a point target is followed, and clearing the camera restores the room size and drawing", () => {
 		const { canvas, transforms } = onScreen();
 		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, {});
@@ -576,6 +594,216 @@ describe("idle staff: an extra of a busy role walks in from the door", () => {
 		const [x] = atDoorRow[0];
 		const door = (OFFICE_CONFIG as unknown as { door: { x: number; w: number } }).door;
 		assert.ok(x >= (door.x - 1) * T && x < (door.x + door.w + 1) * T, `it is at the door columns, x ${x}`);
+	});
+});
+
+describe("review inspectors: where they stand (T1, S1-S3)", () => {
+	// Each inspector has a check spot by the door and a tour of two desks. The tour stops stand beside a desk, never on a resident's seat.
+	const routes = () => {
+		const found = (engineModule as unknown as { INSPECTOR?: { check: Array<{ tx: number; ty: number }>; tours: Array<Array<{ tx: number; ty: number; desk: number }>> } }).INSPECTOR;
+		assert.ok(found, "INSPECTOR routes are exported");
+		return found;
+	};
+	const cfg = OFFICE_CONFIG as unknown as { rows: number; cols: number; door: { x: number }; desks: Array<{ x: number; y: number; face: string }>; verifyDesks: Array<{ x: number; y: number; face: string }> };
+	const blocked = walkableGrid(OFFICE_CONFIG as never);
+	/* A desk's seat is the tile in front of it: north of a face-down desk, south of a face-up one. */
+	const seatTiles = () => [...cfg.desks, ...cfg.verifyDesks].map(d => ({ tx: d.x, ty: d.face === "down" ? d.y - 1 : d.y + 1 }));
+
+	it("every stop stands on walkable floor, and no stop is a resident's seat", () => {
+		const r = routes();
+		const stops = [...r.check, ...r.tours.flat()];
+		for (const s of stops) {
+			assert.equal(blocked[s.ty][s.tx], false, `(${s.tx},${s.ty}) is floor`);
+			assert.ok(!seatTiles().some(t => t.tx === s.tx && t.ty === s.ty), `(${s.tx},${s.ty}) is not a seat`);
+		}
+		assert.equal(new Set(stops.map(s => `${s.tx},${s.ty}`)).size, stops.length, "no two inspectors share a stop");
+	});
+
+	it("every stop is reachable from the door", () => {
+		const seen = new Set([`${cfg.door.x},${cfg.rows - 1}`]);
+		const queue = [[cfg.door.x, cfg.rows - 1]];
+		while (queue.length) {
+			const [x, y] = queue.shift()!;
+			for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+				const nx = x + dx, ny = y + dy, key = `${nx},${ny}`;
+				if (nx < 0 || ny < 0 || nx >= cfg.cols || ny >= cfg.rows || blocked[ny][nx] || seen.has(key)) continue;
+				seen.add(key);
+				queue.push([nx, ny]);
+			}
+		}
+		const r = routes();
+		for (const s of [...r.check, ...r.tours.flat()]) assert.ok(seen.has(`${s.tx},${s.ty}`), `(${s.tx},${s.ty}) is reachable`);
+	});
+
+	it("the two tours together check each of the four pod desks once", () => {
+		const r = routes();
+		assert.equal(r.tours.length, 2);
+		for (const tour of r.tours) assert.equal(tour.length, 2, "two desks per inspector");
+		assert.deepEqual(r.tours.flat().map(s => s.desk).sort(), [0, 1, 2, 3]);
+	});
+});
+
+describe("review inspectors: walking, inspecting and leaving (T1, S1-S4)", () => {
+	const T = OFFICE_CONFIG.tile;
+	const lookOf = (engineModule as unknown as { INSPECTOR_LOOKS?: Array<{ suit: string }> }).INSPECTOR_LOOKS;
+	const INSPECTOR = (engineModule as unknown as { INSPECTOR: { check: Array<{ tx: number; ty: number }>; tours: Array<Array<{ tx: number; ty: number }>> } }).INSPECTOR;
+	const BLANK = { phase: "idle", count: 0, verdict: null, labels: ["Risk", "Reliability"] };
+	const scene = (review: Record<string, unknown>) => ({ ...view([], {}, staffView()), review: { ...BLANK, ...review } });
+	const arriving = () => scene({ phase: "arriving" });
+	const inspecting = (count = 2) => scene({ phase: "inspecting", count });
+	const verdict = (value: string) => scene({ phase: "verdict", verdict: value });
+	const leaving = (value: string | null = null) => scene({ phase: "leaving", verdict: value });
+	type Rect = [number, number, number, number, string];
+
+	/** The inspector's torso is its one 12x11 block in its suit colour. Its tile is where the figure stands. */
+	const torsoAt = (rects: Rect[], suit: string) => rects
+		.filter(([, , w, h, fill]) => w === 12 && h === 11 && fill === suit)
+		.map(([x, y]) => ({ tx: Math.floor((x + 6) / T), ty: Math.floor((y + 20) / T) }));
+	const bubbles = (rects: Rect[]) => rects.filter(([, , w, h]) => w === 18 && h === 14);
+	const GREEN = "#B4E7C7";
+
+	function room(reduce = false) {
+		reduced = reduce;
+		const rects: Rect[] = [];
+		let gone = 0;
+		const canvas = { width: 0, height: 0, getContext: () => styledContext(rects as unknown[][]) };
+		const engine = createOfficeEngine(canvas, OFFICE_CONFIG, { onReviewGone: () => { gone += 1; } });
+		const frame = () => { rects.length = 0; run(1 / 60); return rects; };
+		return { engine, frame, gone: () => gone };
+	}
+
+	it("each inspector wears its own suit colour, distinct from the residents' colours", () => {
+		assert.ok(lookOf, "INSPECTOR_LOOKS is exported");
+		const [a, b] = lookOf.map(l => l.suit);
+		assert.notEqual(a, b);
+		for (const resident of ["#A9C7EE", "#B4E7C7", "#C4DAF6", "#F095C8"]) assert.ok(a !== resident && b !== resident);
+	});
+
+	it("arriving: both inspectors walk in from the door and stop at their check spots", () => {
+		const { engine, frame } = room();
+		const suits = (engineModule as unknown as { INSPECTOR_LOOKS: Array<{ suit: string }> }).INSPECTOR_LOOKS.map(l => l.suit);
+		engine.setScene(arriving());
+		const first = frame();
+		for (const suit of suits) {
+			const at = torsoAt(first, suit);
+			assert.equal(at.length, 1, "one torso per inspector on its first frame");
+			assert.ok(at[0].ty >= OFFICE_CONFIG.rows - 2, "it starts at the door row");
+		}
+		run(8);
+		const settled = frame();
+		INSPECTOR.check.forEach((spot, i) => assert.deepEqual(torsoAt(settled, suits[i]), [{ tx: spot.tx, ty: spot.ty }]));
+		engine.destroy();
+	});
+
+	it("inspecting: each inspector walks to both of its desk stops in turn", () => {
+		const { engine, frame } = room();
+		const suits = (engineModule as unknown as { INSPECTOR_LOOKS: Array<{ suit: string }> }).INSPECTOR_LOOKS.map(l => l.suit);
+		engine.setScene(arriving());
+		run(8);
+		engine.setScene(inspecting(2));
+		const visited = suits.map(() => new Set<string>());
+		for (let i = 0; i < 20 * 4; i++) {
+			run(0.25);
+			const rects = frame();
+			suits.forEach((suit, k) => torsoAt(rects, suit).forEach(t => visited[k].add(`${t.tx},${t.ty}`)));
+		}
+		INSPECTOR.tours.forEach((tour, k) => tour.forEach(stop => assert.ok(visited[k].has(`${stop.tx},${stop.ty}`), `inspector ${k} stands at its desk stop ${stop.tx},${stop.ty}`)));
+		engine.destroy();
+	});
+
+	it("an approved verdict walks them back to their check spots with the check bubble over them", () => {
+		const { engine, frame } = room();
+		const suits = (engineModule as unknown as { INSPECTOR_LOOKS: Array<{ suit: string }> }).INSPECTOR_LOOKS.map(l => l.suit);
+		engine.setScene(arriving());
+		run(8);
+		engine.setScene(inspecting(2));
+		run(3);
+		engine.setScene(verdict("approved"));
+		run(20);
+		const rects = frame();
+		INSPECTOR.check.forEach((spot, i) => {
+			assert.deepEqual(torsoAt(rects, suits[i]), [{ tx: spot.tx, ty: spot.ty }]);
+			const box = bubbles(rects).find(([x]) => Math.abs(x - (spot.tx * T + 12 - 9)) <= 2);
+			assert.ok(box, `a bubble hangs over inspector ${i}`);
+			assert.ok(rects.some(([x, y, w, h, fill]) => fill === GREEN && w === 2 && x >= box[0] && y >= box[1] && y < box[1] + 14), "the bubble holds the check");
+		});
+		engine.destroy();
+	});
+
+	it("a correction verdict sends them out through the door with the bang, and reports the review gone once they are out", () => {
+		const { engine, frame, gone } = room();
+		engine.setScene(arriving());
+		run(8);
+		engine.setScene(inspecting(2));
+		run(3);
+		engine.setScene(leaving("correction"));
+		run(0.5);
+		assert.ok(bubbles(frame()).length >= 1, "the bang shows before they walk");
+		assert.equal(gone(), 0);
+		run(30);
+		assert.equal(gone(), 1, "reported once, after both left");
+		assert.equal(torsoAt(frame(), (engineModule as unknown as { INSPECTOR_LOOKS: Array<{ suit: string }> }).INSPECTOR_LOOKS[0].suit).length, 0, "gone from the room");
+		run(5);
+		assert.equal(gone(), 1, "reported once");
+		engine.destroy();
+	});
+
+	it("a sign-off after an approval: they hold the check for a beat, then walk out and the review is reported gone", () => {
+		const { engine, gone } = room();
+		engine.setScene(arriving());
+		run(8);
+		engine.setScene(inspecting(2));
+		run(3);
+		engine.setScene(verdict("approved"));
+		run(10);
+		engine.setScene(leaving("approved"));
+		run(0.5);
+		assert.equal(gone(), 0, "still on the floor during the beat");
+		run(30);
+		assert.equal(gone(), 1);
+		engine.destroy();
+	});
+
+	it("a leave with no inspector on the floor reports the review gone at once, once", () => {
+		const { engine, frame, gone } = room();
+		engine.setScene(leaving());
+		frame();
+		assert.equal(gone(), 1);
+		run(2);
+		assert.equal(gone(), 1);
+		engine.destroy();
+	});
+
+	it("a new review while they are walking out walks them back in, and no departure is reported", () => {
+		const { engine, frame, gone } = room();
+		engine.setScene(arriving());
+		run(8);
+		engine.setScene(inspecting(2));
+		run(3);
+		engine.setScene(leaving("correction"));
+		run(0.5);
+		engine.setScene(arriving());
+		run(20);
+		const rects = frame();
+		const suits = (engineModule as unknown as { INSPECTOR_LOOKS: Array<{ suit: string }> }).INSPECTOR_LOOKS.map(l => l.suit);
+		INSPECTOR.check.forEach((spot, i) => assert.deepEqual(torsoAt(rects, suits[i]), [{ tx: spot.tx, ty: spot.ty }]));
+		run(10);
+		assert.equal(gone(), 0);
+		engine.destroy();
+	});
+
+	it("under reduced motion they snap to their spots, and leave after the same beat without walking", () => {
+		const { engine, frame, gone } = room(true);
+		const suits = (engineModule as unknown as { INSPECTOR_LOOKS: Array<{ suit: string }> }).INSPECTOR_LOOKS.map(l => l.suit);
+		engine.setScene(arriving());
+		const first = frame();
+		INSPECTOR.check.forEach((spot, i) => assert.deepEqual(torsoAt(first, suits[i]), [{ tx: spot.tx, ty: spot.ty }], "placed at once"));
+		engine.setScene(leaving("correction"));
+		run(1);
+		assert.equal(gone(), 0, "the bang shows first");
+		run(1.5);
+		assert.equal(gone(), 1);
+		engine.destroy();
 	});
 });
 

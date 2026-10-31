@@ -47,7 +47,8 @@ The menu lists the same actions as the subcommands. While the module is off: Tur
 `/office open` starts a loopback server on `127.0.0.1` with a random port and prints the URL. The URL carries a random token in its path, so only the page you were given can read it. The page shows:
 
 - the orchestrator at the whiteboard while it thinks or runs a tool, walking the floor while idle, and at the front with a `?` bubble when it waits for you;
-- resident subagents (explore, worker, verify, and unknown agents as generic workers) at the desks: they walk in, type while running, show `?` while waiting, and leave through the door with `✓` or `!` when they finish. Inspectors and judges are only logged until T4 and T5;
+- resident subagents (explore, worker, verify, and unknown agents as generic workers) at the desks: they walk in, type while running, show `?` while waiting, and leave through the door with `✓` or `!` when they finish. Judges are still only logged until [#3](https://github.com/maiconcrespo/gentle-reef/issues/3);
+- review inspectors: two inspectors with a briefcase and a magnifying glass, in two suits. They walk in through the door when a native review starts, and tour the pod's desks with the glass raised while the reviewers run. An approved review leaves them at their check spot with a `✓`; a correction or a failure sends them out with a `!`. They walk out once the review is signed off or when the session goes idle, and the review is back to idle only after they are out. The team and PARTY lists name them after their lenses (`Risk`, `Reliability`), or `Inspector A` and `Inspector B` when the review names none, with their status while on site;
 - idle staff (S16): one per role (explore, worker, verify) waits in the lounge: explore and worker sit on the two sofas facing each other across the coffee table, verify stands by the lab door, passing a speech bubble in turn and sipping now and then. The first agent of a role that takes a desk is that staff member: it walks over from the lounge, keeps the staff look, and walks back to the lounge when it finishes (`✓` or `!`). Its role narrates the break, for example `EXPLORE: back to the coffee.`. Further agents of that role walk in from the door as before. Team and PARTY lists show the idle staff as `on break`;
 - a story-mode dialog box with the question and its options while an `ask_user` prompt is open. It is display only: you still answer in the terminal, and it closes when the prompt ends;
 - the orchestrator rests in its armchair while idle (a small head turn now and then, no walking); it walks to the whiteboard in its office while it thinks or runs a tool, and to the front spot above the pod when it waits for you;
@@ -57,7 +58,7 @@ The menu lists the same actions as the subcommands. While the module is off: Tur
 - an activity log with tool and compaction lines;
 - a connection indicator (`live`, `reconnecting…`, or `offline`). The page reconnects by itself and resyncs from a fresh snapshot.
 
-With `prefers-reduced-motion` set, the orchestrator does not wander, residents snap to their seats and to the door, and the idle staff stand still with no bubbles or sips. State changes still show.
+With `prefers-reduced-motion` set, the orchestrator does not wander, residents snap to their seats and to the door, the inspectors snap between their spots, and the idle staff stand still with no bubbles or sips. State changes still show.
 
 ### Full layout
 
@@ -73,7 +74,7 @@ Open the compact layout with `/office dock`, or with "Open the compact window" /
 
 `/office story`, or "Open in story mode" / "Turn on and open in story mode" in the menu, opens the window at `?layout=story` (`design/agent-office/03-story-mode.html`). Story fills the whole window with a close-up of the room:
 
-- **Camera.** The room is drawn at a whole-number zoom (up to 4x), so the pixels stay square. The zoom always keeps at least 12 of the room's 15 rows in view: 2x on a 1366×768 window, 3x on 1920×1080, 4x on 2560×1440. The window is the camera: it eases toward the actor that acted last and never shows past the room's edge. Orchestrator events move it to the orchestrator, a subagent event to that resident, and a feature event to its prop.
+- **Camera.** The room is drawn at a whole-number zoom (up to 4x), so the pixels stay square. The zoom always keeps at least 12 of the room's 15 rows in view: 2x on a 1366×768 window, 3x on 1920×1080, 4x on 2560×1440. The window is the camera: it eases toward the actor that acted last and never shows past the room's edge. Orchestrator events move it to the orchestrator, a subagent event to that resident, a feature event to its prop, and a review event to the inspectors (the midpoint between them while they are on the floor).
 - **CONTEXT BREW** (top left): the context left as a rounded percent, with an HP-style bar. It shows "—" until Pi reports usage.
 - **PARTY** (top right): the orchestrator and each resident with its state. The row the camera follows is marked with ▶.
 - **Dialog** (bottom): the narration, or the `ask_user` prompt while one is open. The footer shows the key hint: Space or a click moves to the next line.
@@ -87,6 +88,7 @@ The dialog narrates real events, one line each, with a speaker:
 - `ORCHESTRATOR: thinking…` when a turn starts; `running bash…` at a tool start; `bash done ✓ · 0.4s` or `bash failed ! · 13s` at its end; `waiting for your answer.` while an `ask_user` prompt is open; `done, back on the floor.` when the turn ends.
 - Feature props say what they do, for example `ORCHESTRATOR: saving to memory…`.
 - Compaction: brewing a fresh pot, the fresh pot, or a failure.
+- Review inspectors: `INSPECTORS: arriving at the door.`, `inspecting the desks, 2 lenses…`, `approved ✓`, `correction required !`, `review failed !`, and `signed off, leaving.`
 - Subagents: `scout: arrived, waiting for a desk.`, `starts typing…`, `waiting for a reply.`, then `finished ✓`, `failed !`, `cancelled !` or `timed out !`.
 
 Subagents' internal tool calls are not visible to the window, so their lines cover only arrival, status and the end.

@@ -50,6 +50,8 @@ export function initialScene(deskCount = DESK_COUNT, verifyCount = VERIFY_DESK_C
     // features[feature].until is when its prop goes idle again; running[toolName] is the feature of a tool still in flight.
     features: {},
     running: {},
+    // The native review (T1): the two inspectors on site, and what they are doing.
+    review: initialReview(),
     log: [],
     logSeq: 0,
   };
@@ -64,6 +66,8 @@ export function reduceScene(state, action) {
       return applyEvent(state, action);
     case "departed":
       return applyDeparture(state, String(action.id));
+    case "review-gone":
+      return applyReviewGone(state);
     case "note":
       return pushLog(state, { kind: typeof action.kind === "string" ? action.kind : "info", text: String(action.text), at: action.at ?? 0 });
     default:
@@ -99,6 +103,7 @@ function applySnapshot(state, { snapshot }) {
     compaction: COMPACTION_PHASES.has(snapshot.compaction) ? snapshot.compaction : null,
     agents: agents.filter((agent) => isActive(agent) || seatOf(seats, agent.id) !== null),
     seats,
+    review: endReviewWhenIdle(state.review, orchestratorState),
   };
 }
 
@@ -107,7 +112,7 @@ function applyEvent(state, { event, at = 0 }) {
   switch (event.type) {
     case "orchestrator": {
       if (!ORCHESTRATOR_STATES.has(event.state)) return state;
-      const next = { ...state, orchestrator: orchestratorOf(event) };
+      const next = { ...state, orchestrator: orchestratorOf(event), review: endReviewWhenIdle(state.review, event.state) };
       if (event.state === "waiting-user" && state.orchestrator.state !== "waiting-user") {
         return pushLog(next, { kind: "ask", text: "Waiting for your answer", at });
       }
@@ -143,6 +148,8 @@ function applyEvent(state, { event, at = 0 }) {
       if (typeof event.feature !== "string" || typeof event.detail !== "string") return state;
       return lightFeature(pushLog(state, { kind: "feature", text: `${event.feature}: ${event.detail}`, at }), event.feature, event.detail, at);
     }
+    case "review":
+      return applyReview(state, event, at);
     default:
       return state;
   }
@@ -196,6 +203,73 @@ function endFeature(state, toolName, at) {
 
 function keepRunning(running = {}, toolName) {
   return Object.fromEntries(Object.entries(running).filter(([tool]) => tool === toolName));
+}
+
+/* ---------- review inspectors (T1, S1-S4) ---------- */
+// Phases on site: arriving, inspecting, and verdict (approved, standing by the check). `leaving` is walking out; `idle` is not in the room.
+const ON_SITE_REVIEW = new Set(["arriving", "inspecting", "verdict"]);
+const REVIEW_VERDICTS = new Set(["approved", "correction", "failed"]);
+const REVIEW_STATUS = { arriving: "arriving", inspecting: "inspecting the desks", verdict: "approved ✓" };
+const VERDICT_LINE = {
+  approved: { kind: "tool", text: "review approved ✓" },
+  correction: { kind: "fail", text: "review correction required !" },
+  failed: { kind: "fail", text: "review failed !" },
+};
+
+function initialReview() {
+  return { phase: "idle", count: 0, verdict: null, names: [] };
+}
+
+/** Inspector A and B are named after the lenses the review asked for, else "Inspector A" and "Inspector B". */
+export function inspectorLabel(names, index) {
+  const lens = names[index];
+  return lens ? `${lens[0].toUpperCase()}${lens.slice(1)}` : `Inspector ${"AB"[index]}`;
+}
+
+/**
+ * The review lifecycle from the contract's review events. A verdict or an acknowledgement with no inspector on site changes nothing.
+ * An approved verdict keeps them on site for the check; a correction or a failure sends them out, as does a sign-off (S3, S4).
+ */
+function applyReview(state, event, at) {
+  const current = state.review;
+  switch (event.phase) {
+    case "arrive": {
+      const names = Array.isArray(event.names) ? event.names : current.names;
+      // A status call inside a review that is already on site does not walk them in again.
+      if (ON_SITE_REVIEW.has(current.phase)) return { ...state, review: { ...current, names } };
+      return { ...state, review: { phase: "arriving", count: 0, verdict: null, names } };
+    }
+    case "inspect":
+      return { ...state, review: { ...current, phase: "inspecting", count: typeof event.count === "number" && event.count > 0 ? event.count : 1, verdict: null } };
+    case "verdict": {
+      if (!ON_SITE_REVIEW.has(current.phase) || !REVIEW_VERDICTS.has(event.verdict)) return state;
+      const phase = event.verdict === "approved" ? "verdict" : "leaving";
+      return pushLog({ ...state, review: { ...current, phase, verdict: event.verdict } }, { ...VERDICT_LINE[event.verdict], at });
+    }
+    case "acknowledged":
+      return ON_SITE_REVIEW.has(current.phase) ? { ...state, review: { ...current, phase: "leaving" } } : state;
+    default:
+      return state;
+  }
+}
+
+/** The page reports the inspectors gone once they have walked out. Only a leaving review ends, and its lens names go with it. */
+function applyReviewGone(state) {
+  return state.review.phase === "leaving" ? { ...state, review: initialReview() } : state;
+}
+
+/** The session went idle (agent_settled): inspectors on site leave, so they never stay forever (S4). */
+function endReviewWhenIdle(review, orchestratorState) {
+  return orchestratorState === "idle" && ON_SITE_REVIEW.has(review.phase) ? { ...review, phase: "leaving" } : review;
+}
+
+function reviewView(review) {
+  return {
+    phase: review.phase,
+    count: review.count,
+    verdict: review.verdict,
+    labels: [inspectorLabel(review.names, 0), inspectorLabel(review.names, 1)],
+  };
 }
 
 /** Whether a prop entry from sceneView is lit at `now` (the page's clock, in the same units as `at`). */
@@ -363,6 +437,8 @@ export function sceneView(state) {
     percent: percent === null ? null : Math.round(percent),
     potLevel: percent === null ? 1 : Math.round((1 - percent / 100) * 10000) / 10000,
     activeAgents: state.agents.filter(isActive).length,
+    // Review inspectors (T1): `phase` is idle, arriving, inspecting, verdict or leaving; `labels` names the two of them.
+    review: reviewView(state.review),
     agents,
     // Idle staff: present in the lounge, or claimed by the agent named here.
     staff: STAFF_ROLES.map((role) => ({ role, present: state.seats.lounge[role] === null, claimedBy: state.seats.lounge[role] })),
@@ -378,8 +454,12 @@ export function sceneView(state) {
  * The team list: residents first (as drawn), then each idle staff member on break. Pure over sceneView, so the page and tests read the same rows.
  */
 export function teamRows(view) {
+  const review = view.review;
+  const onSite = review && ON_SITE_REVIEW.has(review.phase) ? review : null;
   return [
     ...view.agents.map((agent) => ({ kind: "resident", id: agent.id, role: agent.role, label: agent.label, status: agent.status })),
+    // The inspectors on site (T1), after the residents and before the staff on break.
+    ...(onSite ? onSite.labels.map((label) => ({ kind: "inspector", role: "inspector", label, status: REVIEW_STATUS[onSite.phase] })) : []),
     ...view.staff.filter((item) => item.present).map((item) => ({ kind: "staff", role: item.role, status: BREAK_STATUS })),
   ];
 }
@@ -396,6 +476,7 @@ export const BACKLOG_ADVANCE_MS = 800;
 const BACKLOG_AT = 3;
 
 const ORCHESTRATOR = "ORCHESTRATOR";
+const INSPECTORS = "INSPECTORS";
 // One sentence per feature prop (S8). Unknown features fall back to a generic line.
 const FEATURE_SENTENCE = {
   music: "playing gentle music",
@@ -448,6 +529,8 @@ export function narrate(state, event, at = 0, context = {}) {
     }
     case "compaction":
       return narrateCompaction(state, event.phase);
+    case "review":
+      return narrateReview(state, event);
     case "subagent":
       return narrateSubagent(state, event, context);
     default:
@@ -484,6 +567,28 @@ function narrateTool(state, event, at) {
   const outcome = failed ? "failed !" : "done ✓";
   const text = startedAt === undefined ? `${name} ${outcome}` : `${name} ${outcome} · ${formatDuration(at - startedAt)}`;
   return { state: { ...state, toolStarts: rest }, lines: [say(ORCHESTRATOR, text, failed ? "fail" : "ok")] };
+}
+
+/** The inspectors (T1): arrival, the lenses they run, the verdict, and the sign-off. */
+function narrateReview(state, event) {
+  switch (event.phase) {
+    case "arrive":
+      return { state, lines: [say(INSPECTORS, "arriving at the door.")] };
+    case "inspect": {
+      const count = event.count;
+      const lenses = typeof count === "number" && count >= 1 ? `, ${count} ${count === 1 ? "lens" : "lenses"}` : "";
+      return { state, lines: [say(INSPECTORS, `inspecting the desks${lenses}…`)] };
+    }
+    case "verdict":
+      if (event.verdict === "approved") return { state, lines: [say(INSPECTORS, "approved ✓", "ok")] };
+      if (event.verdict === "correction") return { state, lines: [say(INSPECTORS, "correction required !", "fail")] };
+      if (event.verdict === "failed") return { state, lines: [say(INSPECTORS, "review failed !", "fail")] };
+      return { state, lines: [] };
+    case "acknowledged":
+      return { state, lines: [say(INSPECTORS, "signed off, leaving.", "ok")] };
+    default:
+      return { state, lines: [] };
+  }
 }
 
 function narrateCompaction(state, phase) {
@@ -538,6 +643,8 @@ export function actorOf(event) {
     case "tool":
     case "compaction":
       return { kind: "orchestrator" };
+    case "review":
+      return { kind: "inspector" };
     case "subagent":
       return typeof event.id === "string" ? { kind: "resident", id: event.id } : null;
     case "feature":
