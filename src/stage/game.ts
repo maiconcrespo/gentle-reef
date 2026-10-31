@@ -18,7 +18,8 @@ export interface CellSize {
 	readonly heightPx: number;
 }
 
-const HUD_ROWS = 1;
+/* No HUD row: since T4f the project, branch, context and brand are signs in the scene. */
+const HUD_ROWS = 0;
 const GAP = 3;
 const MIN_SIDE_COLS = 32;
 const MIN_COLS = 60;
@@ -66,15 +67,36 @@ export function fit(line: string, width: number): string {
  * The overlay's lines: the HUD across the top, then per body row the room line (the first carries the Kitty image, the
  * rest are the rows it covers), the gap, and the text column cut to its width.
  */
-export function composeGame(layout: GameLayout, content: { hud: string; room: readonly string[]; side: readonly string[]; dialog?: readonly string[] }): string[] {
+/** Text drawn over the room image at a cell position (a sign): panel cells with their own background. */
+export interface Sign {
+	readonly row: number;
+	readonly col: number;
+	readonly text: string;
+}
+
+/* The room rows are the image escape (row 0) and blank cells: signs go into those blank cells, the escape stays first. */
+function withSigns(room: string, signs: readonly Sign[], width: number): string {
+	if (signs.length === 0) return fit(room, width);
+	const escapes = (room.match(ESCAPES) ?? []).join("");
+	let out = "", at = 0;
+	for (const sign of [...signs].sort((a, b) => a.col - b.col)) {
+		if (sign.col < at) continue;
+		out += " ".repeat(sign.col - at) + sign.text;
+		at = sign.col + plainWidth(sign.text);
+	}
+	return escapes + fit(out, width);
+}
+
+export function composeGame(layout: GameLayout, content: { hud: string; room: readonly string[]; side: readonly string[]; dialog?: readonly string[]; signs?: readonly Sign[] }): string[] {
 	const width = layout.roomCols + layout.gap + layout.sideCols;
-	const lines = [fit(content.hud, width)];
+	const lines = layout.hudRows > 0 ? [fit(content.hud, width)] : [];
+	const signs = content.signs ?? [];
 	const dialog = content.dialog ?? [];
 	// The dialog sits on the room's bottom rows, 2 cells in; never on row 0, which carries the image.
 	const dialogStart = Math.max(1, layout.bodyRows - dialog.length);
 	for (let row = 0; row < layout.bodyRows; row++) {
 		const over = row >= dialogStart ? dialog[row - dialogStart] : undefined;
-		const room = over === undefined ? fit(content.room[row] ?? "", layout.roomCols) : "  " + fit(over, layout.roomCols - 2);
+		const room = over === undefined ? withSigns(content.room[row] ?? "", signs.filter(sign => sign.row === row), layout.roomCols) : "  " + fit(over, layout.roomCols - 2);
 		lines.push(room + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols));
 	}
 	return lines;
@@ -98,25 +120,18 @@ const ORCHESTRATOR_TEXT: Record<string, string> = { idle: "resting", thinking: "
 
 const bg = (hex: string) => `\x1b[48;2;${Number.parseInt(hex.slice(1, 3), 16)};${Number.parseInt(hex.slice(3, 5), 16)};${Number.parseInt(hex.slice(5, 7), 16)}m`;
 const INK = sgr("#060407"), BORDER = sgr("#C96AA2"), TEXT = sgr("#F6EFF3");
-const PANEL_BG = bg("#100A0F"), BADGE_BG = bg("#E0C27A"), BOLD = "\x1b[1m";
+const PANEL_BG = bg("#100A0F"), PINK_BG = bg("#F095C8"), BOLD = "\x1b[1m";
 
-/** The HUD row: the gold badge, the brew cups (context left, like Zelda hearts), the project, and the keys. */
-export function gameHud(snapshot: OfficeSnapshot, info: { project: string }): string {
-	const percent = snapshot.context.percent;
-	const left = percent === null ? 1 : 1 - Math.min(100, Math.max(0, percent)) / 100;
-	const full = Math.round(left * 10);
-	const cups = `${SAND}${"▮".repeat(full)}${MUTED}${"▯".repeat(10 - full)}${RESET}`;
-	const pct = percent === null ? "—" : `${Math.round(left * 100)}%`;
-	return ` ${BADGE_BG}${INK}${BOLD}✿ GENTLE HQ${RESET}  ${MUTED}BREW${RESET} ${cups} ${SAND}${pct}${RESET}  ${TEXT}${info.project}${RESET}  ${MUTED}alt+t thoughts · alt+g plain chat${RESET}`;
-}
-
-/** A framed panel like the design's boxes: a gold title in the top border, the body padded inside, panel background. */
-export function frame(title: string, body: readonly string[], width: number, height: number): string[] {
+/** A framed panel like the design's boxes: a gold title in the top border, the body padded inside, panel background, an optional footer in the bottom border. */
+export function frame(title: string, body: readonly string[], width: number, height: number, footer?: string): string[] {
 	const inner = Math.max(1, width - 4);
 	const paint = (line: string) => PANEL_BG + line.replaceAll(RESET, RESET + PANEL_BG) + RESET;
 	const top = `${BORDER}╔═ ${GOLD}${BOLD}${title}${RESET}${BORDER} ${"═".repeat(Math.max(0, width - 5 - [...title].length))}╗${RESET}`;
 	const rows = Array.from({ length: Math.max(0, height - 2) }, (_, i) => `${BORDER}║${RESET} ${fit(body[i] ?? "", inner)} ${BORDER}║${RESET}`);
-	return [top, ...rows, `${BORDER}╚${"═".repeat(Math.max(0, width - 2))}╝${RESET}`].map(paint);
+	const bottom = footer
+		? `${BORDER}╚═${RESET}${fit(` ${MUTED}${footer}${RESET} ${BORDER}${"═".repeat(width)}`, width - 3)}${BORDER}╝${RESET}`
+		: `${BORDER}╚${"═".repeat(Math.max(0, width - 2))}╝${RESET}`;
+	return [top, ...rows, bottom].map(paint);
 }
 
 /** The text column: a PARTY box (orchestrator, then each agent in flight) and a CHAT box with as much chat as fits, newest last. */
@@ -130,7 +145,7 @@ export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows
 	const chatHeight = rows - partyBox.length;
 	if (chatHeight < 3) return partyBox.slice(0, rows);
 	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-(chatHeight - 2));
-	return [...partyBox, ...frame("CHAT", body, width, chatHeight)];
+	return [...partyBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat")];
 }
 
 /** What an open question shows: its options, which one the ▶ is on, and whether the dialog drives the answer (T4e). */
@@ -172,4 +187,29 @@ export function rowsBelow(open: { askOptions: number | null; prompts: number }):
 	const ask = open.askOptions === null ? 0 : open.askOptions + ASK_SELECTOR_EXTRA_ROWS;
 	const prompt = open.prompts > 0 ? PROMPT_ROWS : 0;
 	return Math.max(EDITOR_ROWS, ask, prompt);
+}
+
+/* Where each sign sits on the 720 x 408 room (web/hq-scene.js): centre x and row y in room pixels. */
+const SIGN_AT = { project: { x: 360, y: 4 }, brew: { x: 72, y: 362 }, brand: { x: 360, y: 402 } } as const;
+
+/**
+ * The status as signs in the room (T4f): project and branch above the chalkboard, `BREW nn%` (context left) on the
+ * coffee bar, and the pink `✿ GENTLE HQ` plaque under the door. `image` is the room image's size in cells.
+ */
+export function sceneSigns(info: { project: string; branch: string | null; percent: number | null }, image: { cols: number; rows: number }): Sign[] {
+	const place = (at: { x: number; y: number }, text: string): Sign => {
+		const width = plainWidth(text);
+		const col = Math.max(0, Math.min(image.cols - width, Math.round((at.x / HQ_WIDTH) * image.cols - width / 2)));
+		const row = Math.min(image.rows - 1, Math.floor((at.y / HQ_HEIGHT) * image.rows));
+		return { row, col, text };
+	};
+	const sign = (fg: string, back: string, text: string) => `${back}${fg}${BOLD}${text}${RESET}`;
+	const left = info.percent === null ? "—" : `${Math.round(100 - Math.min(100, Math.max(0, info.percent)))}%`;
+	const where = info.branch ? `${info.project} · ${info.branch}` : info.project;
+	const room = Math.max(4, image.cols - 2);
+	return [
+		place(SIGN_AT.project, sign(GOLD, PANEL_BG, fit(` ${where} `, Math.min(plainWidth(` ${where} `), room)))),
+		place(SIGN_AT.brew, sign(SAND, PANEL_BG, ` BREW ${left} `)),
+		place(SIGN_AT.brand, sign(INK, PINK_BG, " ✿ GENTLE HQ ")),
+	];
 }

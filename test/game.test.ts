@@ -1,14 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { belowBackgrounds, composeGame, gameDialog, gameHud, gameLayout, gameSide, plainWidth, rowsBelow } from "../src/stage/game.ts";
+import { belowBackgrounds, composeGame, gameDialog, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
 describe("game mode layout (T3)", () => {
 	it("gives the room the width its height allows, and the rest to the text column", () => {
-		// 20 body rows of 19 px are 380 px tall; the room is 720x408, so it is 670 px wide, 74 cells of 9 px.
+		// No HUD row (T4f: the status lives in the scene). 21 rows of 19 px are 399 px; the room is 720x408, so 704 px, 78 cells of 9 px.
 		const layout = gameLayout(200, 21, { widthPx: 9, heightPx: 19 });
-		assert.deepEqual(layout, { hudRows: 1, bodyRows: 20, roomCols: 74, gap: 3, sideCols: 123 });
+		assert.deepEqual(layout, { hudRows: 0, bodyRows: 21, roomCols: 78, gap: 3, sideCols: 119 });
 	});
 
 	it("keeps at least 32 columns of text: a narrow terminal shrinks the room", () => {
@@ -44,11 +44,6 @@ describe("game mode lines", () => {
 describe("game mode text", () => {
 	const snapshot = (over: Record<string, unknown> = {}) => ({ v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null, ...over }) as never;
 
-	it("HUD: badge, brew cups for the context left, project, and the keys", () => {
-		assert.equal(plainText(gameHud(snapshot({ context: { percent: 38 } }), { project: "~/gentle-reef" })), " ✿ GENTLE HQ  BREW ▮▮▮▮▮▮▯▯▯▯ 62%  ~/gentle-reef  alt+t thoughts · alt+g plain chat");
-		assert.match(plainText(gameHud(snapshot(), { project: "~/x" })), /BREW ▮▮▮▮▮▮▮▮▮▮ — /);
-	});
-
 	it("side column: a PARTY box (orchestrator, then agents in flight) and a CHAT box filling the rest, newest at the bottom", () => {
 		const side = gameSide(snapshot({
 			agents: [
@@ -65,13 +60,14 @@ describe("game mode text", () => {
 			"║ c3                         ║",
 			"║ c4                         ║",
 			"║ c5                         ║",
-			"╚════════════════════════════╝",
+			"╚═ alt+t thoughts · alt+g pla╝",
 		]);
 	});
 
 	it("an empty chat says where to write", () => {
 		const side = gameSide(snapshot(), [], 7, 52).map(plainText);
 		assert.equal(side[4], "║ Write below; the orchestrator answers here.      ║");
+		assert.equal(side[6], "╚═ alt+t thoughts · alt+g plain chat " + "═".repeat(14) + "╝", "the keys live in the CHAT frame's bottom border");
 	});
 
 	it("every side line has the column width", () => {
@@ -128,5 +124,34 @@ describe("room left for Pi's prompts (T4d)", () => {
 	it("any other open Pi prompt (select, confirm, input, editor) frees 12 rows; the larger need wins", () => {
 		assert.equal(rowsBelow({ askOptions: null, prompts: 1 }), 12);
 		assert.equal(rowsBelow({ askOptions: 9, prompts: 1 }), 16);
+	});
+});
+
+describe("status signs in the scene (T4f)", () => {
+	it("project and branch above the chalkboard, BREW on the coffee bar, the pink GENTLE HQ plaque under the door", () => {
+		const signs = sceneSigns({ project: "~/gentle-reef", branch: "fix/10", percent: 38 }, { cols: 80, rows: 20 }).map(sign => ({ ...sign, text: plainText(sign.text) }));
+		assert.deepEqual(signs, [
+			{ row: 0, col: 28, text: " ~/gentle-reef · fix/10 " },
+			{ row: 17, col: 3, text: " BREW 62% " },
+			{ row: 19, col: 34, text: " ✿ GENTLE HQ " },
+		]);
+	});
+
+	it("no branch shows the project alone; unknown context shows BREW —", () => {
+		const signs = sceneSigns({ project: "~/x", branch: null, percent: null }, { cols: 80, rows: 20 }).map(sign => plainText(sign.text));
+		assert.deepEqual(signs, [" ~/x ", " BREW — ", " ✿ GENTLE HQ "]);
+	});
+
+	it("a sign never runs past the room's right edge", () => {
+		const [sign] = sceneSigns({ project: "~/" + "p".repeat(60), branch: "b", percent: 0 }, { cols: 40, rows: 10 });
+		assert.ok(sign!.col + plainWidth(sign!.text) <= 40);
+	});
+
+	it("composeGame draws signs on the room rows, after the image escape on row 0, under the dialog", () => {
+		const layout = { hudRows: 0, bodyRows: 4, roomCols: 12, gap: 1, sideCols: 2 };
+		const lines = composeGame(layout, { hud: "", room: ["\x1b_Gi\x1b\\"], side: [], signs: [{ row: 0, col: 4, text: "AB" }, { row: 2, col: 1, text: "CD" }, { row: 3, col: 0, text: "EF" }], dialog: ["dlg"] });
+		assert.equal(lines[0], "\x1b_Gi\x1b\\" + "    AB      " + "   ");
+		assert.equal(lines[2], " CD         " + "   ");
+		assert.equal(lines[3], "  dlg       " + "   ", "the dialog wins over a sign on its rows");
 	});
 });

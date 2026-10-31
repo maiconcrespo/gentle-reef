@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -9,7 +10,7 @@ import { createAnimator, isActing } from "../src/stage/animator.ts";
 import { chatLines, currentReply, initialChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
 import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
-import { belowBackgrounds, composeGame, gameDialog, gameHud, gameLayout, gameSide, rowsBelow } from "../src/stage/game.ts";
+import { belowBackgrounds, composeGame, gameDialog, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
@@ -82,14 +83,38 @@ function overlayStage(gameVisible: () => boolean): TerminalStage {
 	};
 }
 
+/** The room image's lines and the cells it actually covers (signs are placed on that grid). */
+interface RoomImage {
+	readonly lines: string[];
+	readonly cols: number;
+	readonly rows: number;
+}
+
 /**
- * The room as Kitty lines: the image on the first row (below cell backgrounds, so the dialog can cover part of it) and
- * one empty line per row it spans, as pi-tui's Image component returns them.
+ * The room as Kitty lines: the image on the first row (below cell backgrounds, so the dialog and the signs can cover
+ * parts of it) and one empty line per row it spans, as pi-tui's Image component returns them.
  */
-function roomLines(png: string, cols: number, rows: number, imageId: number): string[] {
+function roomImage(png: string, cols: number, rows: number, imageId: number): RoomImage {
 	const result = renderImage(png, getPngDimensions(png) ?? { widthPx: 1440, heightPx: 816 }, { maxWidthCells: cols, maxHeightCells: rows, imageId, moveCursor: false });
-	if (!result) return [];
-	return [belowBackgrounds(result.sequence), ...Array.from({ length: Math.max(0, result.rows - 1) }, () => "")];
+	if (!result) return { lines: [], cols, rows };
+	return { lines: [belowBackgrounds(result.sequence), ...Array.from({ length: Math.max(0, result.rows - 1) }, () => "")], cols: result.columns, rows: result.rows };
+}
+
+/** The current git branch for the project sign, read at most every 5 s; null outside a repository. */
+function branchReader(cwd: string): () => string | null {
+	let at = 0, value: string | null = null;
+	return () => {
+		const now = Date.now();
+		if (now - at < 5000) return value;
+		at = now;
+		try {
+			const name = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd, timeout: 500, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+			value = name && name !== "HEAD" ? name : null;
+		} catch {
+			value = null;
+		}
+		return value;
+	};
 }
 
 /**
@@ -155,6 +180,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	const markdown = markdownRenderer();
 	const imageId = allocateImageId();
 	const project = process.cwd().replace(homedir(), "~");
+	const branch = branchReader(process.cwd());
 
 	const open = (ctx: ExtensionContext): void => {
 		if (handle || opening) return;
@@ -163,7 +189,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 			tui => {
 				terminalRows = tui.terminal.rows;
 				write = data => tui.terminal.write(data);
-				let image: { png: string; cols: number; rows: number; lines: string[] } | undefined;
+				let image: { png: string; cols: number; rows: number; room: RoomImage } | undefined;
 				let lastWidth: number | undefined;
 				// T7: the room moves at a low frame rate only while someone acts, and never while the overlay is hidden.
 				const animator = createAnimator({ onTick: () => tui.requestRender() });
@@ -212,7 +238,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						const snapshot = hub.snapshot();
 						const png = pngFor({ ...frameFromSnapshot(snapshot), motion: animator.running(), t: animator.step() });
 						if (image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
-							image = { png, cols: layout.roomCols, rows: layout.bodyRows, lines: roomLines(png, layout.roomCols, layout.bodyRows, imageId) };
+							image = { png, cols: layout.roomCols, rows: layout.bodyRows, room: roomImage(png, layout.roomCols, layout.bodyRows, imageId) };
 						}
 						const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
 						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols);
@@ -228,7 +254,9 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						const wanted = (ask ? ask.options.length + (ask.custom ? 1 : 0) + (ask.interactive ? 1 : 0) + 1 : replyLines.length) + 2;
 						const dialogHeight = Math.min(Math.max(4, Math.floor(layout.bodyRows * 0.35)), Math.max(3, wanted));
 						const dialog = reply || ask ? gameDialog({ reply: replyLines, ask }, dialogWidth, dialogHeight) : undefined;
-						return composeGame(layout, { hud: gameHud(snapshot, { project }), room: image.lines, side, dialog });
+						// T4f: project and branch, the context left and the brand are signs in the room, not a HUD row.
+						const signs = sceneSigns({ project, branch: branch(), percent: snapshot.context.percent }, image.room);
+						return composeGame(layout, { hud: "", room: image.room.lines, side, dialog, signs });
 					},
 					invalidate() {
 						image = undefined;
