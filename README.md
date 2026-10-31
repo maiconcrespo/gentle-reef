@@ -13,7 +13,7 @@ It is a [Pi](https://github.com/earendil-works/pi) package. It reads the session
 | Mode | How to start it | State |
 | --- | --- | --- |
 | **Web window** | `/office` inside any gentle-shell session | **MVP, usable today.** Three layouts, live events, local-only server. |
-| **Terminal stage** | `gentle-reef` launcher | **Experimental.** The launcher works but only shows a one-line status widget. The full stage is designed ([preview](#terminal-mode-preview)) and still needs to be built. [Help wanted](CONTRIBUTING.md). |
+| **Terminal game mode** | `gentle-reef` launcher | **Preview.** The Gentle HQ office drawn over Pi's chat in terminals with Kitty graphics (Ghostty, Kitty), with the chat, live thinking and questions inside the scene ([see below](#terminal-game-mode)). Other terminals keep a one-line status widget. |
 
 ## What you see
 
@@ -51,25 +51,34 @@ Then, inside a gentle-shell session:
 
 The window is served on `127.0.0.1` behind a random token, accepts GET only, and loads no external resources. Every session decides for itself, and nothing is written to disk.
 
-### Terminal mode (experimental)
+### Terminal game mode (preview)
 
 ```bash
 ln -s "$PWD/bin/gentle-reef" ~/.local/bin/gentle-reef   # from a checkout
-gentle-reef                                             # gentle-shell with the office attached
+gentle-reef                                             # gentle-shell with the office over the chat
 ```
 
-## Terminal mode preview
+## Terminal game mode
 
-This is the target design for the terminal stage (`design/terminal-office/02-stage-over-chat.html`). It uses the same engine, drawn in Ghostty through the Kitty graphics protocol. `alt+r` cycles the stage between big, small and hidden, and each reply opens a game window with the speaker's portrait.
+![Gentle HQ in Ghostty: the room, the framed project sign, the chat column and a question as a game dialog](docs/images/terminal-game.png)
 
-![Design preview of the terminal stage with a reply window](docs/images/terminal-preview.png)
+`gentle-reef` draws **Gentle HQ** (design: `design/reef-quest/02-gentle-hq.html`) over Pi's chat, as one Kitty image plus terminal text. The editor stays at the bottom and keeps the focus, so you type as usual.
+
+- **The room**: every object is a gentle-shell feature. The orchestrator in its pink suit stands by a black chalkboard that marks the ODD steps; writers sit at drafting desks; the explorer maps the code; the 4R lens desks, the Judgment Day bench and the verify lab fill the review wing. It animates at 4 fps only while someone acts.
+- **Signs in the scene**: a framed sign with the project and branch hangs over the chalkboard, `BREW nn%` (the context left) sits under the coffee corner by the window, and a pink `✿ GENTLE HQ` plaque sits under the door.
+- **PARTY and CHAT**: the orchestrator and the agents in flight, then your messages and the replies with their markdown. Each tool call is one line that ends as `✓ 0.4s · 69 lines` or `✗`.
+- **Live thinking**: the orchestrator's thinking streams while it writes. `alt+t` shows or hides it.
+- **Dialog over the room**: the current reply, Pokémon style. A single-choice question becomes the selector: `↑↓` move the `▶`, `Enter` answers, `Esc` cancels, and `Other…` opens Pi's editor for your own answer.
+- **`alt+g`** switches between the game and plain Pi.
 
 ## Roadmap
 
 - [x] Event contract, adapter, hub and the local window server
 - [x] Web office: full, compact and story layouts, narration, idle crew, props, ask dialog
 - [x] `gentle-reef` launcher and per-session modes
-- [ ] **Terminal stage** built from the design (T7). This is the next milestone. [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
+- [x] **Terminal game mode** (Gentle HQ): the room as a Kitty image, chat, live thinking, the dialog as selector, signs in the scene [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
+- [ ] Terminal game mode, next: notices in a box, Doing now (todo), the orchestrator's portrait in the dialog, a monitor per running tool [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
+- [ ] Gentle HQ in the web window, with mouse-wheel zoom [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
 - [ ] Review inspectors that visit during native review (T4) [#2](https://github.com/maiconcrespo/gentle-reef/issues/2)
 - [ ] Judgment-day judges debating at their table (T5) [#3](https://github.com/maiconcrespo/gentle-reef/issues/3)
 - [ ] A boss character you move with the keyboard, which sends prompts over an authenticated channel (T8, security-sensitive) [#4](https://github.com/maiconcrespo/gentle-reef/issues/4)
@@ -77,7 +86,7 @@ This is the target design for the terminal stage (`design/terminal-office/02-sta
 
 ## Contributing
 
-Contributions are welcome, from sprites to the terminal stage. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. The full behavior is documented in [docs/reference.md](docs/reference.md).
+Contributions are welcome, from sprites to the terminal game mode. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. The full behavior is documented in [docs/reference.md](docs/reference.md).
 
 ## License
 
