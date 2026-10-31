@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { belowBackgrounds, composeGame, gameDialog, gameHud, gameLayout, gameSide, plainWidth } from "../src/stage/game.ts";
+import { belowBackgrounds, composeGame, gameDialog, gameHud, gameLayout, gameSide, plainWidth, rowsBelow } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -102,5 +102,20 @@ describe("dialog over the room (T4d)", () => {
 	it("an open question shows instead of the reply, with its options and ▶ on the first", () => {
 		const box = gameDialog({ reply: ["old"], ask: { question: "Push now?", options: ["Yes", "Not yet"] } }, 24, 6).map(plainText);
 		assert.deepEqual(box.slice(0, 5), ["╔═ ORCHESTRATOR · asks ╗", "║ Push now?            ║", "║ ▶ Yes                ║", "║   Not yet            ║", "║                      ║"]);
+	});
+});
+
+describe("room left for Pi's prompts (T4d)", () => {
+	it("leaves the editor's 4 rows normally", () => {
+		assert.equal(rowsBelow({ askOptions: null, prompts: 0 }), 4);
+	});
+
+	it("an open ask_user question frees its options plus the selector's title, custom answer, hints and frame", () => {
+		assert.equal(rowsBelow({ askOptions: 3, prompts: 0 }), 3 + 7);
+	});
+
+	it("any other open Pi prompt (select, confirm, input, editor) frees 12 rows; the larger need wins", () => {
+		assert.equal(rowsBelow({ askOptions: null, prompts: 1 }), 12);
+		assert.equal(rowsBelow({ askOptions: 9, prompts: 1 }), 16);
 	});
 });

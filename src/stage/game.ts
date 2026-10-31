@@ -144,3 +144,17 @@ export function gameDialog(content: { reply: readonly string[]; ask: { question:
 	}
 	return frame("ORCHESTRATOR", content.reply.slice(-(height - 2)), width, height);
 }
+
+const EDITOR_ROWS = 4;
+const ASK_SELECTOR_EXTRA_ROWS = 7;
+const PROMPT_ROWS = 12;
+
+/**
+ * Rows the overlay leaves free at the bottom for Pi: the editor normally, and enough for Pi's own selector while a
+ * question or prompt is open, so its options stay visible and selectable (the dialog over the room only shows them).
+ */
+export function rowsBelow(open: { askOptions: number | null; prompts: number }): number {
+	const ask = open.askOptions === null ? 0 : open.askOptions + ASK_SELECTOR_EXTRA_ROWS;
+	const prompt = open.prompts > 0 ? PROMPT_ROWS : 0;
+	return Math.max(EDITOR_ROWS, ask, prompt);
+}

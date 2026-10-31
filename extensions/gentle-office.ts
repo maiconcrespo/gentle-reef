@@ -8,7 +8,7 @@ import { openInBrowser } from "../src/server/open-browser.ts";
 import { createAnimator, isActing } from "../src/stage/animator.ts";
 import { chatLines, currentReply, initialChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
 import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
-import { belowBackgrounds, composeGame, gameDialog, gameHud, gameLayout, gameSide } from "../src/stage/game.ts";
+import { belowBackgrounds, composeGame, gameDialog, gameHud, gameLayout, gameSide, rowsBelow } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
@@ -37,6 +37,10 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 	});
 	// T4: the chat column reads Pi's own conversation events; alt+t shows or hides the orchestrator's thinking.
 	for (const name of CHAT_EVENTS) pi.on(name, (event: { type: string }) => game.chat(event));
+	// Pi's own prompts (select, confirm, input, editor) need room below the overlay. Our overlay is a ui.custom, so
+	// "custom" prompts are not counted: the scene must not shrink because of itself.
+	pi.on("ui_prompt_start", (event: { kind?: string }) => { if (event.kind !== "custom") game.prompt(+1); });
+	pi.on("ui_prompt_end", (event: { kind?: string }) => { if (event.kind !== "custom") game.prompt(-1); });
 	pi.registerShortcut("alt+t", {
 		description: "Gentle HQ: show or hide the orchestrator's thinking",
 		handler: () => game.toggleThoughts(),
@@ -87,9 +91,6 @@ function roomLines(png: string, cols: number, rows: number, imageId: number): st
 	return [belowBackgrounds(result.sequence), ...Array.from({ length: Math.max(0, result.rows - 1) }, () => "")];
 }
 
-/** Rows left under the overlay for Pi's editor and its frame, so the scene reaches it and Pi's chat never shows below. */
-const EDITOR_ROWS = 4;
-
 /**
  * Replies keep their formatting: pi-tui's Markdown with Pi's own theme, the same renderer as the plain chat. Parsing is
  * cached per text and width, since the column repaints on every streamed token.
@@ -126,6 +127,10 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let repaint: (() => void) | undefined;
 	let chat: ChatState = initialChat();
 	let thoughtsShown = true;
+	let prompts = 0;
+	let forceRepaint: (() => void) | undefined;
+	/** Rows under the overlay: the editor, or Pi's selector while a question or prompt is open (src/stage/game.ts rowsBelow). */
+	const reserved = (): number => rowsBelow({ askOptions: hub.snapshot().ask?.questions[0]?.options.length ?? null, prompts });
 	const markdown = markdownRenderer();
 	const imageId = allocateImageId();
 	const project = process.cwd().replace(homedir(), "~");
@@ -144,8 +149,15 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				const acting = (): boolean => isActing(frameFromSnapshot(hub.snapshot()));
 				animate = on => animator.update(on && acting());
 				repaint = () => tui.requestRender();
+				// The overlay shrinking or growing exposes or covers Pi's rows, which only a full repaint redraws.
+				let lastReserved = reserved();
+				forceRepaint = () => queueMicrotask(() => tui.requestRender(true));
 				const unsubscribe = hub.subscribe(() => {
 					animator.update(!(handle?.isHidden() ?? false) && acting());
+					if (reserved() !== lastReserved) {
+						lastReserved = reserved();
+						forceRepaint?.();
+					}
 					tui.requestRender();
 				});
 				animator.update(acting());
@@ -158,7 +170,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							lastWidth = width;
 						}
 						terminalRows = tui.terminal.rows;
-						const layout = gameLayout(width, Math.max(1, terminalRows - EDITOR_ROWS), getCellDimensions());
+						const layout = gameLayout(width, Math.max(1, terminalRows - reserved()), getCellDimensions());
 						if (!layout) return [];
 						const snapshot = hub.snapshot();
 						const png = pngFor({ ...frameFromSnapshot(snapshot), motion: animator.running(), t: animator.step() });
@@ -183,6 +195,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 					},
 					dispose() {
 						repaint = undefined;
+						forceRepaint = undefined;
 						animator.stop();
 						unsubscribe();
 					},
@@ -190,7 +203,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 			},
 			{
 				overlay: true,
-				overlayOptions: () => ({ anchor: "top-left", width: "100%", maxHeight: Math.max(1, terminalRows - EDITOR_ROWS), margin: 0, nonCapturing: true }),
+				overlayOptions: () => ({ anchor: "top-left", width: "100%", maxHeight: Math.max(1, terminalRows - reserved()), margin: 0, nonCapturing: true }),
 				onHandle: h => {
 					handle = h;
 					opening = false;
@@ -212,6 +225,12 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 			const next = reduceChat(chat, { ...event, at: Date.now() });
 			if (next === chat) return;
 			chat = next;
+			repaint?.();
+		},
+		/** A Pi prompt opened (+1) or closed (-1): the overlay makes room for it. */
+		prompt(change: number): void {
+			prompts = Math.max(0, prompts + change);
+			forceRepaint?.();
 			repaint?.();
 		},
 		toggleThoughts(): void {
