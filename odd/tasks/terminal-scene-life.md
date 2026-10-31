@@ -11,7 +11,7 @@ Branch: feat/terminal-scene-life (from main 64cb43b). Issues: #3 (judges). Follo
 - S5 — The user as the Boss: "y yo YOU, el Boss de Sudadera negra con capucha, y un B fucsia en el centro. pantalones blanco corto y zapatilla blanca, un keyboard de ordenador en la mano." Placement agreed ("ok dale asi mismo"): in front of the orchestrator's desk while the orchestrator works, by the door when everything is still.
 
 ## Tasks
-- T1 — S1: alt+c hides the whole side panel. Route: inline. Commit: pending.
+- T1 — S1: alt+c hides the whole side panel. gameLayout({ panel: false }) gives an inset that centres the room, hiddenPanel() the blank side with the key hint; the toggle forces one full repaint. Route: inline. Commit: 51cae8e. Tests: `npm test` 427/427. Pending: the user's look in Ghostty.
 - T2 — S2: judges debate during a judgment day, gavel strike at the end. Route: inline. Commit: pending.
 - T3 — S3: worker screens and the coffee break. Route: inline. Commit: pending.
 - T4 — S4: orchestrator at its monitor. Route: inline. Commit: pending.
@@ -21,3 +21,4 @@ Branch: feat/terminal-scene-life (from main 64cb43b). Issues: #3 (judges). Follo
 ## Log
 - L1 — User: "ok arrancamos con alt+c #3 ok , animamos durante un judgment day. los workers estan todo el tiempo trabajando, mejor que la pantalla este parada con un imagen estatica de un juego cuando no hacen nada, que se levanten y tomen un cafe a veces, si llevan mucho parado. que te parece? el orchestrator que se mueva y mire la pantalla cuando toca hacer algo, y yo YOU, el Boss de Sudadera negra con capucha, y un B fucsia en el centro. pantalones blanco corto y zapatilla blanca, un keyboard de ordenador en la mano."
 - L2 — Plan proposed (S1-S5 as agreed above); user: "ok dale asi mismo".
+- L3 — User: "para un momento cuando puedas guarda la info, tengo que reiniciar el ordanador. par que vuelva todo actualizado." Stopped after T1; T2-T6 next.
