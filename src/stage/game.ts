@@ -87,18 +87,20 @@ const ORCHESTRATOR_TEXT: Record<string, string> = { idle: "resting", thinking: "
 export function gameHud(snapshot: OfficeSnapshot, info: { project: string }): string {
 	const percent = snapshot.context.percent;
 	const ctx = percent === null ? "ctx —" : `ctx ${Math.round(percent)}%`;
-	return ` ${GOLD}✿ GENTLE HQ${RESET} · ${info.project} · ${SAND}${ctx}${RESET} · ${MUTED}alt+g plain chat${RESET}`;
+	return ` ${GOLD}✿ GENTLE HQ${RESET} · ${info.project} · ${SAND}${ctx}${RESET} · ${MUTED}alt+t thoughts · alt+g plain chat${RESET}`;
 }
 
-/** The text column: the party (orchestrator first, then each agent in flight), then the chat (T4 fills it). */
-export function gameSide(snapshot: OfficeSnapshot): string[] {
+/** The text column: the party (orchestrator first, then each agent in flight), then as much of the chat as fits in `rows`, newest last. */
+export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows: number): string[] {
 	const row = (name: string, text: string) => `${PINK}▶${RESET} ${name.padEnd(14)}${MUTED}${text}${RESET}`;
-	return [
+	const head = [
 		`${GOLD}PARTY${RESET}`,
 		row("orchestrator", ORCHESTRATOR_TEXT[snapshot.orchestrator.state] ?? snapshot.orchestrator.state),
 		...snapshot.agents.filter(agent => IN_FLIGHT.has(agent.status)).map(agent => row(agent.role, agent.status)),
 		"",
 		`${GOLD}CHAT${RESET}`,
-		`${MUTED}Messages, live thoughts and confirmations arrive here (T4).${RESET}`,
 	];
+	const room = Math.max(0, rows - head.length);
+	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-room);
+	return [...head, ...body.slice(0, room)];
 }

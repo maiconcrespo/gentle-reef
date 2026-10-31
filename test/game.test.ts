@@ -44,8 +44,8 @@ describe("game mode lines", () => {
 describe("game mode text", () => {
 	const snapshot = (over: Record<string, unknown> = {}) => ({ v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null, ...over }) as never;
 
-	it("HUD: brand, project, context and the key back to plain Pi", () => {
-		assert.equal(plainText(gameHud(snapshot({ context: { percent: 38 } }), { project: "~/gentle-reef" })), " ✿ GENTLE HQ · ~/gentle-reef · ctx 38% · alt+g plain chat");
+	it("HUD: brand, project, context, and the keys for thoughts and plain Pi", () => {
+		assert.equal(plainText(gameHud(snapshot({ context: { percent: 38 } }), { project: "~/gentle-reef" })), " ✿ GENTLE HQ · ~/gentle-reef · ctx 38% · alt+t thoughts · alt+g plain chat");
 		assert.match(plainText(gameHud(snapshot(), { project: "~/x" })), /ctx — /);
 	});
 
@@ -56,7 +56,13 @@ describe("game mode text", () => {
 				{ v: 1, type: "subagent", id: "a", agent: "gentle-ai-worker", role: "worker", label: "gentle-ai-worker", status: "running" },
 				{ v: 1, type: "subagent", id: "b", agent: "gentle-ai-explore", role: "explore", label: "gentle-ai-explore", status: "completed" },
 			],
-		})).map(plainText);
-		assert.deepEqual(side.slice(0, 5), ["PARTY", "▶ orchestrator  waiting for you", "▶ worker        running", "", "CHAT"]);
+		}), [], 10).map(plainText);
+		assert.deepEqual(side.slice(0, 6), ["PARTY", "▶ orchestrator  waiting for you", "▶ worker        running", "", "CHAT", "Write below; the orchestrator answers here."]);
+	});
+
+	it("the chat fills the rows left under the party, newest at the bottom", () => {
+		const chat = ["c1", "c2", "c3", "c4", "c5"];
+		const side = gameSide(snapshot(), chat, 7).map(plainText);
+		assert.deepEqual(side, ["PARTY", "▶ orchestrator  resting", "", "CHAT", "c3", "c4", "c5"]);
 	});
 });

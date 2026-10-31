@@ -6,6 +6,7 @@ import { OfficeHub } from "../src/adapter/hub.ts";
 import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
 import { createAnimator, isActing } from "../src/stage/animator.ts";
+import { chatLines, initialChat, reduceChat, type ChatState } from "../src/stage/chat.ts";
 import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
 import { composeGame, gameHud, gameLayout, gameSide } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
@@ -34,6 +35,12 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 		}
 		controller.refreshWidget();
 	});
+	// T4: the chat column reads Pi's own conversation events; alt+t shows or hides the orchestrator's thinking.
+	for (const name of CHAT_EVENTS) pi.on(name, (event: { type: string }) => game.chat(event));
+	pi.registerShortcut("alt+t", {
+		description: "Gentle HQ: show or hide the orchestrator's thinking",
+		handler: () => game.toggleThoughts(),
+	});
 	pi.registerShortcut("alt+g", {
 		description: "Gentle HQ: switch between game mode and plain chat",
 		handler: ctx => {
@@ -44,6 +51,9 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 }
 
 const kitty = (): boolean => getCapabilities().images === "kitty";
+
+/** Pi events the game mode chat shows (src/stage/chat.ts). */
+const CHAT_EVENTS = ["input", "message_update", "message_end", "tool_execution_start", "tool_execution_end"] as const;
 
 /** The room PNG for a frame, re-encoded only when what the room shows changes (a new animation step included). */
 function roomPng(): (frame: HqFrame) => string {
@@ -80,6 +90,9 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let terminalRows = 40;
 	let write: ((data: string) => void) | undefined;
 	let animate: ((on: boolean) => void) | undefined;
+	let repaint: (() => void) | undefined;
+	let chat: ChatState = initialChat();
+	let thoughtsShown = true;
 	const imageId = allocateImageId();
 	const project = process.cwd().replace(homedir(), "~");
 
@@ -96,6 +109,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				const animator = createAnimator({ onTick: () => tui.requestRender() });
 				const acting = (): boolean => isActing(frameFromSnapshot(hub.snapshot()));
 				animate = on => animator.update(on && acting());
+				repaint = () => tui.requestRender();
 				const unsubscribe = hub.subscribe(() => {
 					animator.update(!(handle?.isHidden() ?? false) && acting());
 					tui.requestRender();
@@ -118,12 +132,14 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							const view = new Image(png, "image/png", { fallbackColor: text => theme.fg("muted", text) }, { maxWidthCells: layout.roomCols, maxHeightCells: layout.bodyRows, imageId });
 							image = { png, cols: layout.roomCols, rows: layout.bodyRows, view };
 						}
-						return composeGame(layout, { hud: gameHud(snapshot, { project }), room: image.view.render(layout.roomCols + 2), side: gameSide(snapshot) });
+						const side = gameSide(snapshot, chatLines(chat, { width: layout.sideCols, thoughtsShown }), layout.bodyRows);
+						return composeGame(layout, { hud: gameHud(snapshot, { project }), room: image.view.render(layout.roomCols + 2), side });
 					},
 					invalidate() {
 						image?.view.invalidate();
 					},
 					dispose() {
+						repaint = undefined;
 						animator.stop();
 						unsubscribe();
 					},
@@ -148,6 +164,17 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 
 	return {
 		visible: () => (handle !== undefined && !handle.isHidden()) || opening,
+		/** One Pi conversation event into the chat column; repaints only when it changed something. */
+		chat(event: { type: string }): void {
+			const next = reduceChat(chat, { ...event, at: Date.now() });
+			if (next === chat) return;
+			chat = next;
+			repaint?.();
+		},
+		toggleThoughts(): void {
+			thoughtsShown = !thoughtsShown;
+			repaint?.();
+		},
 		open,
 		toggle(ctx: ExtensionContext): void {
 			if (!handle) return open(ctx);
