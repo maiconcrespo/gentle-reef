@@ -256,19 +256,25 @@ describe("room left for Pi's prompts (T4d)", () => {
 });
 
 describe("status signs in the scene (T4f)", () => {
-	it("a framed project-and-branch sign hanging over the chalkboard, BREW under the coffee corner, the pink GENTLE HQ plaque under the door", () => {
+	it("a framed project-and-branch sign hanging over the chalkboard, BREW under the coffee corner, the pink GENTLE HQ plaque on the orchestrator's desk", () => {
 		const signs = sceneSigns({ project: "~/gentle-reef", branch: "fix/10", percent: 38 }, { cols: 80, rows: 20 }).map(sign => ({ ...sign, text: plainText(sign.text) }));
 		assert.deepEqual(signs, [
 			{ row: 0, col: 27, text: "║ ~/gentle-reef · fix/10 ║" },
 			{ row: 1, col: 27, text: "╚════════════════════════╝" },
 			{ row: 3, col: 16, text: " BREW 62% " },
-			{ row: 19, col: 34, text: " ✿ GENTLE HQ " },
+			{ row: 6, col: 35, text: "✿ GENTLE HQ" },
 		]);
+	});
+
+	it("the plaque is centred on the desk (x 320-416 in room pixels, y 124), not under the door", () => {
+		const [, , , plaque] = sceneSigns({ project: "~/x", branch: null, percent: null }, { cols: 720, rows: 408 });
+		assert.equal(plaque!.row, 124);
+		assert.ok(plaque!.col >= 320 && plaque!.col + plainWidth(plaque!.text) <= 416, `col ${plaque!.col}`);
 	});
 
 	it("no branch shows the project alone; unknown context shows BREW —", () => {
 		const signs = sceneSigns({ project: "~/x", branch: null, percent: null }, { cols: 80, rows: 20 }).map(sign => plainText(sign.text));
-		assert.deepEqual(signs, ["║ ~/x ║", "╚═════╝", " BREW — ", " ✿ GENTLE HQ "]);
+		assert.deepEqual(signs, ["║ ~/x ║", "╚═════╝", " BREW — ", "✿ GENTLE HQ"]);
 	});
 
 	it("a sign never runs past the room's right edge", () => {

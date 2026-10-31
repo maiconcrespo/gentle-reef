@@ -285,18 +285,19 @@ export function rowsBelow(open: { askOptions: number | null; prompts: number }):
 }
 
 /* Where each sign sits on the 720 x 408 room (web/hq-scene.js): centre x and row y in room pixels. */
-const SIGN_AT = { project: { x: 360, y: 4 }, brew: { x: 191, y: 78 }, brand: { x: 360, y: 402 } } as const;
+const SIGN_AT = { project: { x: 360, y: 4 }, brew: { x: 191, y: 78 }, brand: { x: 368, y: 124 } } as const;
 
 /**
  * The status as signs in the room (T4f): a framed project-and-branch sign hanging over the chalkboard (its text row and
- * its bottom border), `BREW nn%` (context left) under the coffee corner by the window, and the pink `✿ GENTLE HQ` plaque
- * under the door. `image` is the room image's size in cells.
+ * its bottom border), `BREW nn%` (context left) under the coffee corner by the window, and the pink `✿ GENTLE HQ` nameplate
+ * on the orchestrator's desk. `image` is the room image's size in cells.
  */
 export function sceneSigns(info: { project: string; branch: string | null; percent: number | null }, image: { cols: number; rows: number }): Sign[] {
 	const place = (at: { x: number; y: number }, text: string): Sign => {
 		const width = plainWidth(text);
-		const col = Math.max(0, Math.min(image.cols - width, Math.round((at.x / HQ_WIDTH) * image.cols - width / 2)));
-		const row = Math.min(image.rows - 1, Math.floor((at.y / HQ_HEIGHT) * image.rows));
+		// Multiply before dividing: (y / 408) * rows can land just below a row boundary.
+		const col = Math.max(0, Math.min(image.cols - width, Math.round((at.x * image.cols) / HQ_WIDTH - width / 2)));
+		const row = Math.min(image.rows - 1, Math.floor((at.y * image.rows) / HQ_HEIGHT));
 		return { row, col, text };
 	};
 	const sign = (fg: string, back: string, text: string) => `${back}${fg}${BOLD}${text}${RESET}`;
@@ -310,6 +311,6 @@ export function sceneSigns(info: { project: string; branch: string | null; perce
 		{ ...hanging, text: framed(`║${label}║`) },
 		{ row: Math.min(image.rows - 1, hanging.row + 1), col: hanging.col, text: framed(`╚${"═".repeat(plainWidth(label))}╝`) },
 		place(SIGN_AT.brew, sign(SAND, PANEL_BG, ` BREW ${left} `)),
-		place(SIGN_AT.brand, sign(INK, PINK_BG, " ✿ GENTLE HQ ")),
+		place(SIGN_AT.brand, sign(INK, PINK_BG, "✿ GENTLE HQ")),
 	];
 }
