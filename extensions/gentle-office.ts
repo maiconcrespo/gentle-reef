@@ -8,11 +8,11 @@ import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
 import { createAnimator, isActing } from "../src/stage/animator.ts";
 import { chatLines, currentReply, initialChat, jobsFromChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
-import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
+import { frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from "../src/stage/frame.ts";
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
-import { belowBackgrounds, composeGame, gameDialog, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
@@ -187,6 +187,18 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	};
 	const markdown = markdownRenderer();
 	const imageId = allocateImageId();
+	// T4b: the orchestrator's portrait in the dialog, a second Kitty image drawn over the dialog's panel.
+	const portraitId = allocateImageId();
+	const portraitPng = renderPortraitPng();
+	let portrait: { rows: number; image: string } | undefined;
+	let portraitShown = false;
+	const portraitFor = (rows: number): string => {
+		if (portrait?.rows !== rows) {
+			const result = renderImage(portraitPng, { widthPx: 96, heightPx: 96 }, { maxWidthCells: PORTRAIT_COLS, maxHeightCells: rows, imageId: portraitId, moveCursor: false });
+			portrait = { rows, image: result ? aboveBackgrounds(result.sequence) : "" };
+		}
+		return portrait.image;
+	};
 	const project = process.cwd().replace(homedir(), "~");
 	const branch = branchReader(process.cwd());
 
@@ -258,16 +270,23 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							? { question: question.question, options: question.options, custom: question.custom === true && driving, selected: driving ? selector!.choice.index() : 0, interactive: driving }
 							: null;
 						const dialogWidth = layout.roomCols - 4;
-						const replyLines = reply ? markdown(reply, dialogWidth - 4) : [];
+						// T4b: with room for the portrait the text starts after it, and the box keeps the portrait's 4 rows.
+						const withPortrait = portraitFits(Number.POSITIVE_INFINITY, dialogWidth);
+						const replyLines = reply ? markdown(reply, dialogWidth - 4 - (withPortrait ? PORTRAIT_COLS + 1 : 0)) : [];
 						const wanted = (ask ? ask.options.length + (ask.custom ? 1 : 0) + (ask.interactive ? 1 : 0) + 1 : replyLines.length) + 2;
-						const dialogHeight = Math.min(Math.max(4, Math.floor(layout.bodyRows * 0.35)), Math.max(3, wanted));
-						const dialog = reply || ask ? gameDialog({ reply: replyLines, ask }, dialogWidth, dialogHeight) : undefined;
+						const dialogHeight = Math.min(Math.max(4, Math.floor(layout.bodyRows * 0.35)), Math.max(withPortrait ? 4 : 3, wanted));
+						const showPortrait = Boolean(reply || ask) && portraitFits(dialogHeight, dialogWidth);
+						const dialog = reply || ask ? gameDialog({ reply: replyLines, ask }, dialogWidth, dialogHeight, showPortrait ? { image: portraitFor(dialogHeight - 2) } : undefined) : undefined;
+						// A Kitty image stays until deleted: when the dialog goes away, so must its portrait.
+						if (portraitShown && !showPortrait) queueMicrotask(() => write?.(deleteKittyImage(portraitId)));
+						portraitShown = showPortrait;
 						// T4f: project and branch, the context left and the brand are signs in the room, not a HUD row.
 						const signs = sceneSigns({ project, branch: branch(), percent: snapshot.context.percent }, image.room);
 						return composeGame(layout, { hud: "", room: image.room.lines, side, dialog, signs });
 					},
 					invalidate() {
 						image = undefined;
+						portrait = undefined;
 					},
 					dispose() {
 						stopKeys();
@@ -337,7 +356,12 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 			handle.setHidden(hide);
 			animate?.(!hide);
 			// A Kitty image stays on screen until it is deleted; the overlay's lines going away does not remove it.
-			if (hide) write?.(deleteKittyImage(imageId));
+			if (hide) {
+				write?.(deleteKittyImage(imageId) + deleteKittyImage(portraitId));
+				// Shown again, the portrait must be transmitted again.
+				portrait = undefined;
+				portraitShown = false;
+			}
 		},
 	};
 }

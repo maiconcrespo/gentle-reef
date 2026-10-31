@@ -1,5 +1,5 @@
 import type { OfficeSnapshot } from "../adapter/hub.ts";
-import { HQ_HEIGHT, HQ_WIDTH, drawHq } from "../../web/hq-scene.js";
+import { HQ_HEIGHT, HQ_WIDTH, drawHq, drawHqPortrait } from "../../web/hq-scene.js";
 import { encodePng } from "./png.ts";
 import { createRaster, upscale } from "./raster.ts";
 
@@ -43,5 +43,15 @@ export function renderHqPng(frame: HqFrame, scale = 2): string {
 	const raster = createRaster(HQ_WIDTH, HQ_HEIGHT);
 	drawHq(raster, frame);
 	const out = scale === 1 ? raster : upscale(raster, scale);
+	return encodePng(out.data, out.width, out.height).toString("base64");
+}
+
+const PORTRAIT_PX = 24;
+
+/** The orchestrator's dialog portrait (web/hq-scene.js drawHqPortrait) as base64 PNG at 4x: 96 x 96. */
+export function renderPortraitPng(scale = 4): string {
+	const raster = createRaster(PORTRAIT_PX, PORTRAIT_PX);
+	drawHqPortrait(raster);
+	const out = upscale(raster, scale);
 	return encodePng(out.data, out.width, out.height).toString("base64");
 }

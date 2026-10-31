@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { belowBackgrounds, composeGame, gameDialog, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -103,6 +103,40 @@ describe("game mode text", () => {
 
 	it("every side line has the column width", () => {
 		for (const line of gameSide(snapshot(), ["x".repeat(40)], 8, 24)) assert.equal(plainWidth(line), 24);
+	});
+});
+
+describe("the orchestrator's portrait in the dialog (T4b)", () => {
+	const IMG = "\x1b_Ga=T,z=-1,i=7;AAAA\x1b\\";
+	const strip = (line: string) => plainText(line).replace(/\x1b_[^\x1b]*\x1b\\/g, "");
+
+	it("the portrait takes PORTRAIT_COLS at the left of the dialog; its image starts on the first inner row, the text moves right", () => {
+		assert.equal(PORTRAIT_COLS, 8);
+		const box = gameDialog({ reply: ["Hello there", "second"], ask: null }, 30, 4, { image: IMG });
+		assert.deepEqual(box.map(strip), [
+			"╔═ ORCHESTRATOR ═════════════╗",
+			"║          Hello there       ║",
+			"║          second            ║",
+			"╚════════════════════════════╝",
+		]);
+		assert.ok(plainText(box[1]!).startsWith(`║ ${IMG}`), "the image escape sits right after the left border");
+		assert.ok(!box[2]!.includes(IMG), "only the first inner row carries the image");
+	});
+
+	it("an ask dialog makes room for the portrait the same way", () => {
+		const box = gameDialog({ reply: [], ask: { question: "Push now?", options: ["Yes", "No"], interactive: true } }, 30, 6, { image: IMG }).map(strip);
+		assert.equal(box[1], "║          Push now?         ║");
+		assert.equal(box[2], "║          ▶ Yes             ║");
+	});
+
+	it("the portrait fits only in a dialog of at least 4 rows and 40 columns", () => {
+		assert.equal(portraitFits(4, 40), true);
+		assert.equal(portraitFits(3, 60), false);
+		assert.equal(portraitFits(8, 39), false);
+	});
+
+	it("the portrait image draws above the dialog's cell background and below its text (Kitty z=-1)", () => {
+		assert.equal(aboveBackgrounds("\x1b_Ga=T,f=100,i=7;AAAA\x1b\\"), "\x1b_Ga=T,z=-1,f=100,i=7;AAAA\x1b\\");
 	});
 });
 

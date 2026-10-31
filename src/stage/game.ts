@@ -174,8 +174,37 @@ export interface DialogAsk {
 	readonly interactive?: boolean;
 }
 
-/** The dialog over the room: the current reply in a framed ORCHESTRATOR panel (tail when long), or an open question as a selector. */
-export function gameDialog(content: { reply: readonly string[]; ask: DialogAsk | null }, width: number, height: number): string[] {
+/** Columns the orchestrator's portrait takes at the dialog's left (T4b); the text starts one column after it. */
+export const PORTRAIT_COLS = 8;
+const PORTRAIT_MIN_ROWS = 4;
+const PORTRAIT_MIN_COLS = 40;
+
+/** Whether a dialog of this size has room for the portrait. */
+export function portraitFits(height: number, width: number): boolean {
+	return height >= PORTRAIT_MIN_ROWS && width >= PORTRAIT_MIN_COLS;
+}
+
+/* Kitty z-index under text and over cell backgrounds: the portrait shows on the dialog's panel, like a sprite in a text box. */
+const ABOVE_BACKGROUNDS = -1;
+
+/** Puts a pi-tui Kitty sequence above cell backgrounds and below text. */
+export function aboveBackgrounds(sequence: string): string {
+	return sequence.replace("\x1b_Ga=T,", `\x1b_Ga=T,z=${ABOVE_BACKGROUNDS},`);
+}
+
+/**
+ * The dialog over the room: the current reply in a framed ORCHESTRATOR panel (tail when long), or an open question as a
+ * selector. With `portrait`, its Kitty image starts on the first inner row and every line moves PORTRAIT_COLS + 1 right.
+ */
+export function gameDialog(content: { reply: readonly string[]; ask: DialogAsk | null }, width: number, height: number, portrait?: { image: string }): string[] {
+	const boxed = gameDialogBody(content, width, height);
+	if (!portrait) return frame(boxed.title, boxed.body, width, height);
+	const pad = " ".repeat(PORTRAIT_COLS + 1);
+	const rows = Array.from({ length: Math.max(0, height - 2) }, (_, i) => (i === 0 ? portrait.image : "") + pad + (boxed.body[i] ?? ""));
+	return frame(boxed.title, rows, width, height);
+}
+
+function gameDialogBody(content: { reply: readonly string[]; ask: DialogAsk | null }, _width: number, height: number): { title: string; body: string[] } {
 	const ask = content.ask;
 	if (ask) {
 		const items = ask.custom ? [...ask.options, "Other… (write your own)"] : [...ask.options];
@@ -185,9 +214,9 @@ export function gameDialog(content: { reply: readonly string[]; ask: DialogAsk |
 			...items.map((item, i) => (i === selected ? `${PINK}▶${RESET} ${TEXT}${BOLD}${item}${RESET}` : `  ${MUTED}${item}${RESET}`)),
 			...(ask.interactive ? [`${MUTED}↑↓ choose · Enter · Esc${RESET}`] : []),
 		];
-		return frame("ORCHESTRATOR · asks", body, width, height);
+		return { title: "ORCHESTRATOR · asks", body };
 	}
-	return frame("ORCHESTRATOR", content.reply.slice(-(height - 2)), width, height);
+	return { title: "ORCHESTRATOR", body: content.reply.slice(-(height - 2)) };
 }
 
 const EDITOR_ROWS = 4;

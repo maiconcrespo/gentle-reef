@@ -66,9 +66,10 @@ gentle-reef                                             # gentle-shell with the 
 
 - **The room**: every object is a gentle-shell feature. The orchestrator in its pink suit stands by a black chalkboard that marks the ODD steps; writers sit at drafting desks; the explorer maps the code; the 4R lens desks, the Judgment Day bench and the verify lab fill the review wing. It animates at 4 fps only while someone acts.
 - **Signs in the scene**: a framed sign with the project and branch hangs over the chalkboard, `BREW nn%` (the context left) sits under the coffee corner by the window, and a pink `✿ GENTLE HQ` plaque sits under the door.
+- **Notices, Doing now and the monitor wall**: warnings from any extension show in a box, PARTY shows the todo task in progress, and each running tool lights a screen on the wall.
 - **PARTY and CHAT**: the orchestrator and the agents in flight, then your messages and the replies with their markdown. Each tool call is one line that ends as `✓ 0.4s · 69 lines` or `✗`.
 - **Live thinking**: the orchestrator's thinking streams while it writes. `alt+t` shows or hides it.
-- **Dialog over the room**: the current reply, Pokémon style. A single-choice question becomes the selector: `↑↓` move the `▶`, `Enter` answers, `Esc` cancels, and `Other…` opens Pi's editor for your own answer.
+- **Dialog over the room**: the current reply with the orchestrator's portrait, Pokémon style. A single-choice question becomes the selector: `↑↓` move the `▶`, `Enter` answers, `Esc` cancels, and `Other…` opens Pi's editor for your own answer.
 - **`alt+g`** switches between the game and plain Pi.
 
 ## Roadmap
@@ -76,8 +77,7 @@ gentle-reef                                             # gentle-shell with the 
 - [x] Event contract, adapter, hub and the local window server
 - [x] Web office: full, compact and story layouts, narration, idle crew, props, ask dialog
 - [x] `gentle-reef` launcher and per-session modes
-- [x] **Terminal game mode** (Gentle HQ): the room as a Kitty image, chat, live thinking, the dialog as selector, signs in the scene [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
-- [ ] Terminal game mode, next: notices in a box, Doing now (todo), the orchestrator's portrait in the dialog, a monitor per running tool [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
+- [x] **Terminal game mode** (Gentle HQ): the room as a Kitty image, chat, live thinking, the dialog as selector with the orchestrator's portrait, signs in the scene, notices, Doing now and the monitor wall [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
 - [ ] Gentle HQ in the web window, with mouse-wheel zoom [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
 - [ ] Review inspectors that visit during native review (T4) [#2](https://github.com/maiconcrespo/gentle-reef/issues/2)
 - [ ] Judgment-day judges debating at their table (T5) [#3](https://github.com/maiconcrespo/gentle-reef/issues/3)

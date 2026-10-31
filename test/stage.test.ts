@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { inflateSync } from "node:zlib";
 import { encodePng } from "../src/stage/png.ts";
 import { createRaster } from "../src/stage/raster.ts";
-import { frameFromSnapshot, renderHqPng } from "../src/stage/frame.ts";
-import { HQ_HEIGHT, HQ_PALETTE, HQ_WIDTH, drawHq } from "../web/hq-scene.js";
+import { frameFromSnapshot, renderHqPng, renderPortraitPng } from "../src/stage/frame.ts";
+import { HQ_HEIGHT, HQ_PALETTE, HQ_WIDTH, drawHq, drawHqPortrait } from "../web/hq-scene.js";
 
 /** Splits a PNG into its chunks, checking each CRC. */
 function chunks(png: Buffer): Array<{ type: string; data: Buffer }> {
@@ -105,6 +105,16 @@ describe("Gentle HQ room shows the session state (T2)", () => {
 		assert.equal(hex(r, 620, 17), P("bg"), "screen 4: off");
 		assert.equal(hex(r, 524, 39), P("bg"), "second row: off");
 		assert.equal(hex(paint({}), 524, 17), P("bg"), "no jobs: every screen off");
+	});
+
+	it("the dialog portrait (T4b) is the orchestrator's 24 x 24 face as a PNG at 4x, painted", () => {
+		const png = Buffer.from(renderPortraitPng(), "base64");
+		const ihdr = chunks(png)[0]!;
+		assert.equal(ihdr.type, "IHDR");
+		assert.deepEqual([ihdr.data.readUInt32BE(0), ihdr.data.readUInt32BE(4)], [96, 96]);
+		const r = createRaster(24, 24);
+		drawHqPortrait(r);
+		assert.ok(r.data.some((v, i) => i % 4 === 3 && v > 0), "the portrait paints something");
 	});
 
 	it("the old coffee bar at the bottom left is gone: floor where the counter stood (the dialog covered it)", () => {
