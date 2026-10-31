@@ -48,6 +48,8 @@ interface WidgetUi {
  */
 export interface TerminalStage {
 	available(): boolean;
+	/** Game mode covers the screen with its own HUD: the widget is cleared instead of repeating it. */
+	covered?(): boolean;
 	widget(snapshot: OfficeSnapshot): WidgetFactory;
 }
 
@@ -130,7 +132,7 @@ export function registerOffice(
 	// The widget only exists in terminal mode and only once Pi has handed us the session's ui.
 	// It is the stage image when the terminal shows Kitty images, else the one status line.
 	const widgetContent = (): string[] | WidgetFactory | undefined => {
-		if (!enabled) return undefined;
+		if (!enabled || stage?.covered?.()) return undefined;
 		const snapshot = hub.snapshot();
 		return stage?.available() ? stage.widget(snapshot) : [reefWidgetLine(snapshot)];
 	};

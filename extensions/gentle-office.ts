@@ -21,7 +21,7 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 	});
 	const png = roomPng();
 	const game = gameMode(hub, png);
-	const controller = registerOffice(pi, { hub, server, stage: kittyStage(png, () => game.visible()) });
+	const controller = registerOffice(pi, { hub, server, stage: overlayStage(() => game.visible()) });
 	if (!controller.terminal) return;
 
 	// Game mode (T3): on by default in gentle-reef on Kitty terminals; alt+g goes back to plain Pi and forth.
@@ -55,25 +55,15 @@ function roomPng(): (snapshot: OfficeSnapshot) => string {
 	};
 }
 
-/** Share of the terminal height the band above the editor may take (when game mode is off but the band is shown). */
-const STAGE_HEIGHT_SHARE = 0.55;
-
 /**
- * The band above the editor (T1): the room as one Kitty image. Hidden while game mode shows the room, so the widget
- * falls back to the one status line. One image id for the session, so frames replace each other.
+ * The terminal widget's stage hooks: game mode (below) shows the room, so the widget never draws the image itself.
+ * While the overlay is up the widget is cleared (the HUD says it all); with alt+g back to plain chat it is the status line.
  */
-function kittyStage(pngFor: (snapshot: OfficeSnapshot) => string, gameVisible: () => boolean): TerminalStage {
-	let imageId: number | undefined;
+function overlayStage(gameVisible: () => boolean): TerminalStage {
 	return {
-		available: () => kitty() && !gameVisible(),
-		widget: snapshot => {
-			const png = pngFor(snapshot);
-			return tui => {
-				imageId ??= allocateImageId();
-				const rows = Math.max(8, Math.floor((tui?.terminal?.rows ?? 40) * STAGE_HEIGHT_SHARE));
-				return new Image(png, "image/png", { fallbackColor: text => text }, { maxWidthCells: 400, maxHeightCells: rows, imageId });
-			};
-		},
+		available: () => false,
+		covered: () => kitty() && gameVisible(),
+		widget: () => () => ({ render: () => [], invalidate() {} }),
 	};
 }
 
@@ -100,9 +90,16 @@ function gameMode(hub: OfficeHub, pngFor: (snapshot: OfficeSnapshot) => string) 
 				terminalRows = tui.terminal.rows;
 				write = data => tui.terminal.write(data);
 				let image: { png: string; cols: number; rows: number; view: Image } | undefined;
+				let lastWidth: number | undefined;
 				const unsubscribe = hub.subscribe(() => tui.requestRender());
 				return {
 					render(width: number): string[] {
+						// After a resize Pi repaints only the lines that changed, which leaves the old chat showing through
+						// around the overlay; one forced full repaint per new size clears it.
+						if (terminalRows !== tui.terminal.rows || lastWidth !== width) {
+							if (lastWidth !== undefined) queueMicrotask(() => tui.requestRender(true));
+							lastWidth = width;
+						}
 						terminalRows = tui.terminal.rows;
 						const layout = gameLayout(width, Math.max(1, terminalRows - EDITOR_ROWS), getCellDimensions());
 						if (!layout) return [];
