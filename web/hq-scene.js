@@ -170,11 +170,16 @@ function coffeeCorner() {
 	O(206, 56, 3, 4, K.text);
 }
 function jukebox() {
-	O(152, 318, 36, 62, K.fdeep); R(152, 318, 36, 18, K.pink); R(156, 322, 28, 10, K.gold);
-	R(158, 340, 24, 18, INK);
-	for (let i = 0; i < 4; i++) R(160 + i * 6, 342 + ((t + i) % 2) * 2, 4, 14 - ((t + i) % 3) * 4, [K.blue, K.green, K.pink, K.gold][i]);
-	R(156, 362, 28, 14, shade(K.fdeep));
-	if (motion) { const y = 300 - (t % 8) * 2; R(196, y, 2, 6, K.gold); R(198, y, 3, 2, K.gold); R(146, y + 6, 2, 6, K.pink); R(143, y + 10, 3, 2, K.pink); }
+	/* Standing on the floor just left of the coffee counter (T11b): 22 x 34, the same colours as before. The equaliser bars and the notes move only while the room does. */
+	const x = 146, y = 84;
+	O(x, y, 22, 34, K.fdeep); R(x, y, 22, 8, K.pink); R(x + 3, y + 2, 16, 4, K.gold);
+	R(x + 3, y + 11, 16, 12, INK);
+	for (let i = 0; i < 4; i++) {
+		const bar = motion ? 3 + ((t + i) % 3) * 3 : 6;
+		R(x + 4 + i * 4, y + 22 - bar, 3, bar, [K.blue, K.green, K.pink, K.gold][i]);
+	}
+	R(x + 2, y + 24, 18, 8, shade(K.fdeep));
+	if (motion) { const ny = y - 4 - (t % 8) * 2; R(x + 24, ny, 2, 6, K.gold); R(x + 26, ny, 3, 2, K.gold); R(x - 4, ny + 6, 2, 6, K.pink); R(x - 7, ny + 10, 3, 2, K.pink); }
 }
 function chalkboard() {
 	O(266, 6, 188, 50, shade(K.sand)); R(266, 6, 188, 2, hi(K.sand));

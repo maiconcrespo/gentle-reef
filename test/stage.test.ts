@@ -176,3 +176,35 @@ describe("snapshot to frame (event-to-scene mapping)", () => {
 		assert.equal(frameFromSnapshot({ ...base, orchestrator: { state: "tool", toolName: "read" } } as never).thinking, true);
 	});
 });
+
+describe("Gentle HQ jukebox by the coffee machine (T11b)", () => {
+	const paint = (frame: Record<string, unknown>) => { const r = createRaster(HQ_WIDTH, HQ_HEIGHT); drawHq(r, frame); return r; };
+	const P = (name: keyof typeof HQ_PALETTE) => HQ_PALETTE[name].toUpperCase();
+	/* The jukebox box: left of the counter (x 172), on the floor, clear of the telescope (x 120-140). */
+	const box = (r: { width: number; data: Uint8Array }) => {
+		const out: string[] = [];
+		for (let y = 52; y < 124; y++) for (let x = 140; x < 172; x++) out.push(hex(r, x, y));
+		return out.join(",");
+	};
+
+	it("the jukebox stands on the floor just left of the counter: pink body, gold marquee, ink screen", () => {
+		const r = paint({});
+		assert.equal(hex(r, 149, 86), P("gold"), "marquee");
+		assert.equal(hex(r, 149, 97), P("bg"), "screen");
+		assert.equal(hex(r, 147, 100), P("fdeep"), "body beside the screen");
+	});
+
+	it("its old spot under the room's bottom right is free again: floor there", () => {
+		const floor = [HQ_PALETTE.floorA, HQ_PALETTE.floorB, HQ_PALETTE.seam].map(c => c.toUpperCase());
+		assert.ok(floor.includes(hex(paint({ motion: true, t: 1 }), 160, 330)), "no jukebox at 160, 330");
+		assert.ok(floor.includes(hex(paint({ motion: true, t: 1 }), 186, 366)), "no jukebox at 186, 366");
+	});
+
+	it("still while the room is still: the bars and notes stay put with motion off", () => {
+		assert.equal(box(paint({ motion: false, t: 0 })), box(paint({ motion: false, t: 3 })));
+	});
+
+	it("its notes float up only while motion is on", () => {
+		assert.notEqual(box(paint({ motion: true, t: 0 })), box(paint({ motion: true, t: 3 })));
+	});
+});
