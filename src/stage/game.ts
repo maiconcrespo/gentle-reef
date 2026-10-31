@@ -7,6 +7,8 @@ import { boardTasks, type TodoTask } from "./todo.ts";
 export interface GameLayout {
 	readonly hudRows: number;
 	readonly bodyRows: number;
+	/** Blank cells before the room: it is centred while the side panel is hidden (alt+c, S1). */
+	readonly inset: number;
 	/** Cells the room image takes, left. */
 	readonly roomCols: number;
 	/** Blank cells between the room and the framed text column. */
@@ -29,14 +31,20 @@ const MIN_ROWS = 8;
 
 /**
  * Splits `cols` x `rows` cells: the room as wide as its height allows (it keeps the 720 x 408 shape), the rest for text,
- * which never gets fewer than 32 columns. Null when the terminal is too small to be worth it: plain Pi stays.
+ * which never gets fewer than 32 columns. With `panel: false` (alt+c, S1) there is no text column: the room takes the
+ * width its height allows and is centred. Null when the terminal is too small to be worth it: plain Pi stays.
  */
-export function gameLayout(cols: number, rows: number, cell: CellSize): GameLayout | null {
+export function gameLayout(cols: number, rows: number, cell: CellSize, options: { panel?: boolean } = {}): GameLayout | null {
 	if (cols < MIN_COLS || rows < MIN_ROWS) return null;
 	const bodyRows = rows - HUD_ROWS;
 	const byHeight = Math.floor((bodyRows * cell.heightPx * HQ_WIDTH) / HQ_HEIGHT / cell.widthPx);
+	if (options.panel === false) {
+		const roomCols = Math.max(1, Math.min(byHeight, cols));
+		const inset = Math.floor((cols - roomCols) / 2);
+		return { hudRows: HUD_ROWS, bodyRows, inset, roomCols, gap: 0, sideCols: cols - inset - roomCols };
+	}
 	const roomCols = Math.max(1, Math.min(byHeight, cols - MIN_SIDE_COLS - GAP));
-	return { hudRows: HUD_ROWS, bodyRows, roomCols, gap: GAP, sideCols: cols - roomCols - GAP };
+	return { hudRows: HUD_ROWS, bodyRows, inset: 0, roomCols, gap: GAP, sideCols: cols - roomCols - GAP };
 }
 
 /* SGR colours and APC sequences (Kitty images, pi-tui's cursor markers) take no cells. */
@@ -90,7 +98,7 @@ function withSigns(room: string, signs: readonly Sign[], width: number): string 
 }
 
 export function composeGame(layout: GameLayout, content: { hud: string; room: readonly string[]; side: readonly string[]; dialog?: readonly string[]; signs?: readonly Sign[] }): string[] {
-	const width = layout.roomCols + layout.gap + layout.sideCols;
+	const width = layout.inset + layout.roomCols + layout.gap + layout.sideCols;
 	const lines = layout.hudRows > 0 ? [fit(content.hud, width)] : [];
 	const signs = content.signs ?? [];
 	const dialog = content.dialog ?? [];
@@ -99,7 +107,7 @@ export function composeGame(layout: GameLayout, content: { hud: string; room: re
 	for (let row = 0; row < layout.bodyRows; row++) {
 		const over = row >= dialogStart ? dialog[row - dialogStart] : undefined;
 		const room = over === undefined ? withSigns(content.room[row] ?? "", signs.filter(sign => sign.row === row), layout.roomCols) : "  " + fit(over, layout.roomCols - 2);
-		lines.push(room + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols));
+		lines.push(" ".repeat(layout.inset) + room + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols));
 	}
 	return lines;
 }
@@ -164,8 +172,6 @@ export interface SideExtras {
 	readonly doing?: { readonly title: string; readonly done: number; readonly total: number } | null;
 	/** The newest notice from any extension (src/stage/notice.ts), while it is fresh. */
 	readonly notice?: { readonly text: string; readonly level: "info" | "warning" | "error" } | null;
-	/** False hides the CHAT box (alt+c, T9): the dialog over the room already shows the reply. */
-	readonly chatShown?: boolean;
 }
 
 const NOTICE_TITLE = { info: "NOTICE", warning: "WARNING", error: "ERROR" } as const;
@@ -183,14 +189,19 @@ export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows
 	// A notice gets its own box under PARTY, only while CHAT still keeps its frame and one line.
 	const noticeBody = extras.notice ? wrap(extras.notice.text, width - 4).slice(0, NOTICE_LINES).map(line => `${extras.notice!.level === "info" ? TEXT : SAND}${line}${RESET}`) : [];
 	const noticeBox = noticeBody.length && rows - partyBox.length - (noticeBody.length + 2) >= 3 ? frame(NOTICE_TITLE[extras.notice!.level], noticeBody, width, noticeBody.length + 2) : [];
-	if (extras.chatShown === false) {
-		const lines = [...partyBox, ...noticeBox, fit(`  ${MUTED}alt+c chat · alt+g plain chat${RESET}`, width)];
-		return [...lines, ...Array<string>(Math.max(0, rows - lines.length)).fill(" ".repeat(width))].slice(0, rows);
-	}
 	const chatHeight = rows - partyBox.length - noticeBox.length;
 	if (chatHeight < 3) return partyBox.slice(0, rows);
 	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-(chatHeight - 2));
-	return [...partyBox, ...noticeBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat · alt+c hide chat")];
+	return [...partyBox, ...noticeBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat · alt+c hide panel")];
+}
+
+const PANEL_HINT = "  alt+c panel";
+
+/** The side column while the panel is hidden (alt+c, S1): blank cells, and the key that brings it back on the last row. */
+export function hiddenPanel(rows: number, width: number): string[] {
+	const lines = Array<string>(Math.max(0, rows)).fill(" ".repeat(width));
+	if (rows > 0 && width >= plainWidth(PANEL_HINT)) lines[rows - 1] = fit(`${MUTED}${PANEL_HINT}${RESET}`, width);
+	return lines;
 }
 
 /** What an open question shows: its options, which one the ▶ is on, and whether the dialog drives the answer (T4e). */

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORTRAIT_COLS, aboveBackgrounds, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, hiddenPanel, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -8,13 +8,22 @@ describe("game mode layout (T3)", () => {
 	it("gives the room the width its height allows, and the rest to the text column", () => {
 		// No HUD row (T4f: the status lives in the scene). 21 rows of 19 px are 399 px; the room is 720x408, so 704 px, 78 cells of 9 px.
 		const layout = gameLayout(200, 21, { widthPx: 9, heightPx: 19 });
-		assert.deepEqual(layout, { hudRows: 0, bodyRows: 21, roomCols: 78, gap: 3, sideCols: 119 });
+		assert.deepEqual(layout, { hudRows: 0, bodyRows: 21, inset: 0, roomCols: 78, gap: 3, sideCols: 119 });
 	});
 
 	it("keeps at least 32 columns of text: a narrow terminal shrinks the room", () => {
 		const layout = gameLayout(100, 41, { widthPx: 9, heightPx: 19 });
 		assert.equal(layout.sideCols, 32);
 		assert.equal(layout.roomCols, 100 - 32 - 3);
+	});
+
+	it("panel hidden (alt+c, S1): no side column; the room is centred in the width and grows when the panel limited it", () => {
+		// Height-limited: still 78 cells, centred in 200 (61 blank cells left, 61 right).
+		assert.deepEqual(gameLayout(200, 21, { widthPx: 9, heightPx: 19 }, { panel: false }), { hudRows: 0, bodyRows: 21, inset: 61, roomCols: 78, gap: 0, sideCols: 61 });
+		// Width-limited with the panel (65 cells): without it the room takes the width its height allows, 100 cells here.
+		const wide = gameLayout(100, 41, { widthPx: 9, heightPx: 19 }, { panel: false });
+		assert.equal(wide.roomCols, 100);
+		assert.equal(wide.inset + wide.roomCols + wide.gap + wide.sideCols, 100);
 	});
 
 	it("is not viable below 60 columns or 8 rows (null: plain Pi stays)", () => {
@@ -24,7 +33,18 @@ describe("game mode layout (T3)", () => {
 });
 
 describe("game mode lines", () => {
-	const layout = { hudRows: 1, bodyRows: 3, roomCols: 6, gap: 3, sideCols: 8 };
+	const layout = { hudRows: 1, bodyRows: 3, inset: 0, roomCols: 6, gap: 3, sideCols: 8 };
+
+	it("an inset puts blank cells before the room on every row (the room centred with the panel hidden)", () => {
+		const lines = composeGame({ ...layout, hudRows: 0, inset: 2 }, { hud: "", room: ["\x1b_Gimg\x1b\\"], side: ["x"] });
+		assert.equal(lines[0], "  " + "\x1b_Gimg\x1b\\" + " ".repeat(6) + "   " + "x".padEnd(8));
+		for (const line of lines) assert.equal(plainWidth(line), 19);
+	});
+
+	it("hidden panel lines (S1): blank, with the key to bring the panel back on the last row", () => {
+		assert.deepEqual(hiddenPanel(3, 20).map(plainText), [" ".repeat(20), " ".repeat(20), "  alt+c panel       "]);
+		assert.deepEqual(hiddenPanel(2, 4).map(plainText), ["    ", "    "], "too narrow for the key: blank");
+	});
 
 	it("HUD on top, then each row: room line padded to its width, a blank gap, the side text cut to its width", () => {
 		const lines = composeGame(layout, { hud: "HQ", room: ["\x1b_Gimg\x1b\\", ""], side: ["DOING NOW", "chat"] });
@@ -95,27 +115,15 @@ describe("game mode text", () => {
 		assert.equal(side[3], "╔═ CHAT ═════════════════════╗");
 	});
 
-	it("chat hidden (alt+c): PARTY stays, CHAT gives way to one line with the keys, the rest is blank", () => {
-		const side = gameSide(snapshot(), ["c1", "c2"], 6, 34, { chatShown: false }).map(plainText);
-		assert.deepEqual(side, [
-			"╔═ PARTY ════════════════════════╗",
-			"║ ▶ orchestrator  resting        ║",
-			"╚════════════════════════════════╝",
-			"  alt+c chat · alt+g plain chat   ",
-			" ".repeat(34),
-			" ".repeat(34),
-		]);
-	});
-
-	it("the CHAT frame names alt+c to hide it", () => {
+	it("the CHAT frame names alt+c to hide the panel", () => {
 		const side = gameSide(snapshot(), ["c1"], 6, 70).map(plainText);
-		assert.match(side.at(-1)!, /alt\+t thoughts · alt\+g plain chat · alt\+c hide chat/);
+		assert.match(side.at(-1)!, /alt\+t thoughts · alt\+g plain chat · alt\+c hide panel/);
 	});
 
 	it("an empty chat says where to write", () => {
 		const side = gameSide(snapshot(), [], 7, 66).map(plainText);
 		assert.equal(side[4], "║ " + "Write below; the orchestrator answers here.".padEnd(62) + " ║");
-		assert.equal(side[6], "╚═ alt+t thoughts · alt+g plain chat · alt+c hide chat " + "═".repeat(10) + "╝", "the keys live in the CHAT frame's bottom border");
+		assert.equal(side[6], "╚═ alt+t thoughts · alt+g plain chat · alt+c hide panel " + "═".repeat(9) + "╝", "the keys live in the CHAT frame's bottom border");
 	});
 
 	it("every side line has the column width", () => {

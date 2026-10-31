@@ -12,7 +12,7 @@ import { frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from 
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
-import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, hiddenPanel, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 import { lastResult } from "../src/stage/memo.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
@@ -55,8 +55,8 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 		handler: () => game.toggleThoughts(),
 	});
 	pi.registerShortcut("alt+c", {
-		description: "Gentle HQ: show or hide the CHAT box (the dialog over the room keeps the reply)",
-		handler: () => game.toggleChat(),
+		description: "Gentle HQ: show or hide the side panel (PARTY, notices and CHAT); the room is centred without it",
+		handler: () => game.togglePanel(),
 	});
 	pi.registerShortcut("alt+g", {
 		description: "Gentle HQ: switch between game mode and plain chat",
@@ -178,7 +178,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let todo: readonly TodoTask[] = [];
 	let notice: Notice | null = null;
 	let thoughtsShown = true;
-	let chatShown = true;
+	let panelShown = true;
 	// T9: the reply's first line shown in the dialog (null follows the tail) and the size of the last reply dialog drawn.
 	let dialogTop: number | null = null;
 	let dialogView: { total: number; rows: number } | undefined;
@@ -287,7 +287,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							lastWidth = width;
 						}
 						terminalRows = tui.terminal.rows;
-						const layout = gameLayout(width, Math.max(1, terminalRows - reserved()), getCellDimensions());
+						const layout = gameLayout(width, Math.max(1, terminalRows - reserved()), getCellDimensions(), { panel: panelShown });
 						if (!layout) return [];
 						const snapshot = hub.snapshot();
 						const png = pngFor({ ...frameFromSnapshot(snapshot), todo: boardRows(todo), jobs: jobsFromChat(chat), motion: animator.running(), t: animator.step() });
@@ -303,10 +303,10 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						}
 						// T10: typing renders the screen again with nothing new in the scene; reuse the lines until an input changes.
 						const shownNotice = currentNotice(notice, Date.now());
-						const inputs = [width, layout.bodyRows, layout.roomCols, image.room.lines[0], JSON.stringify(snapshot), chat, todo, shownNotice, chatShown, thoughtsShown, dialogTop, editing, selector?.choice.active(), selector?.choice.index(), branch()];
+						const inputs = [width, layout.bodyRows, layout.roomCols, image.room.lines[0], JSON.stringify(snapshot), chat, todo, shownNotice, panelShown, thoughtsShown, dialogTop, editing, selector?.choice.active(), selector?.choice.index(), branch()];
 						return sceneLines(inputs, () => {
 							const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
-							const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: shownNotice, chatShown });
+							const side = panelShown ? gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: shownNotice }) : hiddenPanel(layout.bodyRows, layout.sideCols);
 							// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
 							const reply = currentReply(chat);
 							const question = snapshot.ask?.questions[0];
@@ -394,8 +394,10 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 		restoreTodo(tasks: readonly TodoTask[] | null): void {
 			if (tasks) todo = tasks;
 		},
-		toggleChat(): void {
-			chatShown = !chatShown;
+		togglePanel(): void {
+			panelShown = !panelShown;
+			// The room changes place and maybe size: repaint the whole screen once.
+			forceRepaint?.();
 			repaint?.();
 		},
 		toggleThoughts(): void {
