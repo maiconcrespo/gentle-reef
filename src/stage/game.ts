@@ -1,6 +1,7 @@
 import type { OfficeSnapshot } from "../adapter/hub.ts";
 import { HQ_HEIGHT, HQ_WIDTH } from "../../web/hq-scene.js";
 import { wrap } from "./chat.ts";
+import { boardTasks, type TodoTask } from "./todo.ts";
 
 /** Game mode (T3): the Gentle HQ layout drawn over Pi's chat. Row 0 is the HUD; below it, the room and a text column. */
 export interface GameLayout {
@@ -312,5 +313,35 @@ export function sceneSigns(info: { project: string; branch: string | null; perce
 		{ row: Math.min(image.rows - 1, hanging.row + 1), col: hanging.col, text: framed(`╚${"═".repeat(plainWidth(label))}╝`) },
 		place(SIGN_AT.brew, sign(SAND, PANEL_BG, ` BREW ${left} `)),
 		place(SIGN_AT.brand, sign(INK, PINK_BG, "✿ GENTLE HQ")),
+	];
+}
+
+/* The TODO board's paper (web/hq-scene.js questBoard): x 104-202, y 150-200 in room pixels. */
+const BOARD = { left: 104, right: 202, top: 150, bottom: 200 } as const;
+const PAPER_BG = bg("#F4D6B7"), FDEEP = sgr("#C2107A"), DIM = sgr("#76616B");
+const TASK_MARK = { done: "✓", in_progress: "▶", blocked: "·", pending: "·", dropped: "·" } as const;
+
+/**
+ * The TODO board as text (T11c): `TODO done/total` on its first row, then one row per task (✓ done, ▶ current, · open),
+ * on the board's paper colour and cut to its width. Only the rows that fit on the board; none past its bottom edge.
+ */
+export function todoSigns(tasks: readonly TodoTask[], image: { cols: number; rows: number }): Sign[] {
+	const rowPx = HQ_HEIGHT / image.rows;
+	const col = Math.ceil((BOARD.left * image.cols) / HQ_WIDTH);
+	const width = Math.max(4, Math.floor((BOARD.right * image.cols) / HQ_WIDTH) - col);
+	const first = Math.ceil((BOARD.top * image.rows) / HQ_HEIGHT);
+	const last = Math.floor((BOARD.bottom - rowPx) / rowPx);
+	const counted = tasks.filter(task => task.status !== "dropped");
+	const done = counted.filter(task => task.status === "done").length;
+	const paper = (fg: string, text: string) => `${PAPER_BG}${fg}${fit(text, width)}${RESET}`;
+	const title: Sign = { row: first, col, text: paper(FDEEP + BOLD, counted.length ? `TODO ${done}/${counted.length}` : "TODO") };
+	const rows = boardTasks(tasks, Math.max(0, last - first));
+	return [
+		title,
+		...rows.map((task, i) => ({
+			row: first + 1 + i,
+			col,
+			text: paper(task.status === "done" ? DIM : task.status === "in_progress" ? FDEEP + BOLD : INK, `${TASK_MARK[task.status]} ${task.title}`),
+		})),
 	];
 }

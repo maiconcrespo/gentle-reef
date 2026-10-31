@@ -54,10 +54,15 @@ export function doingNow(tasks: readonly TodoTask[]): { title: string; done: num
 
 const BOARD_ROWS = 4;
 
-/** The chalkboard's TODO rows (web/hq-scene.js draws four): from one task before the first open one, dropped tasks skipped. */
-export function boardRows(tasks: readonly TodoTask[]): Array<{ done: boolean; now: boolean }> {
+/** The tasks on the TODO board: from one task before the first open one, dropped tasks skipped, at most `rows`. */
+export function boardTasks(tasks: readonly TodoTask[], rows = BOARD_ROWS): TodoTask[] {
 	const shown = tasks.filter(task => task.status !== "dropped");
 	const open = shown.findIndex(task => task.status !== "done");
-	const start = open === -1 ? Math.max(0, shown.length - BOARD_ROWS) : Math.max(0, open - 1);
-	return shown.slice(start, start + BOARD_ROWS).map(task => ({ done: task.status === "done", now: task.status === "in_progress" }));
+	const start = open === -1 ? Math.max(0, shown.length - rows) : Math.max(0, open - 1);
+	return shown.slice(start, start + rows);
+}
+
+/** The TODO board's rows (web/hq-scene.js draws four), one per task from boardTasks. */
+export function boardRows(tasks: readonly TodoTask[]): Array<{ done: boolean; now: boolean }> {
+	return boardTasks(tasks).map(task => ({ done: task.status === "done", now: task.status === "in_progress" }));
 }

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORTRAIT_COLS, aboveBackgrounds, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -237,6 +237,41 @@ describe("the room image sent once (T10)", () => {
 		assert.ok(place.length < 80);
 		assert.ok(place.startsWith("\x1b_G"));
 		assert.equal(plainWidth(place), 0);
+	});
+});
+
+describe("readable TODO board (T11c)", () => {
+	const task = (id: number, status: string, title = `task ${id}`) => ({ id, title, status }) as never;
+	const image = { cols: 162, rows: 46 };
+
+	it("a title with done/total, then one row per task on the board: ✓ done, ▶ current, · pending, dropped left out", () => {
+		const signs = todoSigns([task(1, "done", "Map the code"), task(2, "dropped"), task(3, "in_progress", "Write the parser"), task(4, "pending", "Docs")], image);
+		assert.deepEqual(signs.map(sign => [sign.row, sign.col, plainText(sign.text)]), [
+			[17, 24, "TODO 1/3".padEnd(21)],
+			[18, 24, "✓ Map the code".padEnd(21)],
+			[19, 24, "▶ Write the parser".padEnd(21)],
+			[20, 24, "· Docs".padEnd(21)],
+		]);
+	});
+
+	it("long titles are cut to the board; at most the rows the board has, from one task before the first open one", () => {
+		const tasks = [1, 2, 3, 4, 5, 6].map(id => task(id, id < 3 ? "done" : id === 3 ? "in_progress" : "pending", `a very long task title number ${id}`));
+		const signs = todoSigns(tasks, image);
+		assert.equal(signs.length, 5);
+		assert.equal(plainText(signs[1]!.text), "✓ a very long task ti");
+		assert.ok(signs.every(sign => plainWidth(sign.text) === 21));
+		assert.match(plainText(signs[2]!.text), /^▶ a very long task ti/);
+	});
+
+	it("no tasks: only the TODO title", () => {
+		assert.deepEqual(todoSigns([], image).map(sign => plainText(sign.text).trim()), ["TODO"]);
+	});
+
+	it("a small room keeps fewer rows, never past the board's bottom", () => {
+		const tasks = [1, 2, 3, 4].map(id => task(id, "pending"));
+		const signs = todoSigns(tasks, { cols: 78, rows: 21 });
+		assert.ok(signs.length < 5);
+		assert.ok(signs.every(sign => sign.row * 408 / 21 + 408 / 21 <= 202));
 	});
 });
 

@@ -12,7 +12,7 @@ import { frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from 
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
-import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 import { lastResult } from "../src/stage/memo.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
@@ -323,7 +323,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							if (portraitShown && !showPortrait) queueMicrotask(() => write?.(deleteKittyImage(portraitId)));
 							portraitShown = showPortrait;
 							// T4f: project and branch, the context left and the brand are signs in the room, not a HUD row.
-							const signs = sceneSigns({ project, branch: branch(), percent: snapshot.context.percent }, image.room);
+							const signs = [...sceneSigns({ project, branch: branch(), percent: snapshot.context.percent }, image.room), ...todoSigns(todo, image.room)];
 							return composeGame(layout, { hud: "", room: image.room.lines, side, dialog, signs });
 						});
 					},
