@@ -133,12 +133,27 @@ export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows
 	return [...partyBox, ...frame("CHAT", body, width, chatHeight)];
 }
 
-/** The dialog over the room: the current reply in a framed ORCHESTRATOR panel (tail when long), or an open question with its options. */
-export function gameDialog(content: { reply: readonly string[]; ask: { question: string; options: readonly string[] } | null }, width: number, height: number): string[] {
-	if (content.ask) {
+/** What an open question shows: its options, which one the ▶ is on, and whether the dialog drives the answer (T4e). */
+export interface DialogAsk {
+	readonly question: string;
+	readonly options: readonly string[];
+	/** Pi's list ends with "Other…" for a free-text answer. */
+	readonly custom?: boolean;
+	readonly selected?: number;
+	/** The dialog is the selector: show the keys. */
+	readonly interactive?: boolean;
+}
+
+/** The dialog over the room: the current reply in a framed ORCHESTRATOR panel (tail when long), or an open question as a selector. */
+export function gameDialog(content: { reply: readonly string[]; ask: DialogAsk | null }, width: number, height: number): string[] {
+	const ask = content.ask;
+	if (ask) {
+		const items = ask.custom ? [...ask.options, "Other… (write your own)"] : [...ask.options];
+		const selected = ask.selected ?? 0;
 		const body = [
-			`${TEXT}${content.ask.question}${RESET}`,
-			...content.ask.options.map((option, i) => (i === 0 ? `${PINK}▶${RESET} ${TEXT}${option}${RESET}` : `  ${MUTED}${option}${RESET}`)),
+			`${TEXT}${ask.question}${RESET}`,
+			...items.map((item, i) => (i === selected ? `${PINK}▶${RESET} ${TEXT}${BOLD}${item}${RESET}` : `  ${MUTED}${item}${RESET}`)),
+			...(ask.interactive ? [`${MUTED}↑↓ choose · Enter · Esc${RESET}`] : []),
 		];
 		return frame("ORCHESTRATOR · asks", body, width, height);
 	}

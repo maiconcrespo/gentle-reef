@@ -99,6 +99,17 @@ describe("dialog over the room (T4d)", () => {
 		assert.deepEqual(box, ["╔═ ORCHESTRATOR ═══╗", "║ l2               ║", "║ l3               ║", "║ l4               ║", "╚══════════════════╝"]);
 	});
 
+	it("as the selector: ▶ on the chosen option, Other… when a custom answer is allowed, and the keys", () => {
+		const box = gameDialog({ reply: [], ask: { question: "Push now?", options: ["Yes", "Not yet"], custom: true, selected: 2, interactive: true } }, 30, 7).map(plainText);
+		assert.deepEqual(box.slice(1, 6), [
+			"║ Push now?                  ║",
+			"║   Yes                      ║",
+			"║   Not yet                  ║",
+			"║ ▶ Other… (write your own)  ║",
+			"║ ↑↓ choose · Enter · Esc    ║",
+		]);
+	});
+
 	it("an open question shows instead of the reply, with its options and ▶ on the first", () => {
 		const box = gameDialog({ reply: ["old"], ask: { question: "Push now?", options: ["Yes", "Not yet"] } }, 24, 6).map(plainText);
 		assert.deepEqual(box.slice(0, 5), ["╔═ ORCHESTRATOR · asks ╗", "║ Push now?            ║", "║ ▶ Yes                ║", "║   Not yet            ║", "║                      ║"]);

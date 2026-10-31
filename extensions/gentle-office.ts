@@ -1,13 +1,14 @@
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Markdown, allocateImageId, deleteKittyImage, getCapabilities, getCellDimensions, getPngDimensions, renderImage, type OverlayHandle } from "@earendil-works/pi-tui";
+import { Markdown, allocateImageId, deleteKittyImage, getCapabilities, getCellDimensions, getPngDimensions, isKeyRelease, matchesKey, renderImage, type OverlayHandle } from "@earendil-works/pi-tui";
 import { OfficeHub } from "../src/adapter/hub.ts";
 import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
 import { createAnimator, isActing } from "../src/stage/animator.ts";
 import { chatLines, currentReply, initialChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
 import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
+import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { belowBackgrounds, composeGame, gameDialog, gameHud, gameLayout, gameSide, rowsBelow } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
@@ -129,8 +130,28 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let thoughtsShown = true;
 	let prompts = 0;
 	let forceRepaint: (() => void) | undefined;
-	/** Rows under the overlay: the editor, or Pi's selector while a question or prompt is open (src/stage/game.ts rowsBelow). */
-	const reserved = (): number => rowsBelow({ askOptions: hub.snapshot().ask?.questions[0]?.options.length ?? null, prompts });
+	// T4e: the dialog is the selector for a single-select question. `editing` is Pi's "Other…" editor after it.
+	let selector: { question: string; choice: ChoiceSelector } | undefined;
+	let editing = false;
+	/** Rows under the overlay: the editor while the dialog drives the answer, else room for Pi's selector or editor (rowsBelow). */
+	const reserved = (): number => {
+		if (selector?.choice.active()) return rowsBelow({ askOptions: null, prompts: 0 });
+		return rowsBelow({ askOptions: editing ? null : hub.snapshot().ask?.questions[0]?.options.length ?? null, prompts: prompts + (editing ? 1 : 0) });
+	};
+	/** A single-select question the dialog can drive; multi-question and multi-select asks keep Pi's selector. */
+	const syncSelector = (canReplay: boolean): void => {
+		const questions = hub.snapshot().ask?.questions ?? [];
+		const only = questions.length === 1 && !questions[0]!.multiSelect && questions[0]!.options.length > 0 ? questions[0]! : undefined;
+		if (!only || !canReplay) {
+			selector = undefined;
+			if (!questions.length) editing = false;
+			return;
+		}
+		if (selector?.question !== only.question) {
+			selector = { question: only.question, choice: createChoiceSelector({ options: only.options.length, custom: only.custom === true }) };
+			editing = false;
+		}
+	};
 	const markdown = markdownRenderer();
 	const imageId = allocateImageId();
 	const project = process.cwd().replace(homedir(), "~");
@@ -152,7 +173,23 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				// The overlay shrinking or growing exposes or covers Pi's rows, which only a full repaint redraws.
 				let lastReserved = reserved();
 				forceRepaint = () => queueMicrotask(() => tui.requestRender(true));
+				// Pi's own input path, used to replay the dialog's answer one key at a time (private in the types, present at runtime).
+				const replay = (tui as unknown as { handleTerminalInput?: (data: string) => void }).handleTerminalInput?.bind(tui);
+				const stopKeys = tui.addInputListener(data => {
+					const choice = selector?.choice;
+					if (!choice?.active() || handle?.isHidden() || isKeyRelease(data)) return undefined;
+					const key: SelectorKey = matchesKey(data, "up") ? "up" : matchesKey(data, "down") ? "down" : matchesKey(data, "enter") || matchesKey(data, "return") ? "enter" : "other";
+					const step = choice.key(key);
+					if (step.done) {
+						editing = step.editing === true;
+						forceRepaint?.();
+						queueMicrotask(() => { for (const forwarded of step.forward ?? []) replay?.(forwarded); });
+					}
+					tui.requestRender();
+					return step.consume ? { consume: true } : undefined;
+				});
 				const unsubscribe = hub.subscribe(() => {
+					syncSelector(replay !== undefined);
 					animator.update(!(handle?.isHidden() ?? false) && acting());
 					if (reserved() !== lastReserved) {
 						lastReserved = reserved();
@@ -182,10 +219,13 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
 						const reply = currentReply(chat);
 						const question = snapshot.ask?.questions[0];
-						const ask = question ? { question: question.question, options: question.options } : null;
+						const driving = selector?.choice.active() === true;
+						const ask = question && !editing
+							? { question: question.question, options: question.options, custom: question.custom === true && driving, selected: driving ? selector!.choice.index() : 0, interactive: driving }
+							: null;
 						const dialogWidth = layout.roomCols - 4;
 						const replyLines = reply ? markdown(reply, dialogWidth - 4) : [];
-						const wanted = (ask ? ask.options.length + 1 : replyLines.length) + 2;
+						const wanted = (ask ? ask.options.length + (ask.custom ? 1 : 0) + (ask.interactive ? 1 : 0) + 1 : replyLines.length) + 2;
 						const dialogHeight = Math.min(Math.max(4, Math.floor(layout.bodyRows * 0.35)), Math.max(3, wanted));
 						const dialog = reply || ask ? gameDialog({ reply: replyLines, ask }, dialogWidth, dialogHeight) : undefined;
 						return composeGame(layout, { hud: gameHud(snapshot, { project }), room: image.lines, side, dialog });
@@ -194,6 +234,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						image = undefined;
 					},
 					dispose() {
+						stopKeys();
 						repaint = undefined;
 						forceRepaint = undefined;
 						animator.stop();
