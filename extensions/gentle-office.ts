@@ -10,6 +10,7 @@ import { createAnimator, isActing } from "../src/stage/animator.ts";
 import { chatLines, currentReply, initialChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
 import { frameFromSnapshot, renderHqPng, type HqFrame } from "../src/stage/frame.ts";
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
+import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
 import { belowBackgrounds, composeGame, gameDialog, gameLayout, gameSide, rowsBelow, sceneSigns } from "../src/stage/game.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
@@ -31,6 +32,8 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 	// Game mode (T3): on by default in gentle-reef on Kitty terminals; alt+g goes back to plain Pi and forth.
 	pi.on("session_start", (_event, ctx) => {
 		try {
+			// T4b: a resumed session shows its todo list from the start, not after the next todo call.
+			game.restoreTodo(todoFromEntries(ctx.sessionManager?.getBranch?.() ?? []));
 			if (kitty()) game.open(ctx);
 		} catch {
 			// Game mode is display only; plain Pi stays if it cannot open.
@@ -152,6 +155,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let animate: ((on: boolean) => void) | undefined;
 	let repaint: (() => void) | undefined;
 	let chat: ChatState = initialChat();
+	let todo: readonly TodoTask[] = [];
 	let thoughtsShown = true;
 	let prompts = 0;
 	let forceRepaint: (() => void) | undefined;
@@ -236,12 +240,12 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						const layout = gameLayout(width, Math.max(1, terminalRows - reserved()), getCellDimensions());
 						if (!layout) return [];
 						const snapshot = hub.snapshot();
-						const png = pngFor({ ...frameFromSnapshot(snapshot), motion: animator.running(), t: animator.step() });
+						const png = pngFor({ ...frameFromSnapshot(snapshot), todo: boardRows(todo), motion: animator.running(), t: animator.step() });
 						if (image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
 							image = { png, cols: layout.roomCols, rows: layout.bodyRows, room: roomImage(png, layout.roomCols, layout.bodyRows, imageId) };
 						}
 						const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
-						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols);
+						const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo) });
 						// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
 						const reply = currentReply(chat);
 						const question = snapshot.ask?.questions[0];
@@ -291,6 +295,12 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 		visible: () => (handle !== undefined && !handle.isHidden()) || opening,
 		/** One Pi conversation event into the chat column; repaints only when it changed something. */
 		chat(event: { type: string }): void {
+			// T4b: each todo call returns the whole list; it feeds Doing now and the chalkboard's TODO rows.
+			const tasks = todoFromToolEnd(event);
+			if (tasks) {
+				todo = tasks;
+				repaint?.();
+			}
 			const next = reduceChat(chat, { ...event, at: Date.now() });
 			if (next === chat) return;
 			chat = next;
@@ -301,6 +311,10 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 			prompts = Math.max(0, prompts + change);
 			forceRepaint?.();
 			repaint?.();
+		},
+		/** The todo list rebuilt from the session (resume); null keeps the current one. */
+		restoreTodo(tasks: readonly TodoTask[] | null): void {
+			if (tasks) todo = tasks;
 		},
 		toggleThoughts(): void {
 			thoughtsShown = !thoughtsShown;

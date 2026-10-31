@@ -64,6 +64,17 @@ describe("game mode text", () => {
 		]);
 	});
 
+	it("Doing now (T4b): PARTY shows the task in progress with done/total under the orchestrator, cut to the width", () => {
+		const side = gameSide(snapshot(), ["c1"], 8, 40, { doing: { title: "Write the parser for the new config", done: 1, total: 3 } }).map(plainText);
+		assert.deepEqual(side.slice(0, 4), [
+			"╔═ PARTY ══════════════════════════════╗",
+			"║ ▶ orchestrator  resting              ║",
+			"║ ◐ doing 1/3     Write the parser for ║",
+			"╚══════════════════════════════════════╝",
+		]);
+		assert.equal(gameSide(snapshot(), [], 8, 40, { doing: null }).map(plainText)[2], "╚══════════════════════════════════════╝", "no task in progress: no row");
+	});
+
 	it("an empty chat says where to write", () => {
 		const side = gameSide(snapshot(), [], 7, 52).map(plainText);
 		assert.equal(side[4], "║ Write below; the orchestrator answers here.      ║");

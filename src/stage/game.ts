@@ -134,11 +134,17 @@ export function frame(title: string, body: readonly string[], width: number, hei
 	return [top, ...rows, bottom].map(paint);
 }
 
-/** The text column: a PARTY box (orchestrator, then each agent in flight) and a CHAT box with as much chat as fits, newest last. */
-export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows: number, width: number): string[] {
+/** Extra lines in the text column: the todo task in progress (T4b). */
+export interface SideExtras {
+	readonly doing?: { readonly title: string; readonly done: number; readonly total: number } | null;
+}
+
+/** The text column: a PARTY box (orchestrator, Doing now, then each agent in flight) and a CHAT box with as much chat as fits, newest last. */
+export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows: number, width: number, extras: SideExtras = {}): string[] {
 	const row = (name: string, text: string) => `${PINK}▶${RESET} ${TEXT}${name.padEnd(14)}${RESET}${MUTED}${text}${RESET}`;
 	const party = [
 		row("orchestrator", ORCHESTRATOR_TEXT[snapshot.orchestrator.state] ?? snapshot.orchestrator.state),
+		...(extras.doing ? [`${SAND}◐${RESET} ${TEXT}${`doing ${extras.doing.done}/${extras.doing.total}`.padEnd(14)}${RESET}${MUTED}${extras.doing.title}${RESET}`] : []),
 		...snapshot.agents.filter(agent => IN_FLIGHT.has(agent.status)).map(agent => row(agent.role, agent.status)),
 	];
 	const partyBox = frame("PARTY", party, width, party.length + 2);
