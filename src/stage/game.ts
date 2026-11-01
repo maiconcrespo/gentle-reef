@@ -97,17 +97,70 @@ function withSigns(room: string, signs: readonly Sign[], width: number): string 
 	return escapes + fit(out, width);
 }
 
-export function composeGame(layout: GameLayout, content: { hud: string; room: readonly string[]; side: readonly string[]; dialog?: readonly string[]; signs?: readonly Sign[] }): string[] {
+/** The line without its first `cells` visible cells; escapes are kept, so colours and the Kitty placement survive. */
+function dropCells(line: string, cells: number): string {
+	let out = "", skipped = 0;
+	for (let at = 0; at < line.length; ) {
+		ESCAPES.lastIndex = at;
+		const escape = ESCAPES.exec(line);
+		if (escape && escape.index === at) {
+			out += escape[0];
+			at += escape[0].length;
+			continue;
+		}
+		const char = String.fromCodePoint(line.codePointAt(at)!);
+		if (skipped < cells) skipped += 1;
+		else out += char;
+		at += char.length;
+	}
+	return out;
+}
+
+export function composeGame(layout: GameLayout, content: { hud: string; room: readonly string[]; side: readonly string[]; dialog?: readonly string[]; signs?: readonly Sign[]; items?: readonly string[] }): string[] {
 	const width = layout.inset + layout.roomCols + layout.gap + layout.sideCols;
 	const lines = layout.hudRows > 0 ? [fit(content.hud, width)] : [];
 	const signs = content.signs ?? [];
 	const dialog = content.dialog ?? [];
-	// The dialog sits on the room's bottom rows, 2 cells in; never on row 0, which carries the image.
-	const dialogStart = Math.max(1, layout.bodyRows - dialog.length);
+	// T7: the ITEMS tray takes the bottom-left corner (itemsTray); never row 0, which carries the image.
+	const items = content.items ?? [];
+	const itemsStart = Math.max(1, layout.bodyRows - items.length);
+	// The dialog sits on the room's bottom rows (above the tray), 2 cells in; never on row 0.
+	const dialogStart = Math.max(1, (items.length ? itemsStart : layout.bodyRows) - dialog.length);
 	for (let row = 0; row < layout.bodyRows; row++) {
-		const over = row >= dialogStart ? dialog[row - dialogStart] : undefined;
+		const over = row >= dialogStart && row - dialogStart < dialog.length ? dialog[row - dialogStart] : undefined;
 		const room = over === undefined ? withSigns(content.room[row] ?? "", signs.filter(sign => sign.row === row), layout.roomCols) : "  " + fit(over, layout.roomCols - 2);
-		lines.push(" ".repeat(layout.inset) + room + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols));
+		const line = " ".repeat(layout.inset) + room + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols);
+		const item = row >= itemsStart ? items[row - itemsStart] : undefined;
+		lines.push(item === undefined ? line : fit(item, ITEM_COLS) + dropCells(line, ITEM_COLS));
+	}
+	return lines;
+}
+
+/* gentle-shell's pasted-image widget (gentle-pi extensions/gentle-shell.ts imageAttachmentsWidget): a label row per
+ * chip and, while Pi is idle, a thumbnail of at most 40 x 6 cells under it, at column 0 just above the editor. Copied
+ * numbers: if gentle-pi changes them, the tray drifts from the thumbnails. */
+const ITEM_THUMB_COLS = 40;
+const ITEM_THUMB_ROWS = 6;
+/** Cells the ITEMS tray takes from the left edge: the thumbnail's columns and the right border. */
+export const ITEM_COLS = ITEM_THUMB_COLS + 1;
+
+/** The `[Image#N]` chips in the editor's draft, each once, in order. */
+export function itemChips(draft: string): string[] {
+	return [...new Set(draft.match(/\[Image#\d+\]/g) ?? [])];
+}
+
+/**
+ * The ITEMS tray (T7, S6): a hole in the scene where gentle-shell's thumbnails land, so they no longer cut through the
+ * dialog. Kitty draws them over text, so the tray leaves their cells as plain panel; it has a top border with the title
+ * and a right border (the left and bottom edges are the screen and the editor). Empty without chips.
+ */
+export function itemsTray(chips: readonly string[], idle: boolean): string[] {
+	if (chips.length === 0) return [];
+	const slot = (text: string) => `${PANEL_BG}${fit(text, ITEM_THUMB_COLS)}${RESET}${BORDER}║${RESET}`;
+	const lines = [`${BORDER}═ ${GOLD}${BOLD}ITEMS${RESET}${BORDER} ${"═".repeat(ITEM_COLS - 9)}╗${RESET}`];
+	for (const chip of chips) {
+		lines.push(slot(` ${PINK}▣${RESET}${PANEL_BG} ${TEXT}${chip}${RESET}${PANEL_BG}`));
+		if (idle) for (let i = 0; i < ITEM_THUMB_ROWS; i++) lines.push(slot(""));
 	}
 	return lines;
 }

@@ -12,7 +12,7 @@ import { frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from 
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
-import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, roomDataLost, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, hiddenPanel, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, roomDataLost, splitKitty, itemChips, itemsTray, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, hiddenPanel, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 import { lastResult } from "../src/stage/memo.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
@@ -230,6 +230,14 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	const open = (ctx: ExtensionContext): void => {
 		if (handle || opening) return;
 		opening = true;
+		// T7: the editor's draft and Pi's idle state tell where gentle-shell's pasted-image thumbnails are.
+		const items = (): string[] => {
+			try {
+				return itemsTray(itemChips(ctx.ui.getEditorText()), ctx.isIdle());
+			} catch {
+				return [];
+			}
+		};
 		void ctx.ui.custom<void>(
 			tui => {
 				terminalRows = tui.terminal.rows;
@@ -311,7 +319,8 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						}
 						// T10: typing renders the screen again with nothing new in the scene; reuse the lines until an input changes.
 						const shownNotice = currentNotice(notice, Date.now());
-						const inputs = [width, layout.bodyRows, layout.roomCols, image.room.lines[0], JSON.stringify(snapshot), chat, todo, shownNotice, panelShown, thoughtsShown, dialogTop, editing, selector?.choice.active(), selector?.choice.index(), branch()];
+						const tray = items();
+						const inputs = [tray.join("\n"), width, layout.bodyRows, layout.roomCols, image.room.lines[0], JSON.stringify(snapshot), chat, todo, shownNotice, panelShown, thoughtsShown, dialogTop, editing, selector?.choice.active(), selector?.choice.index(), branch()];
 						return sceneLines(inputs, () => {
 							const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
 							const side = panelShown ? gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: shownNotice }) : hiddenPanel(layout.bodyRows, layout.sideCols);
@@ -336,7 +345,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							portraitShown = showPortrait;
 							// T4f: project and branch, the context left and the brand are signs in the room, not a HUD row.
 							const signs = [...sceneSigns({ project, branch: branch(), percent: snapshot.context.percent }, image.room), ...todoSigns(todo, image.room)];
-							return composeGame(layout, { hud: "", room: image.room.lines, side, dialog, signs });
+							return composeGame(layout, { hud: "", room: image.room.lines, side, dialog, signs, items: tray });
 						});
 					},
 					invalidate() {

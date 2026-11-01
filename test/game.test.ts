@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORTRAIT_COLS, aboveBackgrounds, hiddenPanel, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns, roomDataLost } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, hiddenPanel, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns, roomDataLost, itemChips, itemsTray, ITEM_COLS } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -355,5 +355,49 @@ describe("room data after a full repaint (L4)", () => {
 		assert.equal(lost(), false);
 		redraws = 5;
 		assert.equal(lost(), true);
+	});
+});
+
+describe("ITEMS tray for pasted images (T7, S6)", () => {
+	const layout = { hudRows: 0, bodyRows: 20, inset: 0, roomCols: 60, gap: 3, sideCols: 37 };
+	const side = Array.from({ length: 20 }, (_, i) => `side ${i}`);
+
+	it("lists each [Image#N] chip in the draft once, in order", () => {
+		assert.deepEqual(itemChips("look [Image#2] and [Image#1], again [Image#2]"), ["[Image#2]", "[Image#1]"]);
+		assert.deepEqual(itemChips("no images here"), []);
+	});
+
+	it("is empty without chips; with chips it has a top border, a label row per chip and 6 thumbnail rows while idle", () => {
+		assert.deepEqual(itemsTray([], true), []);
+		const idle = itemsTray(["[Image#1]", "[Image#2]"], true);
+		assert.equal(idle.length, 1 + 2 * (1 + 6));
+		assert.match(plainText(idle[0]!), /ITEMS/);
+		assert.match(plainText(idle[1]!), /\[Image#1\]/);
+		assert.match(plainText(idle[8]!), /\[Image#2\]/);
+		for (const line of idle) assert.equal(plainWidth(line), ITEM_COLS);
+		for (const line of idle.slice(1)) assert.ok(plainText(line).endsWith("║"));
+		// While the agent works gentle-shell shows labels only.
+		assert.equal(itemsTray(["[Image#1]"], false).length, 2);
+	});
+
+	it("covers the bottom-left corner from column 0, keeps the rest of each row, and lifts the dialog above it", () => {
+		const items = itemsTray(["[Image#1]"], true);
+		const dialog = ["d0", "d1", "d2"];
+		const lines = composeGame(layout, { hud: "", room: [], side, dialog, items });
+		assert.equal(lines.length, 20);
+		const start = 20 - items.length;
+		for (let i = 0; i < items.length; i++) {
+			assert.equal(plainText(lines[start + i]!).slice(0, ITEM_COLS), plainText(items[i]!));
+			assert.ok(plainText(lines[start + i]!).endsWith(`side ${start + i}`.padEnd(37)));
+		}
+		assert.equal(plainText(lines[start - 1]!).slice(2, 4), "d2");
+		assert.equal(plainText(lines[start - 3]!).slice(2, 4), "d0");
+		for (const line of lines) assert.equal(plainWidth(line), 100);
+	});
+
+	it("without items the layout is unchanged", () => {
+		const before = composeGame(layout, { hud: "", room: [], side, dialog: ["d0"] });
+		assert.deepEqual(composeGame(layout, { hud: "", room: [], side, dialog: ["d0"], items: [] }), before);
+		assert.equal(plainText(before[19]!).slice(2, 4), "d0");
 	});
 });
