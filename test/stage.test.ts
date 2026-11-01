@@ -386,3 +386,54 @@ describe("Gentle HQ jukebox by the coffee machine (T11b)", () => {
 		assert.notEqual(box(paint({ motion: true, t: 0 })), box(paint({ motion: true, t: 3 })));
 	});
 });
+
+describe("the Boss (terminal scene life T5, S5)", () => {
+	const paint = (frame: Record<string, unknown>) => { const r = createRaster(HQ_WIDTH, HQ_HEIGHT); drawHq(r, frame); return r; };
+	const P = (name: keyof typeof HQ_PALETTE) => HQ_PALETTE[name].toUpperCase();
+	const FLOOR = ["floorA", "floorB", "seam"].map(name => P(name as keyof typeof HQ_PALETTE));
+	/* The Boss (person() at cx, feet fy): by the door while everything is still, in front of the orchestrator's desk
+	   while it thinks. Offsets are from the sprite's feet, so the checks follow the sprite, not the room. */
+	const DOOR = { cx: 360, fy: 378 }, DESK = { cx: 364, fy: 166 };
+	const boss = (spot: { cx: number; fy: number }) => {
+		const { cx, fy } = spot;
+		return [
+			/* Black hoodie, hood up: the hood's top and sides, the coat under the chin, the B's stem and its counter. */
+			{ at: [cx, fy - 28], want: P("hair"), what: "hood top" },
+			{ at: [cx - 5, fy - 22], want: P("hair"), what: "hood side (no face there)" },
+			{ at: [cx - 5, fy - 10], want: P("hair"), what: "black hoodie on the chest" },
+			{ at: [cx - 1, fy - 14], want: P("hair"), what: "the B's counter" },
+			/* Fuchsia B on the chest: stem, and the right bump. */
+			{ at: [cx - 2, fy - 15], want: P("fuchsia"), what: "the B's stem" },
+			{ at: [cx + 1, fy - 14], want: P("fuchsia"), what: "the B's right bump" },
+			/* White shorts above the knee, bare legs below, white sneakers. */
+			{ at: [cx - 3, fy - 6], want: P("text"), what: "white shorts" },
+			{ at: [cx + 2, fy - 5], want: P("text"), what: "white shorts, right leg" },
+			{ at: [cx - 3, fy - 3], want: P("sand"), what: "bare leg" },
+			{ at: [cx + 2, fy - 4], want: P("sand"), what: "bare leg, right" },
+			{ at: [cx - 4, fy - 1], want: P("text"), what: "white sneaker" },
+			{ at: [cx + 2, fy - 1], want: P("text"), what: "white sneaker, right" },
+			/* Keyboard in the right hand: a light bar with key dots, the hand under its left end. */
+			{ at: [cx + 8, fy - 12], want: P("text"), what: "keyboard light bar" },
+			{ at: [cx + 7, fy - 11], want: P("muted"), what: "keyboard key dot" },
+			{ at: [cx + 4, fy - 10], want: P("sand"), what: "hand on the keyboard" },
+		];
+	};
+	const check = (r: ReturnType<typeof paint>, spot: { cx: number; fy: number }, label: string) => {
+		for (const { at: [x, y], want, what } of boss(spot)) assert.equal(hex(r, x!, y!), want, `${label}: ${what} at ${x},${y}`);
+	};
+
+	it("while everything is still the Boss stands by the door, with or without motion", () => {
+		check(paint({}), DOOR, "idle");
+		check(paint({ t: 1, motion: true, waiting: true }), DOOR, "waiting, motion");
+	});
+
+	it("while the orchestrator thinks the Boss stands in front of its desk", () => {
+		check(paint({ thinking: true }), DESK, "thinking");
+		check(paint({ t: 1, motion: true, thinking: true }), DESK, "thinking, motion");
+	});
+
+	it("the other spot is floor: by the door while it thinks, in front of the desk while it is still", () => {
+		assert.ok(FLOOR.includes(hex(paint({ thinking: true }), DOOR.cx - 5, DOOR.fy - 10)), "door spot empty while thinking");
+		assert.ok(FLOOR.includes(hex(paint({}), DESK.cx - 5, DESK.fy + 10)), "desk spot empty while still");
+	});
+});

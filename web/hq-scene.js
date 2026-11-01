@@ -94,6 +94,19 @@ const ORCH_BACK = { coat: K.pink, pants: K.deep, shoes: INK, hair: K.hair, extra
 	O(cx - 4, fy - 37, 8, 9, K.hair); O(cx - 7, fy - 29, 14, 2, K.hair); R(cx - 4, fy - 31, 8, 2, K.gold);
 	R(cx - 11, fy - 13, 1, 13, INK); R(cx - 12, fy - 14, 3, 2, K.gold);
 } };
+/* The Boss (S5): the user. Black hoodie with the hood up, a fuchsia B on the chest, white shorts above the knee, bare legs,
+   white sneakers, and a computer keyboard in the right hand. The legs are overpainted after person() draws the full-length pants. */
+const BOSS_B = ['XXX.', 'X..X', 'XXX.', 'X..X', 'XXX.'];
+const BOSS = { coat: K.hair, pants: K.text, shoes: K.text, hair: K.hair, extra(cx, fy) {
+	R(cx - 6, fy - 29, 12, 3, K.hair); R(cx - 6, fy - 26, 2, 8, K.hair); R(cx + 4, fy - 26, 2, 8, K.hair);
+	BOSS_B.forEach((row, j) => [...row].forEach((c, i) => { if (c === 'X') R(cx - 2 + i, fy - 15 + j, 1, 1, K.fuchsia); }));
+	R(cx - 4, fy - 6, 3, 2, K.text); R(cx + 1, fy - 6, 3, 2, K.text);
+	R(cx - 4, fy - 4, 3, 2, SKIN); R(cx + 1, fy - 4, 3, 2, SKIN);
+	R(cx + 4, fy - 11, 2, 3, SKIN);
+	R(cx + 6, fy - 12, 12, 4, K.text);
+	for (let i = 0; i < 5; i++) R(cx + 7 + i * 2, fy - 11, 1, 1, K.muted);
+	for (let i = 0; i < 4; i++) R(cx + 8 + i * 3, fy - 9, 1, 1, K.muted);
+} };
 const EXPLORER = { coat: K.blue, pants: K.sand, hair: K.gold, extra(cx, fy) {
 	R(cx - 6, fy - 30, 12, 4, K.sand); R(cx - 7, fy - 27, 14, 1, shade(K.sand)); R(cx - 1, fy - 30, 2, 1, K.green);
 	R(cx - 6, fy - 13, 12, 2, shade(K.sand));
@@ -329,7 +342,8 @@ function jobsWall() {
 /**
  * Paints one frame of the room at 1x (HQ_WIDTH x HQ_HEIGHT) on any context with `fillStyle`, `globalAlpha` and `fillRect`.
  * `frame.t` is the animation step (4 per second), `frame.motion` false draws a still frame, and the flags say who is acting:
- * `thinking`/`waiting` (the orchestrator), `working` (the writers), `exploring` (the explorer); `workers` running writers
+ * `thinking`/`waiting` (the orchestrator; `thinking` also puts the Boss in front of the orchestrator's desk, otherwise the Boss
+ * stands by the door; both with or without motion), `working` (the writers), `exploring` (the explorer); `workers` running writers
  * (the first desks show code, the rest a still game) and `coffee` (the writers on a break at the coffee corner); `judging`
  * (a judgment day: the judges debate, the gavel moves) and `struck` (the judges just finished: the gavel strikes).
  * State shown: `context` percent (the coffee pot), `brewing` (compaction steam), `odd` (current ODD step, 0-6, on the
@@ -378,6 +392,8 @@ export function drawHq(ctx, frame = {}) {
 		person(590, 354, VERIFIER, 0);
 		verifyLab();
 		installerCrates(); doorAndPermissions();
+		/* S5: the Boss stands in front of the orchestrator's desk while it thinks, by the door when everything is still. */
+		if (atMonitor) person(364, 166, BOSS); else person(360, 378, BOSS);
 		plant(196, 300); plant(486, 140); plant(486, 396); plant(222, 300); plant(700, 300);
 	} finally {
 		g = null;
