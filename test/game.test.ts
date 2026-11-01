@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORTRAIT_COLS, aboveBackgrounds, hiddenPanel, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, hiddenPanel, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns, roomDataLost } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -342,5 +342,18 @@ describe("status signs in the scene (T4f)", () => {
 		assert.equal(lines[0], "\x1b_Gi\x1b\\" + "    AB      " + "   ");
 		assert.equal(lines[2], " CD         " + "   ");
 		assert.equal(lines[3], "  dlg       " + "   ", "the dialog wins over a sign on its rows");
+	});
+});
+
+describe("room data after a full repaint (L4)", () => {
+	it("reports the room's data lost once per full repaint Pi made, and not otherwise", () => {
+		let redraws = 2;
+		const lost = roomDataLost(() => redraws);
+		assert.equal(lost(), false);
+		redraws = 3;
+		assert.equal(lost(), true);
+		assert.equal(lost(), false);
+		redraws = 5;
+		assert.equal(lost(), true);
 	});
 });

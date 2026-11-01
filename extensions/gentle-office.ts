@@ -12,7 +12,7 @@ import { frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from 
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
-import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, hiddenPanel, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, roomDataLost, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, hiddenPanel, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 import { lastResult } from "../src/stage/memo.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
@@ -245,6 +245,13 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				// The overlay shrinking or growing exposes or covers Pi's rows, which only a full repaint redraws.
 				let lastReserved = reserved();
 				forceRepaint = () => queueMicrotask(() => tui.requestRender(true));
+				// L4: a full repaint deleted the room's data; once Pi has written it, send the room again under the other id.
+				const lost = roomDataLost(() => tui.fullRedraws);
+				const checkRoom = () => queueMicrotask(() => {
+					if (!lost() || handle?.isHidden()) return;
+					resendRoom = true;
+					tui.requestRender();
+				});
 				// Pi's own input path, used to replay the dialog's answer one key at a time (private in the types, present at runtime).
 				const replay = (tui as unknown as { handleTerminalInput?: (data: string) => void }).handleTerminalInput?.bind(tui);
 				const stopKeys = tui.addInputListener(data => {
@@ -287,6 +294,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							lastWidth = width;
 						}
 						terminalRows = tui.terminal.rows;
+						checkRoom();
 						const layout = gameLayout(width, Math.max(1, terminalRows - reserved()), getCellDimensions(), { panel: panelShown });
 						if (!layout) return [];
 						const snapshot = hub.snapshot();

@@ -135,6 +135,21 @@ export function nextRoomId(ids: readonly [number, number], shown: number | undef
 	return { id, retire: shown };
 }
 
+/**
+ * Whether Pi made a full repaint since the last call (L4). A full repaint deletes every Kitty image its lines name with
+ * `a=d,d=I`, data included, so the room's placement points at nothing until its data is sent again; an unchanged
+ * scene never sends it, and the room stayed black after alt+c.
+ */
+export function roomDataLost(fullRedraws: () => number): () => boolean {
+	let seen = fullRedraws();
+	return () => {
+		const now = fullRedraws();
+		if (now === seen) return false;
+		seen = now;
+		return true;
+	};
+}
+
 /** The z-index that puts the room below cell backgrounds (see belowBackgrounds). */
 export const ROOM_Z = BELOW_BACKGROUNDS;
 
