@@ -10,6 +10,10 @@ export interface HqFrame {
 	readonly thinking?: boolean;
 	readonly waiting?: boolean;
 	readonly working?: boolean;
+	/** Running workers: the first desks, one each, show code; the rest show a still game. */
+	readonly workers?: number;
+	/** No worker has run for COFFEE_AFTER_MS: the workers stand at the coffee corner. */
+	readonly coffee?: boolean;
 	readonly exploring?: boolean;
 	/** Context used, 0-100, or null while Pi has not reported it (the pot stays full). */
 	readonly context?: number | null;
@@ -51,10 +55,30 @@ export function frameFromSnapshot(snapshot: OfficeSnapshot): HqFrame {
 		thinking: state === "thinking" || state === "tool",
 		waiting: state === "waiting-user",
 		working: running.some(agent => agent.role === "worker"),
+		workers: running.filter(agent => agent.role === "worker").length,
 		exploring: running.some(agent => agent.role === "explore"),
 		context: snapshot.context.percent,
 		brewing: snapshot.compaction === "start",
 		reviewDesks: reviewDesks(snapshot.review),
+	};
+}
+
+/** How long the workers stay at their desks with nothing to do before they go for a coffee (S3). */
+export const COFFEE_AFTER_MS = 180_000;
+
+/** When the coffee break starts: COFFEE_AFTER_MS after the last moment a worker ran (or after `start`). */
+export function coffeeClock(start: number) {
+	let last = start;
+	return {
+		/** Whether the workers are on a break at `now`; a running worker resets the clock. */
+		at(working: boolean, now: number): boolean {
+			if (working) {
+				last = now;
+				return false;
+			}
+			return now - last >= COFFEE_AFTER_MS;
+		},
+		dueAt: (): number => last + COFFEE_AFTER_MS,
 	};
 }
 

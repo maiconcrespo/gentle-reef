@@ -96,6 +96,8 @@ const worker = hair => ({ coat: K.green, pants: K.border, hair, seated: true, ex
 	R(cx - 3, fy - 17, 6, 10, shade(K.green)); R(cx - 3, fy - 17, 1, 3, K.text); R(cx + 2, fy - 17, 1, 3, K.text);
 	R(cx - 6, fy - 26, 1, 5, INK); R(cx + 5, fy - 26, 1, 5, INK); R(cx - 5, fy - 29, 10, 1, INK); R(cx - 7, fy - 22, 2, 2, K.fuchsia);
 } });
+/* A worker on a coffee break: standing, a cup in the right hand. */
+const onBreak = hair => { const w = worker(hair); return { ...w, seated: false, extra(cx, fy) { w.extra(cx, fy); O(cx + 6, fy - 11, 3, 4, K.text); R(cx + 9, fy - 10, 1, 2, K.text); } }; };
 const reviewer = lens => ({ coat: K.border, pants: K.user, hair: K.hair, extra(cx, fy) {
 	O(cx - 5, fy - 31, 10, 4, K.hair); O(cx - 7, fy - 28, 14, 1, K.hair); R(cx - 5, fy - 29, 10, 1, lens);
 	R(cx - 4, fy - 14, 3, 3, lens);
@@ -237,10 +239,16 @@ function questBoard() {
 	R(112, 206, 2, 12, INK); R(192, 206, 2, 12, INK);
 }
 
-function draftingDesk(x) {
+function draftingDesk(x, working) {
 	O(x, 222, 64, 16, shade(K.sand)); R(x, 222, 64, 3, hi(K.sand)); R(x + 4, 238, 3, 10, INK); R(x + 57, 238, 3, 10, INK);
 	O(x + 4, 206, 26, 18, K.border); R(x + 6, 208, 22, 14, INK);
-	for (let i = 0; i < 4; i++) R(x + 8, 210 + i * 3, ((t + i + x) % 4) * 4 + 4, 1, K.green);
+	/* S3: code scrolls only while this desk's worker works; otherwise a still game: hero on green ground, a coin, a block. */
+	if (working) for (let i = 0; i < 4; i++) R(x + 8, 210 + i * 3, ((t + i + x) % 4) * 4 + 4, 1, K.green);
+	else {
+		R(x + 6, 219, 22, 3, K.green); R(x + 6, 219, 22, 1, hi(K.green));
+		R(x + 10, 214, 3, 5, K.fuchsia); R(x + 10, 213, 3, 1, K.sand);
+		R(x + 18, 211, 2, 2, K.gold); O(x + 23, 213, 4, 4, K.sand);
+	}
 	R(x + 15, 224, 4, 2, K.border);
 	O(x + 36, 226, 12, 4, K.text); R(x + 50, 225, 6, 5, K.pink);
 }
@@ -305,7 +313,8 @@ function jobsWall() {
 /**
  * Paints one frame of the room at 1x (HQ_WIDTH x HQ_HEIGHT) on any context with `fillStyle`, `globalAlpha` and `fillRect`.
  * `frame.t` is the animation step (4 per second), `frame.motion` false draws a still frame, and the flags say who is acting:
- * `thinking`/`waiting` (the orchestrator), `working` (the writers), `exploring` (the explorer).
+ * `thinking`/`waiting` (the orchestrator), `working` (the writers), `exploring` (the explorer); `workers` running writers
+ * (the first desks show code, the rest a still game) and `coffee` (the writers on a break at the coffee corner).
  * State shown: `context` percent (the coffee pot), `brewing` (compaction steam), `odd` (current ODD step, 0-6, on the
  * chalkboard), `todo` ([{ done, now }] rows on the TODO board), `jobs` ("running" | "ok" | "fail", one monitor each)
  * and `reviewDesks` ("off" | "lit" | "ok", one magnifier per lens desk). Readable text lives in the terminal UI, not the image.
@@ -329,7 +338,13 @@ export function drawHq(ctx, frame = {}) {
 		designEasel(); coffeeCorner(); jukebox();
 		profileRack(); featureDesk();
 		person(300, 104, ORCH, bob(frame.thinking || frame.waiting));
-		[[244, K.sand], [324, K.hair], [404, K.border]].forEach(([x, hair], i) => { person(x + 46, 228, worker(hair), motion && frame.working && (t + i) % 2 === 0 ? 1 : 0); draftingDesk(x); });
+		/* S3: the first `workers` desks work; on a coffee break the chairs are empty and the workers stand by the counter. */
+		const workers = Number.isInteger(frame.workers) ? frame.workers : frame.working ? 3 : 0, coffee = frame.coffee === true;
+		[[244, K.sand], [324, K.hair], [404, K.border]].forEach(([x, hair], i) => {
+			if (!coffee) person(x + 46, 228, worker(hair), motion && i < workers && (t + i) % 2 === 0 ? 1 : 0);
+			draftingDesk(x, i < workers);
+		});
+		if (coffee) [[182, 100, K.sand], [200, 100, K.hair], [191, 132, K.border]].forEach(([cx, fy, hair]) => person(cx, fy, onBreak(hair), 0));
 		reviewStations();
 		[K.red, K.green, K.blue, K.gold].forEach((c, i) => person(535 + i * 48, 100, reviewer(c), 0));
 		person(560, 214, JUDGE, 0); person(668, 214, JUDGE, 0);

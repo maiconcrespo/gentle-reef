@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { inflateSync } from "node:zlib";
 import { encodePng } from "../src/stage/png.ts";
 import { createRaster } from "../src/stage/raster.ts";
-import { frameFromSnapshot, renderHqPng, renderPortraitPng } from "../src/stage/frame.ts";
+import { COFFEE_AFTER_MS, coffeeClock, frameFromSnapshot, renderHqPng, renderPortraitPng } from "../src/stage/frame.ts";
 import { HQ_HEIGHT, HQ_PALETTE, HQ_WIDTH, drawHq, drawHqPortrait } from "../web/hq-scene.js";
 
 /** Splits a PNG into its chunks, checking each CRC. */
@@ -153,7 +153,7 @@ describe("snapshot to frame (event-to-scene mapping)", () => {
 	const agent = (role: string, status: string) => ({ v: 1, type: "subagent", id: role + status, agent: "gentle-ai-" + role, role, label: role, status });
 
 	it("an idle session is a still room with a full pot", () => {
-		assert.deepEqual(frameFromSnapshot(base as never), { motion: false, thinking: false, waiting: false, working: false, exploring: false, context: null, brewing: false, reviewDesks: ["off", "off", "off", "off"] });
+		assert.deepEqual(frameFromSnapshot(base as never), { motion: false, thinking: false, waiting: false, working: false, workers: 0, exploring: false, context: null, brewing: false, reviewDesks: ["off", "off", "off", "off"] });
 	});
 
 	it("reads who acts, the context and compaction from the snapshot", () => {
@@ -167,6 +167,7 @@ describe("snapshot to frame (event-to-scene mapping)", () => {
 		assert.equal(frame.waiting, true);
 		assert.equal(frame.thinking, false);
 		assert.equal(frame.working, true);
+		assert.equal(frame.workers, 1, "one running worker");
 		assert.equal(frame.exploring, false, "a finished explorer no longer acts");
 		assert.equal(frame.context, 38);
 		assert.equal(frame.brewing, true);
@@ -174,6 +175,60 @@ describe("snapshot to frame (event-to-scene mapping)", () => {
 
 	it("a tool call counts as thinking (the orchestrator is at the board)", () => {
 		assert.equal(frameFromSnapshot({ ...base, orchestrator: { state: "tool", toolName: "read" } } as never).thinking, true);
+	});
+});
+
+describe("workers' screens and the coffee break (terminal scene life T3, S3)", () => {
+	const paint = (frame: Record<string, unknown>) => { const r = createRaster(HQ_WIDTH, HQ_HEIGHT); drawHq(r, frame); return r; };
+	const P = (name: keyof typeof HQ_PALETTE) => HQ_PALETTE[name].toUpperCase();
+	const DESKS = [244, 324, 404];
+	const screen = (r: { width: number; data: Uint8Array }, x: number) => {
+		const out: string[] = [];
+		for (let y = 208; y < 222; y++) for (let sx = x + 6; sx < x + 28; sx++) out.push(hex(r, sx, y));
+		return out.join(",");
+	};
+
+	it("a desk's screen moves only while its worker works; the others hold still", () => {
+		const a = paint({ motion: true, t: 0, working: true, workers: 1 });
+		const b = paint({ motion: true, t: 1, working: true, workers: 1 });
+		assert.notEqual(screen(a, DESKS[0]), screen(b, DESKS[0]), "desk 1 works");
+		assert.equal(screen(a, DESKS[1]), screen(b, DESKS[1]), "desk 2 is still");
+		assert.equal(screen(a, DESKS[2]), screen(b, DESKS[2]), "desk 3 is still");
+	});
+
+	it("an idle desk shows a still game picture: a fuchsia hero on green ground, a gold coin", () => {
+		for (const x of DESKS) {
+			const r = paint({ workers: 0 });
+			assert.equal(hex(r, x + 11, 216), P("fuchsia"), `desk ${x}: hero`);
+			assert.equal(hex(r, x + 8, 220), P("green"), `desk ${x}: ground`);
+			assert.equal(hex(r, x + 19, 212), P("gold"), `desk ${x}: coin`);
+		}
+		assert.notEqual(hex(paint({ workers: 3 }), DESKS[0] + 11, 216), P("fuchsia"), "a working desk shows code, not the game");
+	});
+
+	it("on a coffee break the workers leave their desks and stand at the coffee corner with a cup", () => {
+		const desk = paint({}), coffee = paint({ coffee: true });
+		const skin = HQ_PALETTE.sand.toUpperCase();
+		for (const x of DESKS) {
+			assert.equal(hex(desk, x + 44, 205), skin, `desk ${x}: worker seated`);
+			assert.notEqual(hex(coffee, x + 44, 205), skin, `desk ${x}: chair empty`);
+		}
+		for (const cx of [182, 200]) {
+			assert.equal(hex(coffee, cx - 2, 78), skin, `worker at ${cx}: face`);
+			assert.equal(hex(coffee, cx + 7, 91), P("text"), `worker at ${cx}: cup`);
+			assert.notEqual(hex(desk, cx - 2, 78), skin, `no worker at ${cx} while they work`);
+		}
+	});
+
+	it("the coffee clock: a break after three minutes without a running worker, back to work when one starts", () => {
+		assert.equal(COFFEE_AFTER_MS, 180_000);
+		const clock = coffeeClock(1_000);
+		assert.equal(clock.at(false, 1_000 + COFFEE_AFTER_MS - 1), false);
+		assert.equal(clock.at(false, 1_000 + COFFEE_AFTER_MS), true);
+		assert.equal(clock.at(true, 500_000), false, "a worker starts: everyone back at the desks");
+		assert.equal(clock.at(false, 500_001), false);
+		assert.equal(clock.dueAt(), 500_000 + COFFEE_AFTER_MS, "the next break is due three minutes after the last work");
+		assert.equal(clock.at(false, 500_000 + COFFEE_AFTER_MS), true);
 	});
 });
 
