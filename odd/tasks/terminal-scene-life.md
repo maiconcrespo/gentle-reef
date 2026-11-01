@@ -14,6 +14,8 @@ Branch: feat/terminal-scene-life (from main 64cb43b). Issues: #3 (judges). Follo
 - S9 — PgUp/PgDn (L8): "pgup y pgdn no funciona el shft+ flecha si".
 - S5 — The user as the Boss: "y yo YOU, el Boss de Sudadera negra con capucha, y un B fucsia en el centro. pantalones blanco corto y zapatilla blanca, un keyboard de ordenador en la mano." Placement agreed ("ok dale asi mismo"): in front of the orchestrator's desk while the orchestrator works, by the door when everything is still.
 
+- S10 — Reviewer desks (L12-L13): "los reviwers, podriamos tener como apagados con la lupa abajo , segun vaya aprobando enciendendo con un check verde. abajo." / "en las pesas de los revieer" / "mesas". Proposed: on each of the four lens desks in the review wing (web/hq-scene.js reviewStations), a magnifying glass that is off while no review runs or the lens was not asked for, lit in the lens colour while its lens inspects, and a green check when the review approves. Real data only: the verdict is one per capture, so single captures light one by one and a capture group lights all its lenses at once.
+
 ## Tasks
 - T1 — S1: alt+c hides the whole side panel. gameLayout({ panel: false }) gives an inset that centres the room, hiddenPanel() the blank side with the key hint; the toggle forces one full repaint. Route: inline. Commit: 51cae8e. Tests: `npm test` 427/427. Pending: the user's look in Ghostty.
 - T1b — S1 (L4): alt+c left the room black. A full repaint (forced by alt+c, or by a resize) deletes every Kitty image its lines name with `a=d,d=I`, data included; the room's line only places the image (T10), and an unchanged scene never sent the data again, so the room stayed black until the next animated frame. Now each render checks `tui.fullRedraws` after Pi writes it (roomDataLost) and sends the room again under the other id. Route: inline. Commit: see git log (fix(stage): send the room again after a full repaint). Tests: `npm test` 428/428. Pending: the user's look in Ghostty.
@@ -25,7 +27,8 @@ Branch: feat/terminal-scene-life (from main 64cb43b). Issues: #3 (judges). Follo
 - T2 — S2: judges debate during a judgment day, gavel strike at the end. Route: inline. Commit: pending.
 - T4 — S4: orchestrator at its monitor. Route: inline. Commit: pending.
 - T5 — S5: the Boss sprite and its two places. Route: inline. Commit: pending.
-- T6 — S1-S5: README and docs/reference.md. Route: inline. Commit: pending.
+- T11 — S10: reviewer desks. The hub keeps the review (snapshot.review: phase, lenses, count; idle on a correction, failure, sign-off or agent idle); frameFromSnapshot maps it to reviewDesks in REVIEW_DESKS order; reviewStations draws the magnifier (dim / lens colour) and the green check. Per-lens one-by-one is not real data: a capture never names its lens and intermediate single captures carry no approval, so the asked lenses light and approve together. Route: inline. Commit: see git log (feat(stage): reviewer desks). Tests: `npm test` 449/449. Pending: the user's look.
+- T6 — S1-S5, S10: README and docs/reference.md. Route: inline. Commit: pending.
 
 ## Log
 - L1 — User: "ok arrancamos con alt+c #3 ok , animamos durante un judgment day. los workers estan todo el tiempo trabajando, mejor que la pantalla este parada con un imagen estatica de un juego cuando no hacen nada, que se levanten y tomen un cafe a veces, si llevan mucho parado. que te parece? el orchestrator que se mueva y mire la pantalla cuando toca hacer algo, y yo YOU, el Boss de Sudadera negra con capucha, y un B fucsia en el centro. pantalones blanco corto y zapatilla blanca, un keyboard de ordenador en la mano."
@@ -39,3 +42,5 @@ Branch: feat/terminal-scene-life (from main 64cb43b). Issues: #3 (judges). Follo
 - L9 — User (screenshot of the guard's confirm): "este es el tipo de pregunta que no aparece en la escena, que se tapa".
 - L10 — User ran `printf '\e[>7u'; timeout 8 cat -v; printf '\e[<u'` in Ghostty: `^[[5~^[[5;1:3~^[[6~^[[6;1:3~`.
 - L11 — User: "ok , guarda todo lo encontrado, sigo despues,". Stopped after T10 (b684c34). Next: the user's look at T8-T10 in Ghostty, push (3 commits after b79b62a unpushed), slice/PR decision (499 lines since main), then T3, T2, T4, T5, T6.
+- L12 — User: "todavia nos falta etapas no? los workers los reviwers, podriamos tener como apagados con la lupa abajo , segun vaya aprobando enciendendo con un check verde. abajo."
+- L13 — Assistant: the adapter gets one verdict per capture (src/adapter/pi-events.ts reviewEnd), so a capture group lights all lenses at once. User: "en las pesas de los revieer", then "mesas" (the reviewer desks).

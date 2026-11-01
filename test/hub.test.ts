@@ -34,6 +34,7 @@ describe("OfficeHub snapshot", () => {
 			compaction: "start",
 			agents: [],
 			ask: null,
+			review: { phase: "idle", lenses: [], count: 0 },
 		});
 	});
 
@@ -124,5 +125,47 @@ describe("OfficeHub ask dialog", () => {
 		hub.publish(open);
 		hub.reset();
 		assert.equal(hub.snapshot().ask, null);
+	});
+});
+
+describe("OfficeHub review desks (terminal scene life T11, S10)", () => {
+	const review = (event: Record<string, unknown>): OfficeEvent => ({ v: 1, type: "review", ...event }) as OfficeEvent;
+
+	it("a start names the lenses, a capture inspects them, an approved verdict keeps them until the sign-off", () => {
+		const hub = new OfficeHub();
+		hub.publish(review({ phase: "arrive", names: ["risk", "readability"] }));
+		assert.deepEqual(hub.snapshot().review, { phase: "arriving", lenses: ["risk", "readability"], count: 0 });
+		hub.publish(review({ phase: "inspect", count: 2 }));
+		assert.deepEqual(hub.snapshot().review, { phase: "inspecting", lenses: ["risk", "readability"], count: 2 });
+		hub.publish(review({ phase: "verdict", verdict: "approved" }));
+		assert.deepEqual(hub.snapshot().review, { phase: "approved", lenses: ["risk", "readability"], count: 2 });
+		hub.publish(review({ phase: "acknowledged" }));
+		assert.deepEqual(hub.snapshot().review, { phase: "idle", lenses: [], count: 0 });
+	});
+
+	it("a correction or a failure ends the review, as does the session going idle", () => {
+		for (const verdict of ["correction", "failed"]) {
+			const hub = new OfficeHub();
+			hub.publish(review({ phase: "arrive" }));
+			hub.publish(review({ phase: "inspect", count: 1 }));
+			hub.publish(review({ phase: "verdict", verdict }));
+			assert.deepEqual(hub.snapshot().review, { phase: "idle", lenses: [], count: 0 }, verdict);
+		}
+		const hub = new OfficeHub();
+		hub.publish(review({ phase: "arrive", names: ["risk"] }));
+		hub.publish(review({ phase: "verdict", verdict: "approved" }));
+		hub.publish({ v: 1, type: "orchestrator", state: "idle" });
+		assert.deepEqual(hub.snapshot().review, { phase: "idle", lenses: [], count: 0 });
+	});
+
+	it("a verdict or a sign-off with no review running changes nothing; reset clears it", () => {
+		const hub = new OfficeHub();
+		hub.publish(review({ phase: "verdict", verdict: "approved" }));
+		hub.publish(review({ phase: "acknowledged" }));
+		assert.deepEqual(hub.snapshot().review, { phase: "idle", lenses: [], count: 0 });
+		hub.publish(review({ phase: "inspect", count: 3 }));
+		assert.deepEqual(hub.snapshot().review, { phase: "inspecting", lenses: [], count: 3 });
+		hub.reset();
+		assert.deepEqual(hub.snapshot().review, { phase: "idle", lenses: [], count: 0 });
 	});
 });

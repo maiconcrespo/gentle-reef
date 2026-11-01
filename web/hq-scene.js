@@ -18,7 +18,7 @@ const INK = K.bg, SKIN = K.sand, SKIN_SH = shade(K.sand);
 const W = HQ_WIDTH, H = HQ_HEIGHT;
 
 /* The frame being painted. Set by drawHq for the duration of one synchronous call. */
-let g = null, motion = false, t = 0, potLevel = 1, brewing = false, oddStep = null, todo = [], jobs = [];
+let g = null, motion = false, t = 0, potLevel = 1, brewing = false, oddStep = null, todo = [], jobs = [], reviewDesks = [];
 const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 const O = (x, y, w, h, c) => { R(x - 1, y - 1, w + 2, h + 2, INK); R(x, y, w, h, c); };
 
@@ -263,6 +263,11 @@ function reviewStations() {
 		/* Desk lamp in the lens colour. */
 		R(x + 24, 94, 1, 10, INK); O(x + 20, 90, 8, 4, c);
 		if (motion) { g.globalAlpha = 0.18 + 0.08 * ((t + i) % 2); R(x + 14, 94, 20, 10, c); g.globalAlpha = 1; }
+		/* Magnifier at the desk's front (S10): dim while off, the lens colour while it inspects, a green check once approved. */
+		const desk = reviewDesks[i], ring = desk === 'lit' || desk === 'ok' ? c : K.dim;
+		R(x + 4, 112, 6, 1, ring); R(x + 4, 117, 6, 1, ring); R(x + 3, 113, 1, 4, ring); R(x + 10, 113, 1, 4, ring);
+		R(x + 4, 113, 6, 4, desk === 'off' || !desk ? INK : hi(c)); R(x + 11, 117, 3, 2, ring);
+		if (desk === 'ok') { R(x + 17, 114, 2, 2, K.green); R(x + 19, 116, 2, 2, K.green); R(x + 21, 112, 2, 4, K.green); R(x + 23, 110, 2, 2, K.green); }
 	});
 }
 function judgmentBench() {
@@ -302,7 +307,8 @@ function jobsWall() {
  * `frame.t` is the animation step (4 per second), `frame.motion` false draws a still frame, and the flags say who is acting:
  * `thinking`/`waiting` (the orchestrator), `working` (the writers), `exploring` (the explorer).
  * State shown: `context` percent (the coffee pot), `brewing` (compaction steam), `odd` (current ODD step, 0-6, on the
- * chalkboard), `todo` ([{ done, now }] rows on the TODO board) and `jobs` ("running" | "ok" | "fail", one monitor each). Readable text lives in the terminal UI, not the image.
+ * chalkboard), `todo` ([{ done, now }] rows on the TODO board), `jobs` ("running" | "ok" | "fail", one monitor each)
+ * and `reviewDesks` ("off" | "lit" | "ok", one magnifier per lens desk). Readable text lives in the terminal UI, not the image.
  */
 export function drawHq(ctx, frame = {}) {
 	g = ctx; t = frame.t ?? 0; motion = frame.motion ?? false;
@@ -312,6 +318,7 @@ export function drawHq(ctx, frame = {}) {
 	oddStep = Number.isInteger(frame.odd) ? frame.odd : null;
 	todo = Array.isArray(frame.todo) ? frame.todo : [];
 	jobs = Array.isArray(frame.jobs) ? frame.jobs : [];
+	reviewDesks = Array.isArray(frame.reviewDesks) ? frame.reviewDesks : [];
 	const bob = on => (motion && on ? t % 2 : 0);
 	try {
 		R(0, 0, W, H, K.panel);

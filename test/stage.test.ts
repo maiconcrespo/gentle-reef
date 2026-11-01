@@ -149,11 +149,11 @@ describe("stage frame", () => {
 });
 
 describe("snapshot to frame (event-to-scene mapping)", () => {
-	const base = { v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null } as const;
+	const base = { v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null, review: { phase: "idle", lenses: [], count: 0 } } as const;
 	const agent = (role: string, status: string) => ({ v: 1, type: "subagent", id: role + status, agent: "gentle-ai-" + role, role, label: role, status });
 
 	it("an idle session is a still room with a full pot", () => {
-		assert.deepEqual(frameFromSnapshot(base as never), { motion: false, thinking: false, waiting: false, working: false, exploring: false, context: null, brewing: false });
+		assert.deepEqual(frameFromSnapshot(base as never), { motion: false, thinking: false, waiting: false, working: false, exploring: false, context: null, brewing: false, reviewDesks: ["off", "off", "off", "off"] });
 	});
 
 	it("reads who acts, the context and compaction from the snapshot", () => {
@@ -174,6 +174,44 @@ describe("snapshot to frame (event-to-scene mapping)", () => {
 
 	it("a tool call counts as thinking (the orchestrator is at the board)", () => {
 		assert.equal(frameFromSnapshot({ ...base, orchestrator: { state: "tool", toolName: "read" } } as never).thinking, true);
+	});
+});
+
+describe("reviewer desks (terminal scene life T11, S10)", () => {
+	const base = { v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null } as const;
+	const desks = (review: Record<string, unknown>) => frameFromSnapshot({ ...base, review } as never).reviewDesks;
+	const paint = (frame: Record<string, unknown>) => { const r = createRaster(HQ_WIDTH, HQ_HEIGHT); drawHq(r, frame); return r; };
+	const P = (name: keyof typeof HQ_PALETTE) => HQ_PALETTE[name].toUpperCase();
+
+	it("desks follow the lens order risk, resilience, readability, reliability: the asked lenses light while they inspect", () => {
+		assert.deepEqual(desks({ phase: "inspecting", lenses: ["reliability", "risk"], count: 2 }), ["lit", "off", "off", "lit"]);
+		assert.deepEqual(desks({ phase: "approved", lenses: ["reliability", "risk"], count: 2 }), ["ok", "off", "off", "ok"]);
+	});
+
+	it("while the inspectors arrive every magnifier is still off", () => {
+		assert.deepEqual(desks({ phase: "arriving", lenses: ["risk"], count: 0 }), ["off", "off", "off", "off"]);
+	});
+
+	it("with no lens names the first desks light, one per lens the capture runs", () => {
+		assert.deepEqual(desks({ phase: "inspecting", lenses: [], count: 3 }), ["lit", "lit", "lit", "off"]);
+		assert.deepEqual(desks({ phase: "approved", lenses: [], count: 1 }), ["ok", "off", "off", "off"]);
+		assert.deepEqual(desks({ phase: "approved", lenses: [], count: 0 }), ["ok", "ok", "ok", "ok"], "approved with nothing known: every desk");
+	});
+
+	it("each desk has a magnifier at the front: dim when off, the lens colour when lit, a green check when approved", () => {
+		const lens = ["red", "green", "blue", "gold"] as const;
+		const off = paint({ reviewDesks: ["off", "off", "off", "off"] });
+		const lit = paint({ reviewDesks: ["lit", "lit", "lit", "lit"] });
+		const ok = paint({ reviewDesks: ["ok", "ok", "ok", "ok"] });
+		for (let i = 0; i < 4; i++) {
+			const x = 520 + i * 48;
+			assert.equal(hex(off, x + 3, 114), P("dim"), `desk ${i}: off ring`);
+			assert.equal(hex(lit, x + 3, 114), P(lens[i]), `desk ${i}: lit ring`);
+			assert.equal(hex(ok, x + 3, 114), P(lens[i]), `desk ${i}: approved ring`);
+			assert.equal(hex(ok, x + 19, 116), P("green"), `desk ${i}: check`);
+			assert.notEqual(hex(lit, x + 19, 116), P("green"), `desk ${i}: no check before the approval`);
+		}
+		assert.equal(hex(paint({}), 523, 114), P("dim"), "no review: off");
 	});
 });
 
