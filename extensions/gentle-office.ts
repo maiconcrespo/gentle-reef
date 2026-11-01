@@ -345,7 +345,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						const inputs = [tray.join("\n"), width, layout.bodyRows, layout.roomCols, image.room.lines[0], JSON.stringify(snapshot), chat, todo, shownNotice, panelShown, thoughtsShown, dialogTop, editing, selector?.choice.active(), selector?.choice.index(), branch()];
 						return sceneLines(inputs, () => {
 							const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
-							const side = panelShown ? gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: shownNotice }) : hiddenPanel(layout.bodyRows, layout.sideCols);
+							const side = panelShown ? gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: shownNotice, todo }) : hiddenPanel(layout.bodyRows, layout.sideCols);
 							// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
 							const reply = currentReply(chat);
 							const question = snapshot.ask?.questions[0];

@@ -62,6 +62,7 @@ describe("game mode lines", () => {
 });
 
 describe("game mode text", () => {
+	const task = (id: number, status: string, title = `task ${id}`) => ({ id, title, status }) as never;
 	const snapshot = (over: Record<string, unknown> = {}) => ({ v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null, ...over }) as never;
 
 	it("PARTY says where the orchestrator is (T4, S4): at the monitor while it thinks or runs a tool", () => {
@@ -131,6 +132,30 @@ describe("game mode text", () => {
 		const side = gameSide(snapshot(), [], 7, 66).map(plainText);
 		assert.equal(side[4], "║ " + "Write below; the orchestrator answers here.".padEnd(62) + " ║");
 		assert.equal(side[6], "╚═ alt+t thoughts · alt+g plain chat · alt+c hide panel " + "═".repeat(9) + "╝", "the keys live in the CHAT frame's bottom border");
+	});
+
+	it("TODO box under CHAT: every task with its T number and full title, dropped left out", () => {
+		const todo = [task(1, "done", "Map the code"), task(2, "dropped", "Old idea"), task(3, "in_progress", "Write the parser"), task(4, "blocked", "Docs")];
+		const side = gameSide(snapshot(), ["c1"], 13, 30, { todo }).map(plainText);
+		assert.deepEqual(side.slice(-5), [
+			"╔═ TODO 1/3 ═════════════════╗",
+			"║ ✓ T1 Map the code          ║",
+			"║ ▶ T3 Write the parser      ║",
+			"║ ! T4 Docs                  ║",
+			"╚════════════════════════════╝",
+		]);
+		assert.equal(side[3], "╔═ CHAT ═════════════════════╗");
+		assert.equal(side.length, 13);
+	});
+
+	it("the TODO box never squeezes CHAT below its frame and one line, and is absent without tasks", () => {
+		const todo = [1, 2, 3, 4, 5, 6].map(id => task(id, id === 5 ? "in_progress" : "pending"));
+		const side = gameSide(snapshot(), ["c1"], 10, 30, { todo }).map(plainText);
+		assert.equal(side.length, 10);
+		assert.equal(side[3], "╔═ CHAT ═════════════════════╗");
+		assert.equal(side[6], "╔═ TODO 0/6 ═════════════════╗");
+		assert.ok(side.slice(7, 9).some(line => line.includes("▶ T5")), "the current task stays visible");
+		assert.equal(gameSide(snapshot(), ["c1"], 10, 30, { todo: [] }).map(plainText).filter(line => line.includes("TODO")).length, 0);
 	});
 
 	it("every side line has the column width", () => {
@@ -270,23 +295,20 @@ describe("readable TODO board (T11c)", () => {
 	const task = (id: number, status: string, title = `task ${id}`) => ({ id, title, status }) as never;
 	const image = { cols: 162, rows: 46 };
 
-	it("a title with done/total, then one row per task on the board: ✓ done, ▶ current, · pending, dropped left out", () => {
+	it("a title with done/total, then short labels packed in rows: ✓T1 done, ▶T3 current, ·T4 open, dropped left out", () => {
 		const signs = todoSigns([task(1, "done", "Map the code"), task(2, "dropped"), task(3, "in_progress", "Write the parser"), task(4, "pending", "Docs")], image);
 		assert.deepEqual(signs.map(sign => [sign.row, sign.col, plainText(sign.text)]), [
 			[17, 24, "TODO 1/3".padEnd(21)],
-			[18, 24, "✓ Map the code".padEnd(21)],
-			[19, 24, "▶ Write the parser".padEnd(21)],
-			[20, 24, "· Docs".padEnd(21)],
+			[18, 24, "✓T1 ▶T3 ·T4".padEnd(21)],
 		]);
 	});
 
-	it("long titles are cut to the board; at most the rows the board has, from one task before the first open one", () => {
-		const tasks = [1, 2, 3, 4, 5, 6].map(id => task(id, id < 3 ? "done" : id === 3 ? "in_progress" : "pending", `a very long task title number ${id}`));
+	it("many tasks wrap to more rows; every row has the board's width and the current task stays visible", () => {
+		const tasks = Array.from({ length: 30 }, (_, i) => task(i + 1, i < 25 ? "done" : i === 25 ? "in_progress" : "pending"));
 		const signs = todoSigns(tasks, image);
-		assert.equal(signs.length, 5);
-		assert.equal(plainText(signs[1]!.text), "✓ a very long task ti");
+		assert.ok(signs.length <= 5, "title and the four rows the board has");
 		assert.ok(signs.every(sign => plainWidth(sign.text) === 21));
-		assert.match(plainText(signs[2]!.text), /^▶ a very long task ti/);
+		assert.ok(signs.slice(1).some(sign => plainText(sign.text).includes("▶T26")));
 	});
 
 	it("no tasks: only the TODO title", () => {

@@ -1,7 +1,7 @@
 import type { OfficeSnapshot } from "../adapter/hub.ts";
 import { HQ_HEIGHT, HQ_WIDTH } from "../../web/hq-scene.js";
 import { wrap } from "./chat.ts";
-import { boardTasks, type TodoTask } from "./todo.ts";
+import type { TodoTask } from "./todo.ts";
 
 /** Game mode (T3): the Gentle HQ layout drawn over Pi's chat. Row 0 is the HUD; below it, the room and a text column. */
 export interface GameLayout {
@@ -241,6 +241,19 @@ export interface SideExtras {
 	readonly doing?: { readonly title: string; readonly done: number; readonly total: number } | null;
 	/** The newest notice from any extension (src/stage/notice.ts), while it is fresh. */
 	readonly notice?: { readonly text: string; readonly level: "info" | "warning" | "error" } | null;
+	/** The session's todo list: a TODO box under CHAT lists every task with its T number and full title. */
+	readonly todo?: readonly TodoTask[];
+}
+
+const TODO_MARK = { done: "✓", in_progress: "▶", blocked: "!", pending: "·", dropped: "·" } as const;
+const TODO_COLOR = { done: MUTED, in_progress: PINK + BOLD, blocked: SAND, pending: TEXT, dropped: MUTED } as const;
+
+/** The tasks the TODO box shows when not all fit: from one before the task in progress (else the first open one). */
+function todoWindow(tasks: readonly TodoTask[], rows: number): readonly TodoTask[] {
+	const now = tasks.findIndex(task => task.status === "in_progress");
+	const anchor = now !== -1 ? now : tasks.findIndex(task => task.status !== "done");
+	const start = Math.max(0, Math.min((anchor === -1 ? tasks.length : anchor) - 1, tasks.length - rows));
+	return tasks.slice(start, start + rows);
 }
 
 const NOTICE_TITLE = { info: "NOTICE", warning: "WARNING", error: "ERROR" } as const;
@@ -258,10 +271,21 @@ export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows
 	// A notice gets its own box under PARTY, only while CHAT still keeps its frame and one line.
 	const noticeBody = extras.notice ? wrap(extras.notice.text, width - 4).slice(0, NOTICE_LINES).map(line => `${extras.notice!.level === "info" ? TEXT : SAND}${line}${RESET}`) : [];
 	const noticeBox = noticeBody.length && rows - partyBox.length - (noticeBody.length + 2) >= 3 ? frame(NOTICE_TITLE[extras.notice!.level], noticeBody, width, noticeBody.length + 2) : [];
-	const chatHeight = rows - partyBox.length - noticeBox.length;
+	// The TODO box goes under CHAT, only while CHAT still keeps its frame and one line.
+	const listed = (extras.todo ?? []).filter(task => task.status !== "dropped");
+	const todoRows = Math.min(listed.length, rows - partyBox.length - noticeBox.length - 3 - 2);
+	const todoBox = todoRows > 0
+		? frame(
+			`TODO ${listed.filter(task => task.status === "done").length}/${listed.length}`,
+			todoWindow(listed, todoRows).map(task => `${TODO_COLOR[task.status]}${TODO_MARK[task.status]} T${task.id}${RESET} ${task.status === "done" ? MUTED : TEXT}${task.title}${RESET}`),
+			width,
+			todoRows + 2,
+		)
+		: [];
+	const chatHeight = rows - partyBox.length - noticeBox.length - todoBox.length;
 	if (chatHeight < 3) return partyBox.slice(0, rows);
 	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-(chatHeight - 2));
-	return [...partyBox, ...noticeBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat · alt+c hide panel")];
+	return [...partyBox, ...noticeBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat · alt+c hide panel"), ...todoBox];
 }
 
 const PANEL_HINT = "  alt+c panel";
@@ -409,8 +433,9 @@ const PAPER_BG = bg("#F4D6B7"), FDEEP = sgr("#C2107A"), DIM = sgr("#76616B");
 const TASK_MARK = { done: "✓", in_progress: "▶", blocked: "·", pending: "·", dropped: "·" } as const;
 
 /**
- * The TODO board as text (T11c): `TODO done/total` on its first row, then one row per task (✓ done, ▶ current, · open),
- * on the board's paper colour and cut to its width. Only the rows that fit on the board; none past its bottom edge.
+ * The TODO board as text (T11c): `TODO done/total` on its first row, then a short label per task (✓T1 done, ▶T2 current,
+ * ·T3 open) packed into rows on the board's paper colour; the TODO box under CHAT has the titles. Only the rows that fit
+ * on the board, none past its bottom edge, from the row before the first open task.
  */
 export function todoSigns(tasks: readonly TodoTask[], image: { cols: number; rows: number }): Sign[] {
 	const rowPx = HQ_HEIGHT / image.rows;
@@ -420,15 +445,26 @@ export function todoSigns(tasks: readonly TodoTask[], image: { cols: number; row
 	const last = Math.floor((BOARD.bottom - rowPx) / rowPx);
 	const counted = tasks.filter(task => task.status !== "dropped");
 	const done = counted.filter(task => task.status === "done").length;
-	const paper = (fg: string, text: string) => `${PAPER_BG}${fg}${fit(text, width)}${RESET}`;
-	const title: Sign = { row: first, col, text: paper(FDEEP + BOLD, counted.length ? `TODO ${done}/${counted.length}` : "TODO") };
-	const rows = boardTasks(tasks, Math.max(0, last - first));
-	return [
-		title,
-		...rows.map((task, i) => ({
-			row: first + 1 + i,
-			col,
-			text: paper(task.status === "done" ? DIM : task.status === "in_progress" ? FDEEP + BOLD : INK, `${TASK_MARK[task.status]} ${task.title}`),
-		})),
-	];
+	const paper = (text: string) => `${PAPER_BG}${text.replaceAll(RESET, RESET + PAPER_BG)}${PAPER_BG}${" ".repeat(Math.max(0, width - plainWidth(text)))}${RESET}`;
+	const title: Sign = { row: first, col, text: `${PAPER_BG}${FDEEP}${BOLD}${fit(counted.length ? `TODO ${done}/${counted.length}` : "TODO", width)}${RESET}` };
+	// Pack the labels into rows of the board's width.
+	const lines: Array<{ text: string; open: boolean }> = [];
+	let line = "", used = 0, open = false;
+	for (const task of counted) {
+		const label = `${TASK_MARK[task.status]}T${task.id}`;
+		const size = plainWidth(label);
+		if (used && used + 1 + size > width) {
+			lines.push({ text: line, open });
+			line = "", used = 0, open = false;
+		}
+		const color = task.status === "done" ? DIM : task.status === "in_progress" ? FDEEP + BOLD : INK;
+		line += `${used ? " " : ""}${color}${label}${RESET}`;
+		used += (used ? 1 : 0) + size;
+		open ||= task.status !== "done";
+	}
+	if (used) lines.push({ text: line, open });
+	const room = Math.max(0, last - first);
+	const firstOpen = lines.findIndex(row => row.open);
+	const start = Math.max(0, Math.min(firstOpen === -1 ? lines.length : firstOpen - 1, lines.length - room));
+	return [title, ...lines.slice(start, start + room).map((row, i) => ({ row: first + 1 + i, col, text: paper(row.text) }))];
 }
