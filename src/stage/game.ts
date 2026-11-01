@@ -218,7 +218,7 @@ const RESET = "\x1b[0m";
 const GOLD = sgr("#E0C27A"), PINK = sgr("#F095C8"), MUTED = sgr("#A78E9B"), SAND = sgr("#F2B86D");
 
 const IN_FLIGHT: ReadonlySet<string> = new Set(["queued", "running", "waiting"]);
-const ORCHESTRATOR_TEXT: Record<string, string> = { idle: "resting", thinking: "at the whiteboard", tool: "at the whiteboard", "waiting-user": "waiting for you" };
+const ORCHESTRATOR_TEXT: Record<string, string> = { idle: "resting", thinking: "at the monitor", tool: "at the monitor", "waiting-user": "waiting for you" };
 
 const bg = (hex: string) => `\x1b[48;2;${Number.parseInt(hex.slice(1, 3), 16)};${Number.parseInt(hex.slice(3, 5), 16)};${Number.parseInt(hex.slice(5, 7), 16)}m`;
 const INK = sgr("#060407"), BORDER = sgr("#C96AA2"), TEXT = sgr("#F6EFF3");

@@ -64,6 +64,13 @@ describe("game mode lines", () => {
 describe("game mode text", () => {
 	const snapshot = (over: Record<string, unknown> = {}) => ({ v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null, ...over }) as never;
 
+	it("PARTY says where the orchestrator is (T4, S4): at the monitor while it thinks or runs a tool", () => {
+		for (const state of ["thinking", "tool"]) {
+			assert.equal(gameSide(snapshot({ orchestrator: { state } }), [], 6, 40).map(plainText)[1], "║ ▶ orchestrator  at the monitor       ║", state);
+		}
+		assert.equal(gameSide(snapshot({ orchestrator: { state: "waiting-user" } }), [], 6, 40).map(plainText)[1], "║ ▶ orchestrator  waiting for you      ║");
+	});
+
 	it("side column: a PARTY box (orchestrator, then agents in flight) and a CHAT box filling the rest, newest at the bottom", () => {
 		const side = gameSide(snapshot({
 			agents: [

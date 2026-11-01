@@ -87,6 +87,13 @@ const ORCH = { coat: K.pink, pants: K.deep, shoes: INK, hair: K.hair, extra(cx, 
 	R(cx + 1, fy - 25, 3, 1, K.gold); R(cx + 1, fy - 21, 3, 1, K.gold); R(cx, fy - 24, 1, 3, K.gold); R(cx + 4, fy - 24, 1, 3, K.gold); R(cx + 4, fy - 20, 1, 5, K.gold);
 	R(cx + 10, fy - 13, 1, 13, INK); R(cx + 9, fy - 14, 3, 2, K.gold);
 } };
+/* The orchestrator seen from behind, at its monitor: the back of the head and the hat, the cane in the left hand. */
+const ORCH_BACK = { coat: K.pink, pants: K.deep, shoes: INK, hair: K.hair, extra(cx, fy) {
+	R(cx - 5, fy - 27, 10, 10, K.hair); R(cx - 6, fy - 24, 1, 3, SKIN); R(cx + 5, fy - 24, 1, 3, SKIN);
+	R(cx - 3, fy - 17, 6, 2, shade(K.pink));
+	O(cx - 4, fy - 37, 8, 9, K.hair); O(cx - 7, fy - 29, 14, 2, K.hair); R(cx - 4, fy - 31, 8, 2, K.gold);
+	R(cx - 11, fy - 13, 1, 13, INK); R(cx - 12, fy - 14, 3, 2, K.gold);
+} };
 const EXPLORER = { coat: K.blue, pants: K.sand, hair: K.gold, extra(cx, fy) {
 	R(cx - 6, fy - 30, 12, 4, K.sand); R(cx - 7, fy - 27, 14, 1, shade(K.sand)); R(cx - 1, fy - 30, 2, 1, K.green);
 	R(cx - 6, fy - 13, 12, 2, shade(K.sand));
@@ -199,10 +206,13 @@ function chalkboard() {
 	O(290, 56, 140, 3, shade(K.sand));
 	R(300, 54, 6, 2, K.text); R(312, 54, 4, 2, K.pink); R(410, 53, 10, 3, K.muted);
 }
-function featureDesk() {
+function featureDesk(working) {
 	O(320, 108, 96, 22, shade(K.sand)); R(320, 108, 96, 3, hi(K.sand)); R(324, 130, 4, 8, INK); R(408, 130, 4, 8, INK);
+	/* The orchestrator's monitor at the desk's left end (S4): lit with code while it thinks or runs a tool, dark otherwise. */
+	R(328, 103, 2, 5, INK); O(320, 87, 18, 16, K.border); R(322, 89, 14, 12, INK);
+	if (working) { const w = motion ? (t % 3) * 2 : 0; R(323, 92, 6 + w, 2, K.blue); R(323, 96, 9 - w, 1, K.blue); R(323, 99, 4 + w, 1, K.green); }
 	/* Feature document scroll and the Engram mirror stamp. */
-	O(334, 100, 34, 12, K.text); R(334, 100, 34, 2, K.sand); for (let i = 0; i < 4; i++) R(338, 104 + i * 2, 20 - i * 4, 1, K.muted); R(360, 106, 5, 4, K.fuchsia);
+	O(340, 100, 32, 12, K.text); R(340, 100, 32, 2, K.sand); for (let i = 0; i < 4; i++) R(344, 104 + i * 2, 20 - i * 4, 1, K.muted); R(366, 106, 5, 4, K.fuchsia);
 	/* Quill and inkwell. */
 	O(374, 104, 6, 6, INK); R(378, 94, 1, 12, K.text); R(379, 94, 3, 5, K.pink);
 	/* Bell: audio notifications. */
@@ -344,8 +354,13 @@ export function drawHq(ctx, frame = {}) {
 		mapTable(); questBoard();
 		person(82, 130, EXPLORER, bob(frame.exploring));
 		designEasel(); coffeeCorner(); jukebox();
-		profileRack(); featureDesk();
-		person(300, 104, ORCH, bob(frame.thinking || frame.waiting));
+		/* S4: thinking or running a tool, the orchestrator stands at its monitor with its back to us; otherwise it rests
+		   behind the desk facing the room, the cane at its side. */
+		profileRack();
+		const atMonitor = frame.thinking === true;
+		if (!atMonitor) person(356, 112, ORCH, bob(frame.waiting));
+		featureDesk(atMonitor);
+		if (atMonitor) person(308, 112, ORCH_BACK, bob(true));
 		/* S3: the first `workers` desks work; on a coffee break the chairs are empty and the workers stand by the counter. */
 		const workers = Number.isInteger(frame.workers) ? frame.workers : frame.working ? 3 : 0, coffee = frame.coffee === true;
 		[[244, K.sand], [324, K.hair], [404, K.border]].forEach(([x, hair], i) => {

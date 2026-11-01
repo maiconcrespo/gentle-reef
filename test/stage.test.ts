@@ -73,7 +73,7 @@ describe("Gentle HQ room (web/hq-scene.js)", () => {
 	it("paints the 720 x 408 room: the orchestrator's pink suit and the black chalkboard", () => {
 		const r = createRaster(HQ_WIDTH, HQ_HEIGHT);
 		drawHq(r, { t: 0, motion: false });
-		assert.equal(hex(r, 296, 92), HQ_PALETTE.pink.toUpperCase(), "suit");
+		assert.equal(hex(r, 359, 97), HQ_PALETTE.pink.toUpperCase(), "suit");
 		assert.equal(hex(r, 360, 30), HQ_PALETTE.bg.toUpperCase(), "chalkboard");
 	});
 
@@ -286,6 +286,34 @@ describe("judges debate during a judgment day (terminal scene life T2, S2)", () 
 		assert.equal(clock.at(false, 2_000 + GAVEL_STRIKE_MS - 1), true);
 		assert.equal(clock.at(false, 2_000 + GAVEL_STRIKE_MS), false, "then they rest");
 		assert.equal(clock.at(false, 9_000), false, "only once");
+	});
+});
+
+describe("the orchestrator at its monitor (terminal scene life T4, S4)", () => {
+	const paint = (frame: Record<string, unknown>) => { const r = createRaster(HQ_WIDTH, HQ_HEIGHT); drawHq(r, frame); return r; };
+	const P = (name: keyof typeof HQ_PALETTE) => HQ_PALETTE[name].toUpperCase();
+	const skin = HQ_PALETTE.sand.toUpperCase();
+	/* The monitor at the desk's left end (screen 323-335 x 90-100); the orchestrator stands left of it (cx 308, feet 112)
+	   or rests behind the desk (cx 356, feet 112). */
+	it("a monitor stands on the orchestrator's desk: dark while it rests, lit while it thinks or runs a tool", () => {
+		assert.equal(hex(paint({}), 321, 95), P("border"), "monitor frame");
+		assert.equal(hex(paint({}), 329, 95), P("bg"), "dark screen");
+		assert.equal(hex(paint({ thinking: true }), 325, 93), P("blue"), "lit screen");
+	});
+
+	it("while it thinks it stands at the monitor with its back to us: no face there, none behind the desk", () => {
+		const r = paint({ thinking: true });
+		assert.equal(hex(r, 306, 89), P("hair"), "back of the head where the face would be");
+		assert.notEqual(hex(r, 354, 89), skin, "nobody behind the desk");
+	});
+
+	it("while it waits or rests it stands behind the desk facing us, the cane at its side", () => {
+		for (const frame of [{}, { waiting: true }]) {
+			const r = paint(frame);
+			assert.equal(hex(r, 354, 89), skin, `${JSON.stringify(frame)}: face behind the desk`);
+			assert.equal(hex(r, 366, 98), P("gold"), `${JSON.stringify(frame)}: the cane's knob`);
+			assert.notEqual(hex(r, 306, 89), P("hair"), `${JSON.stringify(frame)}: not at the monitor`);
+		}
 	});
 });
 
