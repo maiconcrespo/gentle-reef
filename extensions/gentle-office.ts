@@ -15,6 +15,7 @@ import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } 
 import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, roomDataLost, splitKitty, itemChips, itemsTray, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, hiddenPanel, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 import { lastResult } from "../src/stage/memo.ts";
 import { wrapPrompts } from "../src/stage/prompts.ts";
+import { putListenerFirst } from "../src/stage/input-order.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
@@ -262,17 +263,23 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				});
 				// Pi's own input path, used to replay the dialog's answer one key at a time (private in the types, present at runtime).
 				const replay = (tui as unknown as { handleTerminalInput?: (data: string) => void }).handleTerminalInput?.bind(tui);
+				// T9: a reply longer than the dialog scrolls with PgUp/PgDn and shift+up/down; other keys stay Pi's. S9: this
+				// listener goes before Pi's alt-screen viewport, which would take PgUp/PgDn (putListenerFirst).
+				const scrollListener = (data: string) => {
+					if (handle?.isHidden() || selector?.choice.active() || !dialogView || dialogView.total <= dialogView.rows) return undefined;
+					const scroll = dialogScrollKey(data);
+					if (!scroll) return undefined;
+					// The release of a consumed key is consumed too, so Pi never sees half a key.
+					if (isKeyRelease(data)) return { consume: true };
+					dialogTop = scrollDialog(dialogTop, dialogView, scroll);
+					tui.requestRender();
+					return { consume: true };
+				};
+				const stopScroll = tui.addInputListener(scrollListener);
+				putListenerFirst(tui, scrollListener);
 				const stopKeys = tui.addInputListener(data => {
 					const choice = selector?.choice;
-					if (handle?.isHidden() || isKeyRelease(data)) return undefined;
-					// T9: a reply longer than the dialog scrolls with PgUp/PgDn and shift+up/down; other keys stay Pi's.
-					if (!choice?.active()) {
-						const scroll = dialogScrollKey(data);
-						if (!scroll || !dialogView || dialogView.total <= dialogView.rows) return undefined;
-						dialogTop = scrollDialog(dialogTop, dialogView, scroll);
-						tui.requestRender();
-						return { consume: true };
-					}
+					if (handle?.isHidden() || isKeyRelease(data) || !choice?.active()) return undefined;
 					const key: SelectorKey = matchesKey(data, "up") ? "up" : matchesKey(data, "down") ? "down" : matchesKey(data, "enter") || matchesKey(data, "return") ? "enter" : "other";
 					const step = choice.key(key);
 					if (step.done) {
@@ -354,6 +361,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 					},
 					dispose() {
 						stopKeys();
+						stopScroll();
 						repaint = undefined;
 						forceRepaint = undefined;
 						animator.stop();
