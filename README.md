@@ -64,10 +64,11 @@ gentle-reef                                             # gentle-shell with the 
 
 `gentle-reef` draws **Gentle HQ** (design: `design/reef-quest/02-gentle-hq.html`) over Pi's chat, as one Kitty image plus terminal text. The editor stays at the bottom and keeps the focus, so you type as usual.
 
-- **The room**: every object is a gentle-shell feature. The orchestrator in its pink suit stands by a black chalkboard that marks the ODD steps; writers sit at drafting desks; the explorer maps the code; the 4R lens desks, the Judgment Day bench and the verify lab fill the review wing. It animates at 4 fps only while someone acts.
+- **The room**: every object is a gentle-shell feature, and the crew shows who is doing what. The orchestrator in its pink suit works at the monitor on its desk while it thinks or runs a tool, and rests behind the desk while it waits; you are the Boss, in front of its desk while it works and by the door when all is still. Writers code at their drafting desks while they run, their screens hold a still game when idle, and after three minutes without work they take a coffee break. A black chalkboard marks the ODD steps. In the review wing each 4R lens desk lights its magnifier while its lens inspects and shows a green check when the review approves, the two judges debate in turns during a Judgment Day and strike the gavel when they finish, and the verify lab sits below. It animates at 4 fps only while someone acts.
 - **Signs in the scene**: a framed sign with the project and branch hangs over the chalkboard, `BREW nn%` (the context left) sits under the coffee corner by the window, and a pink `✿ GENTLE HQ` plaque sits under the door.
-- **Notices, Doing now and the monitor wall**: warnings from any extension show in a box, PARTY shows the todo task in progress, and each running tool lights a screen on the wall.
-- **PARTY and CHAT**: the orchestrator and the agents in flight, then your messages and the replies with their markdown. Each tool call is one line that ends as `✓ 0.4s · 69 lines` or `✗`. `alt+c` hides or shows the CHAT box.
+- **Notices, Doing now and the monitor wall**: warnings from any extension show in a box, PARTY shows the todo task in progress, a TODO box under CHAT lists every task as T1, T2… with its title while the board in the room keeps the count and the short labels, and each running tool lights a screen on the wall.
+- **PARTY and CHAT**: the orchestrator and the agents in flight, then your messages and the replies with their markdown. Each tool call is one line that ends as `✓ 0.4s · 69 lines` or `✗`. `alt+c` hides or shows the whole side panel (PARTY, notices and CHAT); without it the room is centred.
+- **ITEMS**: images you paste (gentle-shell's `[Image#N]` chips) land in an ITEMS tray in the scene's bottom-left corner instead of cutting through the dialog, which moves above the tray.
 - **Live thinking**: the orchestrator's thinking streams while it writes. `alt+t` shows or hides it.
 - **Dialog over the room**: the current reply with the orchestrator's portrait, Pokémon style. A reply longer than the box scrolls with `PgUp`/`PgDn` (a page) and `shift+↑`/`shift+↓` (a line). A single-choice question becomes the selector: `↑↓` move the `▶`, `Enter` answers, `Esc` cancels, and `Other…` opens Pi's editor for your own answer.
 - **`alt+g`** switches between the game and plain Pi.
@@ -80,7 +81,7 @@ gentle-reef                                             # gentle-shell with the 
 - [x] **Terminal game mode** (Gentle HQ): the room as a Kitty image, chat, live thinking, the dialog as selector with the orchestrator's portrait, signs in the scene, notices, Doing now and the monitor wall [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
 - [ ] Gentle HQ in the web window, with mouse-wheel zoom [#1](https://github.com/maiconcrespo/gentle-reef/issues/1)
 - [x] Review inspectors that visit during native review (T4) [#2](https://github.com/maiconcrespo/gentle-reef/issues/2)
-- [ ] Judgment-day judges debating at their table (T5) [#3](https://github.com/maiconcrespo/gentle-reef/issues/3)
+- [x] Judgment-day judges debating at their table, in the terminal game mode (T5) [#3](https://github.com/maiconcrespo/gentle-reef/issues/3)
 - [ ] A boss character you move with the keyboard, which sends prompts over an authenticated channel (T8, security-sensitive) [#4](https://github.com/maiconcrespo/gentle-reef/issues/4)
 - [ ] Music radio tied to gentle-shell music [#5](https://github.com/maiconcrespo/gentle-reef/issues/5)
 

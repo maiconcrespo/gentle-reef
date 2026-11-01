@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORTRAIT_COLS, aboveBackgrounds, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, hiddenPanel, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns, roomDataLost, itemChips, itemsTray, ITEM_COLS, fit } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -8,13 +8,22 @@ describe("game mode layout (T3)", () => {
 	it("gives the room the width its height allows, and the rest to the text column", () => {
 		// No HUD row (T4f: the status lives in the scene). 21 rows of 19 px are 399 px; the room is 720x408, so 704 px, 78 cells of 9 px.
 		const layout = gameLayout(200, 21, { widthPx: 9, heightPx: 19 });
-		assert.deepEqual(layout, { hudRows: 0, bodyRows: 21, roomCols: 78, gap: 3, sideCols: 119 });
+		assert.deepEqual(layout, { hudRows: 0, bodyRows: 21, inset: 0, roomCols: 78, gap: 3, sideCols: 119 });
 	});
 
 	it("keeps at least 32 columns of text: a narrow terminal shrinks the room", () => {
 		const layout = gameLayout(100, 41, { widthPx: 9, heightPx: 19 });
 		assert.equal(layout.sideCols, 32);
 		assert.equal(layout.roomCols, 100 - 32 - 3);
+	});
+
+	it("panel hidden (alt+c, S1): no side column; the room is centred in the width and grows when the panel limited it", () => {
+		// Height-limited: still 78 cells, centred in 200 (61 blank cells left, 61 right).
+		assert.deepEqual(gameLayout(200, 21, { widthPx: 9, heightPx: 19 }, { panel: false }), { hudRows: 0, bodyRows: 21, inset: 61, roomCols: 78, gap: 0, sideCols: 61 });
+		// Width-limited with the panel (65 cells): without it the room takes the width its height allows, 100 cells here.
+		const wide = gameLayout(100, 41, { widthPx: 9, heightPx: 19 }, { panel: false });
+		assert.equal(wide.roomCols, 100);
+		assert.equal(wide.inset + wide.roomCols + wide.gap + wide.sideCols, 100);
 	});
 
 	it("is not viable below 60 columns or 8 rows (null: plain Pi stays)", () => {
@@ -24,7 +33,18 @@ describe("game mode layout (T3)", () => {
 });
 
 describe("game mode lines", () => {
-	const layout = { hudRows: 1, bodyRows: 3, roomCols: 6, gap: 3, sideCols: 8 };
+	const layout = { hudRows: 1, bodyRows: 3, inset: 0, roomCols: 6, gap: 3, sideCols: 8 };
+
+	it("an inset puts blank cells before the room on every row (the room centred with the panel hidden)", () => {
+		const lines = composeGame({ ...layout, hudRows: 0, inset: 2 }, { hud: "", room: ["\x1b_Gimg\x1b\\"], side: ["x"] });
+		assert.equal(lines[0], "  " + "\x1b_Gimg\x1b\\" + " ".repeat(6) + "   " + "x".padEnd(8));
+		for (const line of lines) assert.equal(plainWidth(line), 19);
+	});
+
+	it("hidden panel lines (S1): blank, with the key to bring the panel back on the last row", () => {
+		assert.deepEqual(hiddenPanel(3, 20).map(plainText), [" ".repeat(20), " ".repeat(20), "  alt+c panel       "]);
+		assert.deepEqual(hiddenPanel(2, 4).map(plainText), ["    ", "    "], "too narrow for the key: blank");
+	});
 
 	it("HUD on top, then each row: room line padded to its width, a blank gap, the side text cut to its width", () => {
 		const lines = composeGame(layout, { hud: "HQ", room: ["\x1b_Gimg\x1b\\", ""], side: ["DOING NOW", "chat"] });
@@ -42,7 +62,15 @@ describe("game mode lines", () => {
 });
 
 describe("game mode text", () => {
+	const task = (id: number, status: string, title = `task ${id}`) => ({ id, title, status }) as never;
 	const snapshot = (over: Record<string, unknown> = {}) => ({ v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null, ...over }) as never;
+
+	it("PARTY says where the orchestrator is (T4, S4): at the monitor while it thinks or runs a tool", () => {
+		for (const state of ["thinking", "tool"]) {
+			assert.equal(gameSide(snapshot({ orchestrator: { state } }), [], 6, 40).map(plainText)[1], "║ ▶ orchestrator  at the monitor       ║", state);
+		}
+		assert.equal(gameSide(snapshot({ orchestrator: { state: "waiting-user" } }), [], 6, 40).map(plainText)[1], "║ ▶ orchestrator  waiting for you      ║");
+	});
 
 	it("side column: a PARTY box (orchestrator, then agents in flight) and a CHAT box filling the rest, newest at the bottom", () => {
 		const side = gameSide(snapshot({
@@ -95,27 +123,39 @@ describe("game mode text", () => {
 		assert.equal(side[3], "╔═ CHAT ═════════════════════╗");
 	});
 
-	it("chat hidden (alt+c): PARTY stays, CHAT gives way to one line with the keys, the rest is blank", () => {
-		const side = gameSide(snapshot(), ["c1", "c2"], 6, 34, { chatShown: false }).map(plainText);
-		assert.deepEqual(side, [
-			"╔═ PARTY ════════════════════════╗",
-			"║ ▶ orchestrator  resting        ║",
-			"╚════════════════════════════════╝",
-			"  alt+c chat · alt+g plain chat   ",
-			" ".repeat(34),
-			" ".repeat(34),
-		]);
-	});
-
-	it("the CHAT frame names alt+c to hide it", () => {
+	it("the CHAT frame names alt+c to hide the panel", () => {
 		const side = gameSide(snapshot(), ["c1"], 6, 70).map(plainText);
-		assert.match(side.at(-1)!, /alt\+t thoughts · alt\+g plain chat · alt\+c hide chat/);
+		assert.match(side.at(-1)!, /alt\+t thoughts · alt\+g plain chat · alt\+c hide panel/);
 	});
 
 	it("an empty chat says where to write", () => {
 		const side = gameSide(snapshot(), [], 7, 66).map(plainText);
 		assert.equal(side[4], "║ " + "Write below; the orchestrator answers here.".padEnd(62) + " ║");
-		assert.equal(side[6], "╚═ alt+t thoughts · alt+g plain chat · alt+c hide chat " + "═".repeat(10) + "╝", "the keys live in the CHAT frame's bottom border");
+		assert.equal(side[6], "╚═ alt+t thoughts · alt+g plain chat · alt+c hide panel " + "═".repeat(9) + "╝", "the keys live in the CHAT frame's bottom border");
+	});
+
+	it("TODO box under CHAT: every task with its T number and full title, dropped left out", () => {
+		const todo = [task(1, "done", "Map the code"), task(2, "dropped", "Old idea"), task(3, "in_progress", "Write the parser"), task(4, "blocked", "Docs")];
+		const side = gameSide(snapshot(), ["c1"], 13, 30, { todo }).map(plainText);
+		assert.deepEqual(side.slice(-5), [
+			"╔═ TODO 1/3 ═════════════════╗",
+			"║ ✓ T1 Map the code          ║",
+			"║ ▶ T3 Write the parser      ║",
+			"║ ! T4 Docs                  ║",
+			"╚════════════════════════════╝",
+		]);
+		assert.equal(side[3], "╔═ CHAT ═════════════════════╗");
+		assert.equal(side.length, 13);
+	});
+
+	it("the TODO box never squeezes CHAT below its frame and one line, and is absent without tasks", () => {
+		const todo = [1, 2, 3, 4, 5, 6].map(id => task(id, id === 5 ? "in_progress" : "pending"));
+		const side = gameSide(snapshot(), ["c1"], 10, 30, { todo }).map(plainText);
+		assert.equal(side.length, 10);
+		assert.equal(side[3], "╔═ CHAT ═════════════════════╗");
+		assert.equal(side[6], "╔═ TODO 0/6 ═════════════════╗");
+		assert.ok(side.slice(7, 9).some(line => line.includes("▶ T5")), "the current task stays visible");
+		assert.equal(gameSide(snapshot(), ["c1"], 10, 30, { todo: [] }).map(plainText).filter(line => line.includes("TODO")).length, 0);
 	});
 
 	it("every side line has the column width", () => {
@@ -255,23 +295,20 @@ describe("readable TODO board (T11c)", () => {
 	const task = (id: number, status: string, title = `task ${id}`) => ({ id, title, status }) as never;
 	const image = { cols: 162, rows: 46 };
 
-	it("a title with done/total, then one row per task on the board: ✓ done, ▶ current, · pending, dropped left out", () => {
+	it("a title with done/total, then short labels packed in rows: ✓T1 done, ▶T3 current, ·T4 open, dropped left out", () => {
 		const signs = todoSigns([task(1, "done", "Map the code"), task(2, "dropped"), task(3, "in_progress", "Write the parser"), task(4, "pending", "Docs")], image);
 		assert.deepEqual(signs.map(sign => [sign.row, sign.col, plainText(sign.text)]), [
 			[17, 24, "TODO 1/3".padEnd(21)],
-			[18, 24, "✓ Map the code".padEnd(21)],
-			[19, 24, "▶ Write the parser".padEnd(21)],
-			[20, 24, "· Docs".padEnd(21)],
+			[18, 24, "✓T1 ▶T3 ·T4".padEnd(21)],
 		]);
 	});
 
-	it("long titles are cut to the board; at most the rows the board has, from one task before the first open one", () => {
-		const tasks = [1, 2, 3, 4, 5, 6].map(id => task(id, id < 3 ? "done" : id === 3 ? "in_progress" : "pending", `a very long task title number ${id}`));
+	it("many tasks wrap to more rows; every row has the board's width and the current task stays visible", () => {
+		const tasks = Array.from({ length: 30 }, (_, i) => task(i + 1, i < 25 ? "done" : i === 25 ? "in_progress" : "pending"));
 		const signs = todoSigns(tasks, image);
-		assert.equal(signs.length, 5);
-		assert.equal(plainText(signs[1]!.text), "✓ a very long task ti");
+		assert.ok(signs.length <= 5, "title and the four rows the board has");
 		assert.ok(signs.every(sign => plainWidth(sign.text) === 21));
-		assert.match(plainText(signs[2]!.text), /^▶ a very long task ti/);
+		assert.ok(signs.slice(1).some(sign => plainText(sign.text).includes("▶T26")));
 	});
 
 	it("no tasks: only the TODO title", () => {
@@ -334,5 +371,82 @@ describe("status signs in the scene (T4f)", () => {
 		assert.equal(lines[0], "\x1b_Gi\x1b\\" + "    AB      " + "   ");
 		assert.equal(lines[2], " CD         " + "   ");
 		assert.equal(lines[3], "  dlg       " + "   ", "the dialog wins over a sign on its rows");
+	});
+});
+
+describe("room data after a full repaint (L4)", () => {
+	it("reports the room's data lost once per full repaint Pi made, and not otherwise", () => {
+		let redraws = 2;
+		const lost = roomDataLost(() => redraws);
+		assert.equal(lost(), false);
+		redraws = 3;
+		assert.equal(lost(), true);
+		assert.equal(lost(), false);
+		redraws = 5;
+		assert.equal(lost(), true);
+	});
+});
+
+describe("ITEMS tray for pasted images (T7, S6)", () => {
+	const layout = { hudRows: 0, bodyRows: 20, inset: 0, roomCols: 60, gap: 3, sideCols: 37 };
+	const side = Array.from({ length: 20 }, (_, i) => `side ${i}`);
+
+	it("lists each [Image#N] chip in the draft once, in order", () => {
+		assert.deepEqual(itemChips("look [Image#2] and [Image#1], again [Image#2]"), ["[Image#2]", "[Image#1]"]);
+		assert.deepEqual(itemChips("no images here"), []);
+	});
+
+	it("is empty without chips; with chips it has a top border, a label row per chip and 6 thumbnail rows while idle", () => {
+		assert.deepEqual(itemsTray([], true), []);
+		const idle = itemsTray(["[Image#1]", "[Image#2]"], true);
+		assert.equal(idle.length, 1 + 2 * (1 + 6));
+		assert.match(plainText(idle[0]!), /ITEMS/);
+		assert.match(plainText(idle[1]!), /\[Image#1\]/);
+		assert.match(plainText(idle[8]!), /\[Image#2\]/);
+		for (const line of idle) assert.equal(plainWidth(line), ITEM_COLS);
+		for (const line of idle.slice(1)) assert.ok(plainText(line).endsWith("║"));
+		// While the agent works gentle-shell shows labels only.
+		assert.equal(itemsTray(["[Image#1]"], false).length, 2);
+	});
+
+	it("covers the bottom-left corner from column 0, keeps the rest of each row, and lifts the dialog above it", () => {
+		const items = itemsTray(["[Image#1]"], true);
+		const dialog = ["d0", "d1", "d2"];
+		const lines = composeGame(layout, { hud: "", room: [], side, dialog, items });
+		assert.equal(lines.length, 20);
+		const start = 20 - items.length;
+		for (let i = 0; i < items.length; i++) {
+			assert.equal(plainText(lines[start + i]!).slice(0, ITEM_COLS), plainText(items[i]!));
+			assert.ok(plainText(lines[start + i]!).endsWith(`side ${start + i}`.padEnd(37)));
+		}
+		assert.equal(plainText(lines[start - 1]!).slice(2, 4), "d2");
+		assert.equal(plainText(lines[start - 3]!).slice(2, 4), "d0");
+		for (const line of lines) assert.equal(plainWidth(line), 100);
+	});
+
+	it("without items the layout is unchanged", () => {
+		const before = composeGame(layout, { hud: "", room: [], side, dialog: ["d0"] });
+		assert.deepEqual(composeGame(layout, { hud: "", room: [], side, dialog: ["d0"], items: [] }), before);
+		assert.equal(plainText(before[19]!).slice(2, 4), "d0");
+	});
+});
+
+describe("hyperlinks in the chat and the dialog (S7)", () => {
+	// pi-tui's Markdown wraps a URL in OSC 8 hyperlinks, one pair per wrapped line: escapes that take no cells.
+	const OPEN = "\x1b]8;;https://github.com/maiconcrespo/gentle-reef/pull/new/feat/terminal-scene-life\x1b\\";
+	const CLOSE = "\x1b]8;;\x1b\\";
+	const link = `${OPEN}\x1b[38;2;105;173;208mhttps://github.com${CLOSE}`;
+
+	it("counts only the link's visible text", () => {
+		assert.equal(plainWidth(link), "https://github.com".length);
+		assert.equal(plainWidth(`\x1b]8;;https://a.io\x07a.io\x1b]8;;\x07`), 4);
+	});
+
+	it("pads a linked line to the width with both hyperlink escapes whole", () => {
+		assert.equal(fit(link, 20), `${link}  `);
+	});
+
+	it("cuts the text, never the escapes: the hyperlink is still closed", () => {
+		assert.equal(fit(link, 5), `${OPEN}\x1b[38;2;105;173;208mhttps${CLOSE}`);
 	});
 });

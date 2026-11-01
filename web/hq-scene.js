@@ -18,7 +18,7 @@ const INK = K.bg, SKIN = K.sand, SKIN_SH = shade(K.sand);
 const W = HQ_WIDTH, H = HQ_HEIGHT;
 
 /* The frame being painted. Set by drawHq for the duration of one synchronous call. */
-let g = null, motion = false, t = 0, potLevel = 1, brewing = false, oddStep = null, todo = [], jobs = [];
+let g = null, motion = false, t = 0, potLevel = 1, brewing = false, oddStep = null, todo = [], jobs = [], reviewDesks = [], judging = false, struck = false;
 const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 const O = (x, y, w, h, c) => { R(x - 1, y - 1, w + 2, h + 2, INK); R(x, y, w, h, c); };
 
@@ -87,6 +87,23 @@ const ORCH = { coat: K.pink, pants: K.deep, shoes: INK, hair: K.hair, extra(cx, 
 	R(cx + 1, fy - 25, 3, 1, K.gold); R(cx + 1, fy - 21, 3, 1, K.gold); R(cx, fy - 24, 1, 3, K.gold); R(cx + 4, fy - 24, 1, 3, K.gold); R(cx + 4, fy - 20, 1, 5, K.gold);
 	R(cx + 10, fy - 13, 1, 13, INK); R(cx + 9, fy - 14, 3, 2, K.gold);
 } };
+/* The orchestrator seen from behind, at its monitor: the back of the head and the hat, the cane in the left hand. */
+const ORCH_BACK = { coat: K.pink, pants: K.deep, shoes: INK, hair: K.hair, extra(cx, fy) {
+	R(cx - 5, fy - 27, 10, 10, K.hair); R(cx - 6, fy - 24, 1, 3, SKIN); R(cx + 5, fy - 24, 1, 3, SKIN);
+	R(cx - 3, fy - 17, 6, 2, shade(K.pink));
+	O(cx - 4, fy - 37, 8, 9, K.hair); O(cx - 7, fy - 29, 14, 2, K.hair); R(cx - 4, fy - 31, 8, 2, K.gold);
+	R(cx - 11, fy - 13, 1, 13, INK); R(cx - 12, fy - 14, 3, 2, K.gold);
+} };
+/* The Boss (S5, L15): the user. A black suit with a white shirt and a fuchsia tie, black shoes, and a computer keyboard in
+   the right hand. */
+const BOSS = { coat: K.hair, pants: K.hair, shoes: INK, hair: K.hair, extra(cx, fy) {
+	R(cx - 2, fy - 17, 4, 6, K.text); R(cx - 3, fy - 17, 1, 5, shade(K.hair)); R(cx + 2, fy - 17, 1, 5, shade(K.hair));
+	R(cx - 1, fy - 17, 2, 2, K.fdeep); R(cx - 1, fy - 15, 2, 5, K.fuchsia);
+	R(cx + 4, fy - 11, 2, 3, SKIN);
+	R(cx + 6, fy - 12, 12, 4, K.text);
+	for (let i = 0; i < 5; i++) R(cx + 7 + i * 2, fy - 11, 1, 1, K.muted);
+	for (let i = 0; i < 4; i++) R(cx + 8 + i * 3, fy - 9, 1, 1, K.muted);
+} };
 const EXPLORER = { coat: K.blue, pants: K.sand, hair: K.gold, extra(cx, fy) {
 	R(cx - 6, fy - 30, 12, 4, K.sand); R(cx - 7, fy - 27, 14, 1, shade(K.sand)); R(cx - 1, fy - 30, 2, 1, K.green);
 	R(cx - 6, fy - 13, 12, 2, shade(K.sand));
@@ -96,6 +113,8 @@ const worker = hair => ({ coat: K.green, pants: K.border, hair, seated: true, ex
 	R(cx - 3, fy - 17, 6, 10, shade(K.green)); R(cx - 3, fy - 17, 1, 3, K.text); R(cx + 2, fy - 17, 1, 3, K.text);
 	R(cx - 6, fy - 26, 1, 5, INK); R(cx + 5, fy - 26, 1, 5, INK); R(cx - 5, fy - 29, 10, 1, INK); R(cx - 7, fy - 22, 2, 2, K.fuchsia);
 } });
+/* A worker on a coffee break: standing, a cup in the right hand. */
+const onBreak = hair => { const w = worker(hair); return { ...w, seated: false, extra(cx, fy) { w.extra(cx, fy); O(cx + 6, fy - 11, 3, 4, K.text); R(cx + 9, fy - 10, 1, 2, K.text); } }; };
 const reviewer = lens => ({ coat: K.border, pants: K.user, hair: K.hair, extra(cx, fy) {
 	O(cx - 5, fy - 31, 10, 4, K.hair); O(cx - 7, fy - 28, 14, 1, K.hair); R(cx - 5, fy - 29, 10, 1, lens);
 	R(cx - 4, fy - 14, 3, 3, lens);
@@ -197,10 +216,13 @@ function chalkboard() {
 	O(290, 56, 140, 3, shade(K.sand));
 	R(300, 54, 6, 2, K.text); R(312, 54, 4, 2, K.pink); R(410, 53, 10, 3, K.muted);
 }
-function featureDesk() {
+function featureDesk(working) {
 	O(320, 108, 96, 22, shade(K.sand)); R(320, 108, 96, 3, hi(K.sand)); R(324, 130, 4, 8, INK); R(408, 130, 4, 8, INK);
+	/* The orchestrator's monitor at the desk's left end (S4): lit with code while it thinks or runs a tool, dark otherwise. */
+	R(328, 103, 2, 5, INK); O(320, 87, 18, 16, K.border); R(322, 89, 14, 12, INK);
+	if (working) { const w = motion ? (t % 3) * 2 : 0; R(323, 92, 6 + w, 2, K.blue); R(323, 96, 9 - w, 1, K.blue); R(323, 99, 4 + w, 1, K.green); }
 	/* Feature document scroll and the Engram mirror stamp. */
-	O(334, 100, 34, 12, K.text); R(334, 100, 34, 2, K.sand); for (let i = 0; i < 4; i++) R(338, 104 + i * 2, 20 - i * 4, 1, K.muted); R(360, 106, 5, 4, K.fuchsia);
+	O(340, 100, 32, 12, K.text); R(340, 100, 32, 2, K.sand); for (let i = 0; i < 4; i++) R(344, 104 + i * 2, 20 - i * 4, 1, K.muted); R(366, 106, 5, 4, K.fuchsia);
 	/* Quill and inkwell. */
 	O(374, 104, 6, 6, INK); R(378, 94, 1, 12, K.text); R(379, 94, 3, 5, K.pink);
 	/* Bell: audio notifications. */
@@ -237,10 +259,16 @@ function questBoard() {
 	R(112, 206, 2, 12, INK); R(192, 206, 2, 12, INK);
 }
 
-function draftingDesk(x) {
+function draftingDesk(x, working) {
 	O(x, 222, 64, 16, shade(K.sand)); R(x, 222, 64, 3, hi(K.sand)); R(x + 4, 238, 3, 10, INK); R(x + 57, 238, 3, 10, INK);
 	O(x + 4, 206, 26, 18, K.border); R(x + 6, 208, 22, 14, INK);
-	for (let i = 0; i < 4; i++) R(x + 8, 210 + i * 3, ((t + i + x) % 4) * 4 + 4, 1, K.green);
+	/* S3: code scrolls only while this desk's worker works; otherwise a still game: hero on green ground, a coin, a block. */
+	if (working) for (let i = 0; i < 4; i++) R(x + 8, 210 + i * 3, ((t + i + x) % 4) * 4 + 4, 1, K.green);
+	else {
+		R(x + 6, 219, 22, 3, K.green); R(x + 6, 219, 22, 1, hi(K.green));
+		R(x + 10, 214, 3, 5, K.fuchsia); R(x + 10, 213, 3, 1, K.sand);
+		R(x + 18, 211, 2, 2, K.gold); O(x + 23, 213, 4, 4, K.sand);
+	}
 	R(x + 15, 224, 4, 2, K.border);
 	O(x + 36, 226, 12, 4, K.text); R(x + 50, 225, 6, 5, K.pink);
 }
@@ -263,14 +291,25 @@ function reviewStations() {
 		/* Desk lamp in the lens colour. */
 		R(x + 24, 94, 1, 10, INK); O(x + 20, 90, 8, 4, c);
 		if (motion) { g.globalAlpha = 0.18 + 0.08 * ((t + i) % 2); R(x + 14, 94, 20, 10, c); g.globalAlpha = 1; }
+		/* Magnifier at the desk's front (S10): dim while off, the lens colour while it inspects, a green check once approved. */
+		const desk = reviewDesks[i], ring = desk === 'lit' || desk === 'ok' ? c : K.dim;
+		R(x + 4, 112, 6, 1, ring); R(x + 4, 117, 6, 1, ring); R(x + 3, 113, 1, 4, ring); R(x + 10, 113, 1, 4, ring);
+		R(x + 4, 113, 6, 4, desk === 'off' || !desk ? INK : hi(c)); R(x + 11, 117, 3, 2, ring);
+		if (desk === 'ok') { R(x + 17, 114, 2, 2, K.green); R(x + 19, 116, 2, 2, K.green); R(x + 21, 112, 2, 4, K.green); R(x + 23, 110, 2, 2, K.green); }
 	});
+}
+/* A speech bubble with "…" over a judge's head (S2). */
+function speechBubble(cx) {
+	O(cx - 5, 172, 12, 9, K.text); R(cx - 1, 181, 2, 2, K.text);
+	for (let i = 0; i < 3; i++) R(cx - 3 + i * 3, 176, 1, 1, INK);
 }
 function judgmentBench() {
 	O(534, 210, 160, 30, K.hair); R(534, 210, 160, 4, K.border); R(538, 218, 152, 1, K.border);
 	R(606, 214, 16, 20, K.fuchsia); R(608, 216, 12, 16, K.fdeep); R(612, 220, 4, 4, K.gold);
-	/* Gavel on its block. */
-	O(574, 204, 10, 4, shade(K.sand)); const up = motion && t % 6 === 0;
+	/* Gavel on its block: it rises and falls only during a judgment day (S2); when the judges finish it strikes once, with a spark. */
+	O(574, 204, 10, 4, shade(K.sand)); const up = motion && judging && !struck && t % 6 === 0;
 	O(570, up ? 194 : 198, 10, 5, K.sand); R(578, up ? 196 : 200, 10, 2, shade(K.sand));
+	if (struck) { R(570, 192, 1, 3, K.gold); R(574, 189, 2, 4, K.gold); R(579, 192, 1, 3, K.gold); }
 	/* Two scales: A and B. */
 	O(642, 200, 2, 10, K.gold); R(636, 200, 14, 1, K.gold); R(634, 202, 4, 2, K.gold); R(648, 202, 4, 2, K.gold);
 }
@@ -300,9 +339,13 @@ function jobsWall() {
 /**
  * Paints one frame of the room at 1x (HQ_WIDTH x HQ_HEIGHT) on any context with `fillStyle`, `globalAlpha` and `fillRect`.
  * `frame.t` is the animation step (4 per second), `frame.motion` false draws a still frame, and the flags say who is acting:
- * `thinking`/`waiting` (the orchestrator), `working` (the writers), `exploring` (the explorer).
+ * `thinking`/`waiting` (the orchestrator; `thinking` also puts the Boss in front of the orchestrator's desk, otherwise the Boss
+ * stands by the door; both with or without motion), `working` (the writers), `exploring` (the explorer); `workers` running writers
+ * (the first desks show code, the rest a still game) and `coffee` (the writers on a break at the coffee corner); `judging`
+ * (a judgment day: the judges debate, the gavel moves) and `struck` (the judges just finished: the gavel strikes).
  * State shown: `context` percent (the coffee pot), `brewing` (compaction steam), `odd` (current ODD step, 0-6, on the
- * chalkboard), `todo` ([{ done, now }] rows on the TODO board) and `jobs` ("running" | "ok" | "fail", one monitor each). Readable text lives in the terminal UI, not the image.
+ * chalkboard), `todo` ([{ done, now }] rows on the TODO board), `jobs` ("running" | "ok" | "fail", one monitor each)
+ * and `reviewDesks` ("off" | "lit" | "ok", one magnifier per lens desk). Readable text lives in the terminal UI, not the image.
  */
 export function drawHq(ctx, frame = {}) {
 	g = ctx; t = frame.t ?? 0; motion = frame.motion ?? false;
@@ -312,6 +355,8 @@ export function drawHq(ctx, frame = {}) {
 	oddStep = Number.isInteger(frame.odd) ? frame.odd : null;
 	todo = Array.isArray(frame.todo) ? frame.todo : [];
 	jobs = Array.isArray(frame.jobs) ? frame.jobs : [];
+	reviewDesks = Array.isArray(frame.reviewDesks) ? frame.reviewDesks : [];
+	judging = frame.judging === true; struck = frame.struck === true;
 	const bob = on => (motion && on ? t % 2 : 0);
 	try {
 		R(0, 0, W, H, K.panel);
@@ -320,17 +365,32 @@ export function drawHq(ctx, frame = {}) {
 		mapTable(); questBoard();
 		person(82, 130, EXPLORER, bob(frame.exploring));
 		designEasel(); coffeeCorner(); jukebox();
-		profileRack(); featureDesk();
-		person(300, 104, ORCH, bob(frame.thinking || frame.waiting));
-		[[244, K.sand], [324, K.hair], [404, K.border]].forEach(([x, hair], i) => { person(x + 46, 228, worker(hair), motion && frame.working && (t + i) % 2 === 0 ? 1 : 0); draftingDesk(x); });
+		/* S4: thinking or running a tool, the orchestrator stands at its monitor with its back to us; otherwise it rests
+		   behind the desk facing the room, the cane at its side. */
+		profileRack();
+		const atMonitor = frame.thinking === true;
+		if (!atMonitor) person(356, 112, ORCH, bob(frame.waiting));
+		featureDesk(atMonitor);
+		if (atMonitor) person(308, 112, ORCH_BACK, bob(true));
+		/* S3: the first `workers` desks work; on a coffee break the chairs are empty and the workers stand by the counter. */
+		const workers = Number.isInteger(frame.workers) ? frame.workers : frame.working ? 3 : 0, coffee = frame.coffee === true;
+		[[244, K.sand], [324, K.hair], [404, K.border]].forEach(([x, hair], i) => {
+			if (!coffee) person(x + 46, 228, worker(hair), motion && i < workers && (t + i) % 2 === 0 ? 1 : 0);
+			draftingDesk(x, i < workers);
+		});
+		if (coffee) [[182, 100, K.sand], [200, 100, K.hair], [191, 132, K.border]].forEach(([cx, fy, hair]) => person(cx, fy, onBreak(hair), 0));
 		reviewStations();
 		[K.red, K.green, K.blue, K.gold].forEach((c, i) => person(535 + i * 48, 100, reviewer(c), 0));
 		person(560, 214, JUDGE, 0); person(668, 214, JUDGE, 0);
 		judgmentBench();
+		/* The judges debate in turns while a judgment day runs: one speaks for four steps, then the other. */
+		if (motion && judging) speechBubble(Math.floor(t / 4) % 2 === 0 ? 560 : 668);
 		person(600, 284, FIXER, 0);
 		person(590, 354, VERIFIER, 0);
 		verifyLab();
 		installerCrates(); doorAndPermissions();
+		/* S5: the Boss stands in front of the orchestrator's desk while it thinks, by the door when everything is still. */
+		if (atMonitor) person(364, 166, BOSS); else person(360, 378, BOSS);
 		plant(196, 300); plant(486, 140); plant(486, 396); plant(222, 300); plant(700, 300);
 	} finally {
 		g = null;

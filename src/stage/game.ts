@@ -1,12 +1,14 @@
 import type { OfficeSnapshot } from "../adapter/hub.ts";
 import { HQ_HEIGHT, HQ_WIDTH } from "../../web/hq-scene.js";
 import { wrap } from "./chat.ts";
-import { boardTasks, type TodoTask } from "./todo.ts";
+import type { TodoTask } from "./todo.ts";
 
 /** Game mode (T3): the Gentle HQ layout drawn over Pi's chat. Row 0 is the HUD; below it, the room and a text column. */
 export interface GameLayout {
 	readonly hudRows: number;
 	readonly bodyRows: number;
+	/** Blank cells before the room: it is centred while the side panel is hidden (alt+c, S1). */
+	readonly inset: number;
 	/** Cells the room image takes, left. */
 	readonly roomCols: number;
 	/** Blank cells between the room and the framed text column. */
@@ -29,18 +31,25 @@ const MIN_ROWS = 8;
 
 /**
  * Splits `cols` x `rows` cells: the room as wide as its height allows (it keeps the 720 x 408 shape), the rest for text,
- * which never gets fewer than 32 columns. Null when the terminal is too small to be worth it: plain Pi stays.
+ * which never gets fewer than 32 columns. With `panel: false` (alt+c, S1) there is no text column: the room takes the
+ * width its height allows and is centred. Null when the terminal is too small to be worth it: plain Pi stays.
  */
-export function gameLayout(cols: number, rows: number, cell: CellSize): GameLayout | null {
+export function gameLayout(cols: number, rows: number, cell: CellSize, options: { panel?: boolean } = {}): GameLayout | null {
 	if (cols < MIN_COLS || rows < MIN_ROWS) return null;
 	const bodyRows = rows - HUD_ROWS;
 	const byHeight = Math.floor((bodyRows * cell.heightPx * HQ_WIDTH) / HQ_HEIGHT / cell.widthPx);
+	if (options.panel === false) {
+		const roomCols = Math.max(1, Math.min(byHeight, cols));
+		const inset = Math.floor((cols - roomCols) / 2);
+		return { hudRows: HUD_ROWS, bodyRows, inset, roomCols, gap: 0, sideCols: cols - inset - roomCols };
+	}
 	const roomCols = Math.max(1, Math.min(byHeight, cols - MIN_SIDE_COLS - GAP));
-	return { hudRows: HUD_ROWS, bodyRows, roomCols, gap: GAP, sideCols: cols - roomCols - GAP };
+	return { hudRows: HUD_ROWS, bodyRows, inset: 0, roomCols, gap: GAP, sideCols: cols - roomCols - GAP };
 }
 
-/* SGR colours and APC sequences (Kitty images, pi-tui's cursor markers) take no cells. */
-const ESCAPES = /\x1b\[[0-9;]*m|\x1b_[^\x1b]*\x1b\\/g;
+/* SGR colours, APC sequences (Kitty images, pi-tui's cursor markers) and OSC sequences (the hyperlinks pi-tui's
+ * Markdown puts around a URL, S7) take no cells. */
+const ESCAPES = /\x1b\[[0-9;]*m|\x1b_[^\x1b]*\x1b\\|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
 
 /** Visible cells of a line, for one-cell characters (the game text is ASCII and box drawing). */
 export function plainWidth(line: string): number {
@@ -89,17 +98,70 @@ function withSigns(room: string, signs: readonly Sign[], width: number): string 
 	return escapes + fit(out, width);
 }
 
-export function composeGame(layout: GameLayout, content: { hud: string; room: readonly string[]; side: readonly string[]; dialog?: readonly string[]; signs?: readonly Sign[] }): string[] {
-	const width = layout.roomCols + layout.gap + layout.sideCols;
+/** The line without its first `cells` visible cells; escapes are kept, so colours and the Kitty placement survive. */
+function dropCells(line: string, cells: number): string {
+	let out = "", skipped = 0;
+	for (let at = 0; at < line.length; ) {
+		ESCAPES.lastIndex = at;
+		const escape = ESCAPES.exec(line);
+		if (escape && escape.index === at) {
+			out += escape[0];
+			at += escape[0].length;
+			continue;
+		}
+		const char = String.fromCodePoint(line.codePointAt(at)!);
+		if (skipped < cells) skipped += 1;
+		else out += char;
+		at += char.length;
+	}
+	return out;
+}
+
+export function composeGame(layout: GameLayout, content: { hud: string; room: readonly string[]; side: readonly string[]; dialog?: readonly string[]; signs?: readonly Sign[]; items?: readonly string[] }): string[] {
+	const width = layout.inset + layout.roomCols + layout.gap + layout.sideCols;
 	const lines = layout.hudRows > 0 ? [fit(content.hud, width)] : [];
 	const signs = content.signs ?? [];
 	const dialog = content.dialog ?? [];
-	// The dialog sits on the room's bottom rows, 2 cells in; never on row 0, which carries the image.
-	const dialogStart = Math.max(1, layout.bodyRows - dialog.length);
+	// T7: the ITEMS tray takes the bottom-left corner (itemsTray); never row 0, which carries the image.
+	const items = content.items ?? [];
+	const itemsStart = Math.max(1, layout.bodyRows - items.length);
+	// The dialog sits on the room's bottom rows (above the tray), 2 cells in; never on row 0.
+	const dialogStart = Math.max(1, (items.length ? itemsStart : layout.bodyRows) - dialog.length);
 	for (let row = 0; row < layout.bodyRows; row++) {
-		const over = row >= dialogStart ? dialog[row - dialogStart] : undefined;
+		const over = row >= dialogStart && row - dialogStart < dialog.length ? dialog[row - dialogStart] : undefined;
 		const room = over === undefined ? withSigns(content.room[row] ?? "", signs.filter(sign => sign.row === row), layout.roomCols) : "  " + fit(over, layout.roomCols - 2);
-		lines.push(room + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols));
+		const line = " ".repeat(layout.inset) + room + " ".repeat(layout.gap) + fit(content.side[row] ?? "", layout.sideCols);
+		const item = row >= itemsStart ? items[row - itemsStart] : undefined;
+		lines.push(item === undefined ? line : fit(item, ITEM_COLS) + dropCells(line, ITEM_COLS));
+	}
+	return lines;
+}
+
+/* gentle-shell's pasted-image widget (gentle-pi extensions/gentle-shell.ts imageAttachmentsWidget): a label row per
+ * chip and, while Pi is idle, a thumbnail of at most 40 x 6 cells under it, at column 0 just above the editor. Copied
+ * numbers: if gentle-pi changes them, the tray drifts from the thumbnails. */
+const ITEM_THUMB_COLS = 40;
+const ITEM_THUMB_ROWS = 6;
+/** Cells the ITEMS tray takes from the left edge: the thumbnail's columns and the right border. */
+export const ITEM_COLS = ITEM_THUMB_COLS + 1;
+
+/** The `[Image#N]` chips in the editor's draft, each once, in order. */
+export function itemChips(draft: string): string[] {
+	return [...new Set(draft.match(/\[Image#\d+\]/g) ?? [])];
+}
+
+/**
+ * The ITEMS tray (T7, S6): a hole in the scene where gentle-shell's thumbnails land, so they no longer cut through the
+ * dialog. Kitty draws them over text, so the tray leaves their cells as plain panel; it has a top border with the title
+ * and a right border (the left and bottom edges are the screen and the editor). Empty without chips.
+ */
+export function itemsTray(chips: readonly string[], idle: boolean): string[] {
+	if (chips.length === 0) return [];
+	const slot = (text: string) => `${PANEL_BG}${fit(text, ITEM_THUMB_COLS)}${RESET}${BORDER}║${RESET}`;
+	const lines = [`${BORDER}═ ${GOLD}${BOLD}ITEMS${RESET}${BORDER} ${"═".repeat(ITEM_COLS - 9)}╗${RESET}`];
+	for (const chip of chips) {
+		lines.push(slot(` ${PINK}▣${RESET}${PANEL_BG} ${TEXT}${chip}${RESET}${PANEL_BG}`));
+		if (idle) for (let i = 0; i < ITEM_THUMB_ROWS; i++) lines.push(slot(""));
 	}
 	return lines;
 }
@@ -127,6 +189,21 @@ export function nextRoomId(ids: readonly [number, number], shown: number | undef
 	return { id, retire: shown };
 }
 
+/**
+ * Whether Pi made a full repaint since the last call (L4). A full repaint deletes every Kitty image its lines name with
+ * `a=d,d=I`, data included, so the room's placement points at nothing until its data is sent again; an unchanged
+ * scene never sends it, and the room stayed black after alt+c.
+ */
+export function roomDataLost(fullRedraws: () => number): () => boolean {
+	let seen = fullRedraws();
+	return () => {
+		const now = fullRedraws();
+		if (now === seen) return false;
+		seen = now;
+		return true;
+	};
+}
+
 /** The z-index that puts the room below cell backgrounds (see belowBackgrounds). */
 export const ROOM_Z = BELOW_BACKGROUNDS;
 
@@ -141,7 +218,7 @@ const RESET = "\x1b[0m";
 const GOLD = sgr("#E0C27A"), PINK = sgr("#F095C8"), MUTED = sgr("#A78E9B"), SAND = sgr("#F2B86D");
 
 const IN_FLIGHT: ReadonlySet<string> = new Set(["queued", "running", "waiting"]);
-const ORCHESTRATOR_TEXT: Record<string, string> = { idle: "resting", thinking: "at the whiteboard", tool: "at the whiteboard", "waiting-user": "waiting for you" };
+const ORCHESTRATOR_TEXT: Record<string, string> = { idle: "resting", thinking: "at the monitor", tool: "at the monitor", "waiting-user": "waiting for you" };
 
 const bg = (hex: string) => `\x1b[48;2;${Number.parseInt(hex.slice(1, 3), 16)};${Number.parseInt(hex.slice(3, 5), 16)};${Number.parseInt(hex.slice(5, 7), 16)}m`;
 const INK = sgr("#060407"), BORDER = sgr("#C96AA2"), TEXT = sgr("#F6EFF3");
@@ -164,8 +241,19 @@ export interface SideExtras {
 	readonly doing?: { readonly title: string; readonly done: number; readonly total: number } | null;
 	/** The newest notice from any extension (src/stage/notice.ts), while it is fresh. */
 	readonly notice?: { readonly text: string; readonly level: "info" | "warning" | "error" } | null;
-	/** False hides the CHAT box (alt+c, T9): the dialog over the room already shows the reply. */
-	readonly chatShown?: boolean;
+	/** The session's todo list: a TODO box under CHAT lists every task with its T number and full title. */
+	readonly todo?: readonly TodoTask[];
+}
+
+const TODO_MARK = { done: "✓", in_progress: "▶", blocked: "!", pending: "·", dropped: "·" } as const;
+const TODO_COLOR = { done: MUTED, in_progress: PINK + BOLD, blocked: SAND, pending: TEXT, dropped: MUTED } as const;
+
+/** The tasks the TODO box shows when not all fit: from one before the task in progress (else the first open one). */
+function todoWindow(tasks: readonly TodoTask[], rows: number): readonly TodoTask[] {
+	const now = tasks.findIndex(task => task.status === "in_progress");
+	const anchor = now !== -1 ? now : tasks.findIndex(task => task.status !== "done");
+	const start = Math.max(0, Math.min((anchor === -1 ? tasks.length : anchor) - 1, tasks.length - rows));
+	return tasks.slice(start, start + rows);
 }
 
 const NOTICE_TITLE = { info: "NOTICE", warning: "WARNING", error: "ERROR" } as const;
@@ -183,14 +271,30 @@ export function gameSide(snapshot: OfficeSnapshot, chat: readonly string[], rows
 	// A notice gets its own box under PARTY, only while CHAT still keeps its frame and one line.
 	const noticeBody = extras.notice ? wrap(extras.notice.text, width - 4).slice(0, NOTICE_LINES).map(line => `${extras.notice!.level === "info" ? TEXT : SAND}${line}${RESET}`) : [];
 	const noticeBox = noticeBody.length && rows - partyBox.length - (noticeBody.length + 2) >= 3 ? frame(NOTICE_TITLE[extras.notice!.level], noticeBody, width, noticeBody.length + 2) : [];
-	if (extras.chatShown === false) {
-		const lines = [...partyBox, ...noticeBox, fit(`  ${MUTED}alt+c chat · alt+g plain chat${RESET}`, width)];
-		return [...lines, ...Array<string>(Math.max(0, rows - lines.length)).fill(" ".repeat(width))].slice(0, rows);
-	}
-	const chatHeight = rows - partyBox.length - noticeBox.length;
+	// The TODO box goes under CHAT, only while CHAT still keeps its frame and one line.
+	const listed = (extras.todo ?? []).filter(task => task.status !== "dropped");
+	const todoRows = Math.min(listed.length, rows - partyBox.length - noticeBox.length - 3 - 2);
+	const todoBox = todoRows > 0
+		? frame(
+			`TODO ${listed.filter(task => task.status === "done").length}/${listed.length}`,
+			todoWindow(listed, todoRows).map(task => `${TODO_COLOR[task.status]}${TODO_MARK[task.status]} T${task.id}${RESET} ${task.status === "done" ? MUTED : TEXT}${task.title}${RESET}`),
+			width,
+			todoRows + 2,
+		)
+		: [];
+	const chatHeight = rows - partyBox.length - noticeBox.length - todoBox.length;
 	if (chatHeight < 3) return partyBox.slice(0, rows);
 	const body = chat.length === 0 ? [`${MUTED}Write below; the orchestrator answers here.${RESET}`] : chat.slice(-(chatHeight - 2));
-	return [...partyBox, ...noticeBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat · alt+c hide chat")];
+	return [...partyBox, ...noticeBox, ...frame("CHAT", body, width, chatHeight, "alt+t thoughts · alt+g plain chat · alt+c hide panel"), ...todoBox];
+}
+
+const PANEL_HINT = "  alt+c panel";
+
+/** The side column while the panel is hidden (alt+c, S1): blank cells, and the key that brings it back on the last row. */
+export function hiddenPanel(rows: number, width: number): string[] {
+	const lines = Array<string>(Math.max(0, rows)).fill(" ".repeat(width));
+	if (rows > 0 && width >= plainWidth(PANEL_HINT)) lines[rows - 1] = fit(`${MUTED}${PANEL_HINT}${RESET}`, width);
+	return lines;
 }
 
 /** What an open question shows: its options, which one the ▶ is on, and whether the dialog drives the answer (T4e). */
@@ -329,8 +433,9 @@ const PAPER_BG = bg("#F4D6B7"), FDEEP = sgr("#C2107A"), DIM = sgr("#76616B");
 const TASK_MARK = { done: "✓", in_progress: "▶", blocked: "·", pending: "·", dropped: "·" } as const;
 
 /**
- * The TODO board as text (T11c): `TODO done/total` on its first row, then one row per task (✓ done, ▶ current, · open),
- * on the board's paper colour and cut to its width. Only the rows that fit on the board; none past its bottom edge.
+ * The TODO board as text (T11c): `TODO done/total` on its first row, then a short label per task (✓T1 done, ▶T2 current,
+ * ·T3 open) packed into rows on the board's paper colour; the TODO box under CHAT has the titles. Only the rows that fit
+ * on the board, none past its bottom edge, from the row before the first open task.
  */
 export function todoSigns(tasks: readonly TodoTask[], image: { cols: number; rows: number }): Sign[] {
 	const rowPx = HQ_HEIGHT / image.rows;
@@ -340,15 +445,26 @@ export function todoSigns(tasks: readonly TodoTask[], image: { cols: number; row
 	const last = Math.floor((BOARD.bottom - rowPx) / rowPx);
 	const counted = tasks.filter(task => task.status !== "dropped");
 	const done = counted.filter(task => task.status === "done").length;
-	const paper = (fg: string, text: string) => `${PAPER_BG}${fg}${fit(text, width)}${RESET}`;
-	const title: Sign = { row: first, col, text: paper(FDEEP + BOLD, counted.length ? `TODO ${done}/${counted.length}` : "TODO") };
-	const rows = boardTasks(tasks, Math.max(0, last - first));
-	return [
-		title,
-		...rows.map((task, i) => ({
-			row: first + 1 + i,
-			col,
-			text: paper(task.status === "done" ? DIM : task.status === "in_progress" ? FDEEP + BOLD : INK, `${TASK_MARK[task.status]} ${task.title}`),
-		})),
-	];
+	const paper = (text: string) => `${PAPER_BG}${text.replaceAll(RESET, RESET + PAPER_BG)}${PAPER_BG}${" ".repeat(Math.max(0, width - plainWidth(text)))}${RESET}`;
+	const title: Sign = { row: first, col, text: `${PAPER_BG}${FDEEP}${BOLD}${fit(counted.length ? `TODO ${done}/${counted.length}` : "TODO", width)}${RESET}` };
+	// Pack the labels into rows of the board's width.
+	const lines: Array<{ text: string; open: boolean }> = [];
+	let line = "", used = 0, open = false;
+	for (const task of counted) {
+		const label = `${TASK_MARK[task.status]}T${task.id}`;
+		const size = plainWidth(label);
+		if (used && used + 1 + size > width) {
+			lines.push({ text: line, open });
+			line = "", used = 0, open = false;
+		}
+		const color = task.status === "done" ? DIM : task.status === "in_progress" ? FDEEP + BOLD : INK;
+		line += `${used ? " " : ""}${color}${label}${RESET}`;
+		used += (used ? 1 : 0) + size;
+		open ||= task.status !== "done";
+	}
+	if (used) lines.push({ text: line, open });
+	const room = Math.max(0, last - first);
+	const firstOpen = lines.findIndex(row => row.open);
+	const start = Math.max(0, Math.min(firstOpen === -1 ? lines.length : firstOpen - 1, lines.length - room));
+	return [title, ...lines.slice(start, start + room).map((row, i) => ({ row: first + 1 + i, col, text: paper(row.text) }))];
 }

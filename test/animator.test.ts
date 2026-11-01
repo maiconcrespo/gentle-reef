@@ -16,7 +16,7 @@ function fakeClock() {
 describe("room animation (T7)", () => {
 	it("someone acting is the orchestrator thinking or waiting, an agent working or exploring, or a compaction", () => {
 		assert.equal(isActing({}), false);
-		for (const key of ["thinking", "waiting", "working", "exploring", "brewing"]) assert.equal(isActing({ [key]: true }), true, key);
+		for (const key of ["thinking", "waiting", "working", "exploring", "brewing", "judging"]) assert.equal(isActing({ [key]: true }), true, key);
 	});
 
 	it("ticks at 4 fps only while someone acts, and stops when the room is still", () => {

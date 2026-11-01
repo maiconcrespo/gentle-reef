@@ -6,6 +6,7 @@ import {
 	type OfficeEvent,
 	type OfficeTaskStatus,
 	type OrchestratorState,
+	type ReviewEvent,
 	type SubagentEvent,
 } from "../contract/office-event.ts";
 
@@ -28,7 +29,18 @@ export interface OfficeSnapshot {
 	readonly agents: readonly SubagentEvent[];
 	/** The ask_user prompt waiting for the user, or null. */
 	readonly ask: { readonly questions: readonly AskQuestion[] } | null;
+	/** The native review on the reviewer desks: the lenses its start asked for and how many a capture runs. */
+	readonly review: ReviewView;
 }
+
+/** `arriving` after a start, `inspecting` while a capture runs, `approved` until the sign-off; `idle` otherwise. */
+export interface ReviewView {
+	readonly phase: "idle" | "arriving" | "inspecting" | "approved";
+	readonly lenses: readonly string[];
+	readonly count: number;
+}
+
+const NO_REVIEW: ReviewView = { phase: "idle", lenses: [], count: 0 };
 
 export interface HubStats {
 	readonly subscribers: number;
@@ -59,6 +71,7 @@ export class OfficeHub {
 	#context: { percent: number | null } = { percent: null };
 	#compaction: CompactionPhase | null = null;
 	#ask: { questions: readonly AskQuestion[] } | null = null;
+	#review: ReviewView = NO_REVIEW;
 	#seq = 0;
 	#dropped = 0;
 	#listenerErrors = 0;
@@ -103,6 +116,7 @@ export class OfficeHub {
 			compaction: this.#compaction,
 			agents: [...this.#agents.values()].map(agent => ({ ...agent })),
 			ask: this.#ask === null ? null : { questions: this.#ask.questions.map(question => ({ ...question })) },
+			review: { ...this.#review, lenses: [...this.#review.lenses] },
 		};
 	}
 
@@ -125,11 +139,14 @@ export class OfficeHub {
 		this.#context = { percent: null };
 		this.#compaction = null;
 		this.#ask = null;
+		this.#review = NO_REVIEW;
 	}
 
 	#apply(event: OfficeEvent): void {
 		switch (event.type) {
 			case "orchestrator":
+				// The session went idle: nobody stays at the reviewer desks.
+				if (event.state === "idle") this.#review = NO_REVIEW;
 				this.#orchestrator = event.toolName === undefined ? { state: event.state } : { state: event.state, toolName: event.toolName };
 				return;
 			case "context":
@@ -146,6 +163,9 @@ export class OfficeHub {
 			case "ask":
 				this.#ask = event.phase === "open" ? { questions: event.questions } : null;
 				return;
+			case "review":
+				this.#review = nextReview(this.#review, event);
+				return;
 			default:
 				return;
 		}
@@ -161,5 +181,20 @@ export class OfficeHub {
 			if (this.#agents.size <= MAX_TRACKED_AGENTS) break;
 			if (!ACTIVE_STATUSES.has(candidate.status)) this.#agents.delete(id);
 		}
+	}
+}
+
+/** One verdict per capture: an approval waits for the sign-off, a correction or a failure ends the review. */
+function nextReview(current: ReviewView, event: ReviewEvent): ReviewView {
+	switch (event.phase) {
+		case "arrive":
+			return { phase: "arriving", lenses: [...(event.names ?? [])], count: 0 };
+		case "inspect":
+			return { phase: "inspecting", lenses: current.lenses, count: event.count };
+		case "verdict":
+			if (current.phase === "idle") return current;
+			return event.verdict === "approved" ? { ...current, phase: "approved" } : NO_REVIEW;
+		case "acknowledged":
+			return NO_REVIEW;
 	}
 }

@@ -8,12 +8,14 @@ import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
 import { createAnimator, isActing } from "../src/stage/animator.ts";
 import { chatLines, currentReply, initialChat, jobsFromChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
-import { frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from "../src/stage/frame.ts";
+import { coffeeClock, frameFromSnapshot, gavelClock, renderHqPng, renderPortraitPng, type HqFrame } from "../src/stage/frame.ts";
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
-import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, splitKitty, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, roomDataLost, splitKitty, itemChips, itemsTray, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, hiddenPanel, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 import { lastResult } from "../src/stage/memo.ts";
+import { wrapPrompts } from "../src/stage/prompts.ts";
+import { putListenerFirst } from "../src/stage/input-order.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
@@ -38,6 +40,9 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 			game.restoreTodo(todoFromEntries(ctx.sessionManager?.getBranch?.() ?? []));
 			// T4b: warnings from any extension (ui.notify) also show in a box in the scene; Pi still shows them as before.
 			wrapNotify(ctx.ui, notice => game.notice(notice));
+			// S8: Pi's own prompts (select, confirm, input, editor) need room below the overlay. Pi's ui_prompt_start never
+			// comes while game mode (itself a ui.custom) is open, so each prompt is counted where it is called.
+			wrapPrompts(ctx.ui, change => game.prompt(change));
 			if (kitty()) game.open(ctx);
 		} catch {
 			// Game mode is display only; plain Pi stays if it cannot open.
@@ -46,17 +51,13 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 	});
 	// T4: the chat column reads Pi's own conversation events; alt+t shows or hides the orchestrator's thinking.
 	for (const name of CHAT_EVENTS) pi.on(name, (event: { type: string }) => game.chat(event));
-	// Pi's own prompts (select, confirm, input, editor) need room below the overlay. Our overlay is a ui.custom, so
-	// "custom" prompts are not counted: the scene must not shrink because of itself.
-	pi.on("ui_prompt_start", (event: { kind?: string }) => { if (event.kind !== "custom") game.prompt(+1); });
-	pi.on("ui_prompt_end", (event: { kind?: string }) => { if (event.kind !== "custom") game.prompt(-1); });
 	pi.registerShortcut("alt+t", {
 		description: "Gentle HQ: show or hide the orchestrator's thinking",
 		handler: () => game.toggleThoughts(),
 	});
 	pi.registerShortcut("alt+c", {
-		description: "Gentle HQ: show or hide the CHAT box (the dialog over the room keeps the reply)",
-		handler: () => game.toggleChat(),
+		description: "Gentle HQ: show or hide the side panel (PARTY, notices and CHAT); the room is centred without it",
+		handler: () => game.togglePanel(),
 	});
 	pi.registerShortcut("alt+g", {
 		description: "Gentle HQ: switch between game mode and plain chat",
@@ -178,7 +179,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	let todo: readonly TodoTask[] = [];
 	let notice: Notice | null = null;
 	let thoughtsShown = true;
-	let chatShown = true;
+	let panelShown = true;
 	// T9: the reply's first line shown in the dialog (null follows the tail) and the size of the last reply dialog drawn.
 	let dialogTop: number | null = null;
 	let dialogView: { total: number; rows: number } | undefined;
@@ -230,6 +231,14 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 	const open = (ctx: ExtensionContext): void => {
 		if (handle || opening) return;
 		opening = true;
+		// T7: the editor's draft and Pi's idle state tell where gentle-shell's pasted-image thumbnails are.
+		const items = (): string[] => {
+			try {
+				return itemsTray(itemChips(ctx.ui.getEditorText()), ctx.isIdle());
+			} catch {
+				return [];
+			}
+		};
 		void ctx.ui.custom<void>(
 			tui => {
 				terminalRows = tui.terminal.rows;
@@ -245,19 +254,32 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 				// The overlay shrinking or growing exposes or covers Pi's rows, which only a full repaint redraws.
 				let lastReserved = reserved();
 				forceRepaint = () => queueMicrotask(() => tui.requestRender(true));
+				// L4: a full repaint deleted the room's data; once Pi has written it, send the room again under the other id.
+				const lost = roomDataLost(() => tui.fullRedraws);
+				const checkRoom = () => queueMicrotask(() => {
+					if (!lost() || handle?.isHidden()) return;
+					resendRoom = true;
+					tui.requestRender();
+				});
 				// Pi's own input path, used to replay the dialog's answer one key at a time (private in the types, present at runtime).
 				const replay = (tui as unknown as { handleTerminalInput?: (data: string) => void }).handleTerminalInput?.bind(tui);
+				// T9: a reply longer than the dialog scrolls with PgUp/PgDn and shift+up/down; other keys stay Pi's. S9: this
+				// listener goes before Pi's alt-screen viewport, which would take PgUp/PgDn (putListenerFirst).
+				const scrollListener = (data: string) => {
+					if (handle?.isHidden() || selector?.choice.active() || !dialogView || dialogView.total <= dialogView.rows) return undefined;
+					const scroll = dialogScrollKey(data);
+					if (!scroll) return undefined;
+					// The release of a consumed key is consumed too, so Pi never sees half a key.
+					if (isKeyRelease(data)) return { consume: true };
+					dialogTop = scrollDialog(dialogTop, dialogView, scroll);
+					tui.requestRender();
+					return { consume: true };
+				};
+				const stopScroll = tui.addInputListener(scrollListener);
+				putListenerFirst(tui, scrollListener);
 				const stopKeys = tui.addInputListener(data => {
 					const choice = selector?.choice;
-					if (handle?.isHidden() || isKeyRelease(data)) return undefined;
-					// T9: a reply longer than the dialog scrolls with PgUp/PgDn and shift+up/down; other keys stay Pi's.
-					if (!choice?.active()) {
-						const scroll = dialogScrollKey(data);
-						if (!scroll || !dialogView || dialogView.total <= dialogView.rows) return undefined;
-						dialogTop = scrollDialog(dialogTop, dialogView, scroll);
-						tui.requestRender();
-						return { consume: true };
-					}
+					if (handle?.isHidden() || isKeyRelease(data) || !choice?.active()) return undefined;
 					const key: SelectorKey = matchesKey(data, "up") ? "up" : matchesKey(data, "down") ? "down" : matchesKey(data, "enter") || matchesKey(data, "return") ? "enter" : "other";
 					const step = choice.key(key);
 					if (step.done) {
@@ -278,6 +300,20 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 					tui.requestRender();
 				});
 				animator.update(acting());
+				// S3: with no worker running for three minutes the workers go for a coffee. S2: the gavel strikes when the judges
+				// finish. Each change is due at a known time with nothing else to render it, so one timer renders then.
+				const coffee = coffeeClock(Date.now());
+				const gavel = gavelClock();
+				let clockTimer: ReturnType<typeof setTimeout> | undefined;
+				const clocks = (room: HqFrame): Pick<HqFrame, "coffee" | "struck"> => {
+					const now = Date.now();
+					const shown = { coffee: coffee.at(room.working === true, now), struck: gavel.at(room.judging === true, now) };
+					const due = [shown.struck ? gavel.dueAt() : undefined, room.working || shown.coffee ? undefined : coffee.dueAt()].filter((at): at is number => at !== undefined);
+					clearTimeout(clockTimer);
+					clockTimer = due.length ? setTimeout(() => tui.requestRender(), Math.min(...due) - now + 50) : undefined;
+					clockTimer?.unref?.();
+					return shown;
+				};
 				return {
 					render(width: number): string[] {
 						// After a resize Pi repaints only the lines that changed, which leaves the old chat showing through
@@ -287,10 +323,12 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							lastWidth = width;
 						}
 						terminalRows = tui.terminal.rows;
-						const layout = gameLayout(width, Math.max(1, terminalRows - reserved()), getCellDimensions());
+						checkRoom();
+						const layout = gameLayout(width, Math.max(1, terminalRows - reserved()), getCellDimensions(), { panel: panelShown });
 						if (!layout) return [];
 						const snapshot = hub.snapshot();
-						const png = pngFor({ ...frameFromSnapshot(snapshot), todo: boardRows(todo), jobs: jobsFromChat(chat), motion: animator.running(), t: animator.step() });
+						const room = frameFromSnapshot(snapshot);
+						const png = pngFor({ ...room, ...clocks(room), todo: boardRows(todo), jobs: jobsFromChat(chat), motion: animator.running(), t: animator.step() });
 						if (resendRoom || image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
 							resendRoom = false;
 							const { id, retire } = nextRoomId(roomIds, shownRoom);
@@ -303,10 +341,11 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						}
 						// T10: typing renders the screen again with nothing new in the scene; reuse the lines until an input changes.
 						const shownNotice = currentNotice(notice, Date.now());
-						const inputs = [width, layout.bodyRows, layout.roomCols, image.room.lines[0], JSON.stringify(snapshot), chat, todo, shownNotice, chatShown, thoughtsShown, dialogTop, editing, selector?.choice.active(), selector?.choice.index(), branch()];
+						const tray = items();
+						const inputs = [tray.join("\n"), width, layout.bodyRows, layout.roomCols, image.room.lines[0], JSON.stringify(snapshot), chat, todo, shownNotice, panelShown, thoughtsShown, dialogTop, editing, selector?.choice.active(), selector?.choice.index(), branch()];
 						return sceneLines(inputs, () => {
 							const lines = chatLines(chat, { width: layout.sideCols - 4, thoughtsShown, markdown });
-							const side = gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: shownNotice, chatShown });
+							const side = panelShown ? gameSide(snapshot, lines, layout.bodyRows, layout.sideCols, { doing: doingNow(todo), notice: shownNotice, todo }) : hiddenPanel(layout.bodyRows, layout.sideCols);
 							// T4d: the current reply, or an open question, in a dialog over the bottom of the room.
 							const reply = currentReply(chat);
 							const question = snapshot.ask?.questions[0];
@@ -328,7 +367,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 							portraitShown = showPortrait;
 							// T4f: project and branch, the context left and the brand are signs in the room, not a HUD row.
 							const signs = [...sceneSigns({ project, branch: branch(), percent: snapshot.context.percent }, image.room), ...todoSigns(todo, image.room)];
-							return composeGame(layout, { hud: "", room: image.room.lines, side, dialog, signs });
+							return composeGame(layout, { hud: "", room: image.room.lines, side, dialog, signs, items: tray });
 						});
 					},
 					invalidate() {
@@ -337,9 +376,11 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 					},
 					dispose() {
 						stopKeys();
+						stopScroll();
 						repaint = undefined;
 						forceRepaint = undefined;
 						animator.stop();
+						clearTimeout(clockTimer);
 						unsubscribe();
 					},
 				};
@@ -394,8 +435,10 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 		restoreTodo(tasks: readonly TodoTask[] | null): void {
 			if (tasks) todo = tasks;
 		},
-		toggleChat(): void {
-			chatShown = !chatShown;
+		togglePanel(): void {
+			panelShown = !panelShown;
+			// The room changes place and maybe size: repaint the whole screen once.
+			forceRepaint?.();
 			repaint?.();
 		},
 		toggleThoughts(): void {
