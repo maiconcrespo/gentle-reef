@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { inflateSync } from "node:zlib";
 import { encodePng } from "../src/stage/png.ts";
 import { createRaster } from "../src/stage/raster.ts";
-import { COFFEE_AFTER_MS, coffeeClock, frameFromSnapshot, renderHqPng, renderPortraitPng } from "../src/stage/frame.ts";
+import { COFFEE_AFTER_MS, GAVEL_STRIKE_MS, coffeeClock, gavelClock, frameFromSnapshot, renderHqPng, renderPortraitPng } from "../src/stage/frame.ts";
 import { HQ_HEIGHT, HQ_PALETTE, HQ_WIDTH, drawHq, drawHqPortrait } from "../web/hq-scene.js";
 
 /** Splits a PNG into its chunks, checking each CRC. */
@@ -153,7 +153,7 @@ describe("snapshot to frame (event-to-scene mapping)", () => {
 	const agent = (role: string, status: string) => ({ v: 1, type: "subagent", id: role + status, agent: "gentle-ai-" + role, role, label: role, status });
 
 	it("an idle session is a still room with a full pot", () => {
-		assert.deepEqual(frameFromSnapshot(base as never), { motion: false, thinking: false, waiting: false, working: false, workers: 0, exploring: false, context: null, brewing: false, reviewDesks: ["off", "off", "off", "off"] });
+		assert.deepEqual(frameFromSnapshot(base as never), { motion: false, thinking: false, waiting: false, working: false, workers: 0, judging: false, exploring: false, context: null, brewing: false, reviewDesks: ["off", "off", "off", "off"] });
 	});
 
 	it("reads who acts, the context and compaction from the snapshot", () => {
@@ -229,6 +229,63 @@ describe("workers' screens and the coffee break (terminal scene life T3, S3)", (
 		assert.equal(clock.at(false, 500_001), false);
 		assert.equal(clock.dueAt(), 500_000 + COFFEE_AFTER_MS, "the next break is due three minutes after the last work");
 		assert.equal(clock.at(false, 500_000 + COFFEE_AFTER_MS), true);
+	});
+});
+
+describe("judges debate during a judgment day (terminal scene life T2, S2)", () => {
+	const base = { v: 1, orchestrator: { state: "idle" }, context: { percent: null }, compaction: null, agents: [], ask: null, review: { phase: "idle", lenses: [], count: 0 } } as const;
+	const judge = (status: string) => ({ v: 1, type: "subagent", id: "j" + status, agent: "jd-judge-a", role: "judge", label: "judge", status });
+	const paint = (frame: Record<string, unknown>) => { const r = createRaster(HQ_WIDTH, HQ_HEIGHT); drawHq(r, frame); return r; };
+	const P = (name: keyof typeof HQ_PALETTE) => HQ_PALETTE[name].toUpperCase();
+	/* Bubble interiors above each judge's head (judges at x 560 and 668, heads from y 187). */
+	const bubble = (r: { width: number; data: Uint8Array }, cx: number) => hex(r, cx + 1, 178);
+	const gavelUp = (r: { width: number; data: Uint8Array }) => hex(r, 572, 195);
+	const spark = (r: { width: number; data: Uint8Array }) => hex(r, 574, 190);
+
+	it("a running jd-judge agent is a judgment day; a finished one is not", () => {
+		assert.equal(frameFromSnapshot({ ...base, agents: [judge("running")] } as never).judging, true);
+		assert.equal(frameFromSnapshot({ ...base, agents: [judge("completed")] } as never).judging, false);
+	});
+
+	it("the judges speak in turns: a bubble over one, then over the other", () => {
+		const first = paint({ motion: true, t: 0, judging: true });
+		const second = paint({ motion: true, t: 4, judging: true });
+		assert.equal(bubble(first, 560), P("text"), "judge A speaks first");
+		assert.notEqual(bubble(first, 668), P("text"));
+		assert.equal(bubble(second, 668), P("text"), "then judge B");
+		assert.notEqual(bubble(second, 560), P("text"));
+	});
+
+	it("no bubbles and a resting gavel when nobody judges, even while the room moves", () => {
+		for (const t of [0, 4, 6]) {
+			const r = paint({ motion: true, t });
+			assert.notEqual(bubble(r, 560), P("text"));
+			assert.notEqual(bubble(r, 668), P("text"));
+			assert.notEqual(gavelUp(r), P("sand"), `t ${t}: the gavel rests`);
+		}
+	});
+
+	it("the gavel rises and falls during the debate", () => {
+		const frames = [0, 1, 2, 3, 4, 5, 6, 7].map(t => gavelUp(paint({ motion: true, t, judging: true })));
+		assert.ok(frames.includes(P("sand")) && frames.some(c => c !== P("sand")), frames.join(" "));
+	});
+
+	it("when they finish the gavel strikes: down on its block with a gold spark", () => {
+		const r = paint({ struck: true });
+		assert.equal(spark(r), P("gold"));
+		assert.notEqual(gavelUp(r), P("sand"));
+		assert.notEqual(spark(paint({})), P("gold"), "no spark at rest");
+	});
+
+	it("the gavel clock: one strike of GAVEL_STRIKE_MS when the judging ends, none before or after", () => {
+		const clock = gavelClock();
+		assert.equal(clock.at(false, 0), false, "no judgment yet: no strike");
+		assert.equal(clock.at(true, 1_000), false);
+		assert.equal(clock.at(false, 2_000), true, "the judges finish: strike");
+		assert.equal(clock.dueAt(), 2_000 + GAVEL_STRIKE_MS);
+		assert.equal(clock.at(false, 2_000 + GAVEL_STRIKE_MS - 1), true);
+		assert.equal(clock.at(false, 2_000 + GAVEL_STRIKE_MS), false, "then they rest");
+		assert.equal(clock.at(false, 9_000), false, "only once");
 	});
 });
 

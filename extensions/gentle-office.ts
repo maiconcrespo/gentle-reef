@@ -8,7 +8,7 @@ import { createOfficeServer } from "../src/server/office-server.ts";
 import { openInBrowser } from "../src/server/open-browser.ts";
 import { createAnimator, isActing } from "../src/stage/animator.ts";
 import { chatLines, currentReply, initialChat, jobsFromChat, reduceChat, type ChatState, type MarkdownRenderer } from "../src/stage/chat.ts";
-import { coffeeClock, frameFromSnapshot, renderHqPng, renderPortraitPng, type HqFrame } from "../src/stage/frame.ts";
+import { coffeeClock, frameFromSnapshot, gavelClock, renderHqPng, renderPortraitPng, type HqFrame } from "../src/stage/frame.ts";
 import { createChoiceSelector, type ChoiceSelector, type SelectorKey } from "../src/stage/selector.ts";
 import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/notice.ts";
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
@@ -300,16 +300,19 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 					tui.requestRender();
 				});
 				animator.update(acting());
-				// S3: with no worker running for three minutes the workers go for a coffee; one render when the break is due.
+				// S3: with no worker running for three minutes the workers go for a coffee. S2: the gavel strikes when the judges
+				// finish. Each change is due at a known time with nothing else to render it, so one timer renders then.
 				const coffee = coffeeClock(Date.now());
-				let coffeeTimer: ReturnType<typeof setTimeout> | undefined;
-				const onBreak = (working: boolean): boolean => {
+				const gavel = gavelClock();
+				let clockTimer: ReturnType<typeof setTimeout> | undefined;
+				const clocks = (room: HqFrame): Pick<HqFrame, "coffee" | "struck"> => {
 					const now = Date.now();
-					const resting = coffee.at(working, now);
-					clearTimeout(coffeeTimer);
-					coffeeTimer = working || resting ? undefined : setTimeout(() => tui.requestRender(), coffee.dueAt() - now + 50);
-					coffeeTimer?.unref?.();
-					return resting;
+					const shown = { coffee: coffee.at(room.working === true, now), struck: gavel.at(room.judging === true, now) };
+					const due = [shown.struck ? gavel.dueAt() : undefined, room.working || shown.coffee ? undefined : coffee.dueAt()].filter((at): at is number => at !== undefined);
+					clearTimeout(clockTimer);
+					clockTimer = due.length ? setTimeout(() => tui.requestRender(), Math.min(...due) - now + 50) : undefined;
+					clockTimer?.unref?.();
+					return shown;
 				};
 				return {
 					render(width: number): string[] {
@@ -325,7 +328,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						if (!layout) return [];
 						const snapshot = hub.snapshot();
 						const room = frameFromSnapshot(snapshot);
-						const png = pngFor({ ...room, coffee: onBreak(room.working === true), todo: boardRows(todo), jobs: jobsFromChat(chat), motion: animator.running(), t: animator.step() });
+						const png = pngFor({ ...room, ...clocks(room), todo: boardRows(todo), jobs: jobsFromChat(chat), motion: animator.running(), t: animator.step() });
 						if (resendRoom || image?.png !== png || image.cols !== layout.roomCols || image.rows !== layout.bodyRows) {
 							resendRoom = false;
 							const { id, retire } = nextRoomId(roomIds, shownRoom);
@@ -377,7 +380,7 @@ function gameMode(hub: OfficeHub, pngFor: (frame: HqFrame) => string) {
 						repaint = undefined;
 						forceRepaint = undefined;
 						animator.stop();
-						clearTimeout(coffeeTimer);
+						clearTimeout(clockTimer);
 						unsubscribe();
 					},
 				};

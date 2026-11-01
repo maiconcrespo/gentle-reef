@@ -15,6 +15,10 @@ export interface HqFrame {
 	/** No worker has run for COFFEE_AFTER_MS: the workers stand at the coffee corner. */
 	readonly coffee?: boolean;
 	readonly exploring?: boolean;
+	/** A jd-judge agent runs: the judges debate in turns and the gavel moves. */
+	readonly judging?: boolean;
+	/** The judges just finished: the gavel strikes once (gavelClock). */
+	readonly struck?: boolean;
 	/** Context used, 0-100, or null while Pi has not reported it (the pot stays full). */
 	readonly context?: number | null;
 	/** Compaction is running: the espresso machine steams. */
@@ -56,6 +60,7 @@ export function frameFromSnapshot(snapshot: OfficeSnapshot): HqFrame {
 		waiting: state === "waiting-user",
 		working: running.some(agent => agent.role === "worker"),
 		workers: running.filter(agent => agent.role === "worker").length,
+		judging: running.some(agent => agent.role === "judge"),
 		exploring: running.some(agent => agent.role === "explore"),
 		context: snapshot.context.percent,
 		brewing: snapshot.compaction === "start",
@@ -79,6 +84,27 @@ export function coffeeClock(start: number) {
 			return now - last >= COFFEE_AFTER_MS;
 		},
 		dueAt: (): number => last + COFFEE_AFTER_MS,
+	};
+}
+
+/** How long the gavel's strike shows once the judges finish (S2). */
+export const GAVEL_STRIKE_MS = 1_500;
+
+/** The gavel strikes for GAVEL_STRIKE_MS from the moment a judgment day ends, once per judgment day. */
+export function gavelClock() {
+	let judged = false;
+	let until = 0;
+	return {
+		/** Whether the gavel is striking at `now`. */
+		at(judging: boolean, now: number): boolean {
+			if (judging) judged = true;
+			else if (judged) {
+				judged = false;
+				until = now + GAVEL_STRIKE_MS;
+			}
+			return now < until;
+		},
+		dueAt: (): number => until,
 	};
 }
 

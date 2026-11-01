@@ -3,9 +3,9 @@ import type { HqFrame } from "./frame.ts";
 /** Frames per second while someone acts. web/hq-scene.js counts its animation steps at this rate. */
 export const ANIMATION_FPS = 4;
 
-/** Someone acts: the orchestrator thinks or waits for you, a writer works, the explorer explores, or a compaction brews. */
+/** Someone acts: the orchestrator thinks or waits for you, a writer works, the explorer explores, the judges judge, or a compaction brews. */
 export function isActing(frame: HqFrame): boolean {
-	return Boolean(frame.thinking || frame.waiting || frame.working || frame.exploring || frame.brewing);
+	return Boolean(frame.thinking || frame.waiting || frame.working || frame.exploring || frame.judging || frame.brewing);
 }
 
 export interface Animator {

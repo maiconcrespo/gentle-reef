@@ -18,7 +18,7 @@ const INK = K.bg, SKIN = K.sand, SKIN_SH = shade(K.sand);
 const W = HQ_WIDTH, H = HQ_HEIGHT;
 
 /* The frame being painted. Set by drawHq for the duration of one synchronous call. */
-let g = null, motion = false, t = 0, potLevel = 1, brewing = false, oddStep = null, todo = [], jobs = [], reviewDesks = [];
+let g = null, motion = false, t = 0, potLevel = 1, brewing = false, oddStep = null, todo = [], jobs = [], reviewDesks = [], judging = false, struck = false;
 const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 const O = (x, y, w, h, c) => { R(x - 1, y - 1, w + 2, h + 2, INK); R(x, y, w, h, c); };
 
@@ -278,12 +278,18 @@ function reviewStations() {
 		if (desk === 'ok') { R(x + 17, 114, 2, 2, K.green); R(x + 19, 116, 2, 2, K.green); R(x + 21, 112, 2, 4, K.green); R(x + 23, 110, 2, 2, K.green); }
 	});
 }
+/* A speech bubble with "…" over a judge's head (S2). */
+function speechBubble(cx) {
+	O(cx - 5, 172, 12, 9, K.text); R(cx - 1, 181, 2, 2, K.text);
+	for (let i = 0; i < 3; i++) R(cx - 3 + i * 3, 176, 1, 1, INK);
+}
 function judgmentBench() {
 	O(534, 210, 160, 30, K.hair); R(534, 210, 160, 4, K.border); R(538, 218, 152, 1, K.border);
 	R(606, 214, 16, 20, K.fuchsia); R(608, 216, 12, 16, K.fdeep); R(612, 220, 4, 4, K.gold);
-	/* Gavel on its block. */
-	O(574, 204, 10, 4, shade(K.sand)); const up = motion && t % 6 === 0;
+	/* Gavel on its block: it rises and falls only during a judgment day (S2); when the judges finish it strikes once, with a spark. */
+	O(574, 204, 10, 4, shade(K.sand)); const up = motion && judging && !struck && t % 6 === 0;
 	O(570, up ? 194 : 198, 10, 5, K.sand); R(578, up ? 196 : 200, 10, 2, shade(K.sand));
+	if (struck) { R(570, 192, 1, 3, K.gold); R(574, 189, 2, 4, K.gold); R(579, 192, 1, 3, K.gold); }
 	/* Two scales: A and B. */
 	O(642, 200, 2, 10, K.gold); R(636, 200, 14, 1, K.gold); R(634, 202, 4, 2, K.gold); R(648, 202, 4, 2, K.gold);
 }
@@ -314,7 +320,8 @@ function jobsWall() {
  * Paints one frame of the room at 1x (HQ_WIDTH x HQ_HEIGHT) on any context with `fillStyle`, `globalAlpha` and `fillRect`.
  * `frame.t` is the animation step (4 per second), `frame.motion` false draws a still frame, and the flags say who is acting:
  * `thinking`/`waiting` (the orchestrator), `working` (the writers), `exploring` (the explorer); `workers` running writers
- * (the first desks show code, the rest a still game) and `coffee` (the writers on a break at the coffee corner).
+ * (the first desks show code, the rest a still game) and `coffee` (the writers on a break at the coffee corner); `judging`
+ * (a judgment day: the judges debate, the gavel moves) and `struck` (the judges just finished: the gavel strikes).
  * State shown: `context` percent (the coffee pot), `brewing` (compaction steam), `odd` (current ODD step, 0-6, on the
  * chalkboard), `todo` ([{ done, now }] rows on the TODO board), `jobs` ("running" | "ok" | "fail", one monitor each)
  * and `reviewDesks` ("off" | "lit" | "ok", one magnifier per lens desk). Readable text lives in the terminal UI, not the image.
@@ -328,6 +335,7 @@ export function drawHq(ctx, frame = {}) {
 	todo = Array.isArray(frame.todo) ? frame.todo : [];
 	jobs = Array.isArray(frame.jobs) ? frame.jobs : [];
 	reviewDesks = Array.isArray(frame.reviewDesks) ? frame.reviewDesks : [];
+	judging = frame.judging === true; struck = frame.struck === true;
 	const bob = on => (motion && on ? t % 2 : 0);
 	try {
 		R(0, 0, W, H, K.panel);
@@ -349,6 +357,8 @@ export function drawHq(ctx, frame = {}) {
 		[K.red, K.green, K.blue, K.gold].forEach((c, i) => person(535 + i * 48, 100, reviewer(c), 0));
 		person(560, 214, JUDGE, 0); person(668, 214, JUDGE, 0);
 		judgmentBench();
+		/* The judges debate in turns while a judgment day runs: one speaks for four steps, then the other. */
+		if (motion && judging) speechBubble(Math.floor(t / 4) % 2 === 0 ? 560 : 668);
 		person(600, 284, FIXER, 0);
 		person(590, 354, VERIFIER, 0);
 		verifyLab();
