@@ -38,3 +38,4 @@ Branch: feat/terminal-scene-life (from main 64cb43b). Issues: #3 (judges). Follo
 - L8 — User: "pgup y pgdn no funciona el shft+ flecha si (Las preguntas que no me aparecen son las de seguridad cuando hay que hacer un push) si autorizo. (la que suena una aviso)". The ITEMS thumbnail after alt+c was dropped: gentle-shell's thumbnail line carries its full image data, so a full repaint sends it again; not reproduced.
 - L9 — User (screenshot of the guard's confirm): "este es el tipo de pregunta que no aparece en la escena, que se tapa".
 - L10 — User ran `printf '\e[>7u'; timeout 8 cat -v; printf '\e[<u'` in Ghostty: `^[[5~^[[5;1:3~^[[6~^[[6;1:3~`.
+- L11 — User: "ok , guarda todo lo encontrado, sigo despues,". Stopped after T10 (b684c34). Next: the user's look at T8-T10 in Ghostty, push (3 commits after b79b62a unpushed), slice/PR decision (499 lines since main), then T3, T2, T4, T5, T6.
