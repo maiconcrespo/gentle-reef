@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PORTRAIT_COLS, aboveBackgrounds, hiddenPanel, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns, roomDataLost, itemChips, itemsTray, ITEM_COLS } from "../src/stage/game.ts";
+import { PORTRAIT_COLS, aboveBackgrounds, hiddenPanel, nextRoomId, scrollDialog, splitKitty, belowBackgrounds, composeGame, gameDialog, portraitFits, gameLayout, gameSide, plainWidth, rowsBelow, sceneSigns, todoSigns, roomDataLost, itemChips, itemsTray, ITEM_COLS, fit } from "../src/stage/game.ts";
 
 const plainText = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -399,5 +399,25 @@ describe("ITEMS tray for pasted images (T7, S6)", () => {
 		const before = composeGame(layout, { hud: "", room: [], side, dialog: ["d0"] });
 		assert.deepEqual(composeGame(layout, { hud: "", room: [], side, dialog: ["d0"], items: [] }), before);
 		assert.equal(plainText(before[19]!).slice(2, 4), "d0");
+	});
+});
+
+describe("hyperlinks in the chat and the dialog (S7)", () => {
+	// pi-tui's Markdown wraps a URL in OSC 8 hyperlinks, one pair per wrapped line: escapes that take no cells.
+	const OPEN = "\x1b]8;;https://github.com/maiconcrespo/gentle-reef/pull/new/feat/terminal-scene-life\x1b\\";
+	const CLOSE = "\x1b]8;;\x1b\\";
+	const link = `${OPEN}\x1b[38;2;105;173;208mhttps://github.com${CLOSE}`;
+
+	it("counts only the link's visible text", () => {
+		assert.equal(plainWidth(link), "https://github.com".length);
+		assert.equal(plainWidth(`\x1b]8;;https://a.io\x07a.io\x1b]8;;\x07`), 4);
+	});
+
+	it("pads a linked line to the width with both hyperlink escapes whole", () => {
+		assert.equal(fit(link, 20), `${link}  `);
+	});
+
+	it("cuts the text, never the escapes: the hyperlink is still closed", () => {
+		assert.equal(fit(link, 5), `${OPEN}\x1b[38;2;105;173;208mhttps${CLOSE}`);
 	});
 });

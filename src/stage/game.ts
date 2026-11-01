@@ -47,8 +47,9 @@ export function gameLayout(cols: number, rows: number, cell: CellSize, options: 
 	return { hudRows: HUD_ROWS, bodyRows, inset: 0, roomCols, gap: GAP, sideCols: cols - roomCols - GAP };
 }
 
-/* SGR colours and APC sequences (Kitty images, pi-tui's cursor markers) take no cells. */
-const ESCAPES = /\x1b\[[0-9;]*m|\x1b_[^\x1b]*\x1b\\/g;
+/* SGR colours, APC sequences (Kitty images, pi-tui's cursor markers) and OSC sequences (the hyperlinks pi-tui's
+ * Markdown puts around a URL, S7) take no cells. */
+const ESCAPES = /\x1b\[[0-9;]*m|\x1b_[^\x1b]*\x1b\\|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
 
 /** Visible cells of a line, for one-cell characters (the game text is ASCII and box drawing). */
 export function plainWidth(line: string): number {
