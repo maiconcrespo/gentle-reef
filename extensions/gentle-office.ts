@@ -14,6 +14,7 @@ import { NOTICE_MS, currentNotice, wrapNotify, type Notice } from "../src/stage/
 import { boardRows, doingNow, todoFromEntries, todoFromToolEnd, type TodoTask } from "../src/stage/todo.ts";
 import { PORTRAIT_COLS, ROOM_Z, aboveBackgrounds, composeGame, nextRoomId, roomDataLost, splitKitty, itemChips, itemsTray, gameDialog, scrollDialog, type DialogScrollKey, portraitFits, gameLayout, gameSide, hiddenPanel, rowsBelow, sceneSigns, todoSigns } from "../src/stage/game.ts";
 import { lastResult } from "../src/stage/memo.ts";
+import { wrapPrompts } from "../src/stage/prompts.ts";
 import { registerOffice, type TerminalStage } from "../src/toggle.ts";
 
 // Thin wiring only. Event mapping, layout and state live in src/ so they stay testable.
@@ -38,6 +39,9 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 			game.restoreTodo(todoFromEntries(ctx.sessionManager?.getBranch?.() ?? []));
 			// T4b: warnings from any extension (ui.notify) also show in a box in the scene; Pi still shows them as before.
 			wrapNotify(ctx.ui, notice => game.notice(notice));
+			// S8: Pi's own prompts (select, confirm, input, editor) need room below the overlay. Pi's ui_prompt_start never
+			// comes while game mode (itself a ui.custom) is open, so each prompt is counted where it is called.
+			wrapPrompts(ctx.ui, change => game.prompt(change));
 			if (kitty()) game.open(ctx);
 		} catch {
 			// Game mode is display only; plain Pi stays if it cannot open.
@@ -46,10 +50,6 @@ export default function gentleOffice(pi: ExtensionAPI): void {
 	});
 	// T4: the chat column reads Pi's own conversation events; alt+t shows or hides the orchestrator's thinking.
 	for (const name of CHAT_EVENTS) pi.on(name, (event: { type: string }) => game.chat(event));
-	// Pi's own prompts (select, confirm, input, editor) need room below the overlay. Our overlay is a ui.custom, so
-	// "custom" prompts are not counted: the scene must not shrink because of itself.
-	pi.on("ui_prompt_start", (event: { kind?: string }) => { if (event.kind !== "custom") game.prompt(+1); });
-	pi.on("ui_prompt_end", (event: { kind?: string }) => { if (event.kind !== "custom") game.prompt(-1); });
 	pi.registerShortcut("alt+t", {
 		description: "Gentle HQ: show or hide the orchestrator's thinking",
 		handler: () => game.toggleThoughts(),
