@@ -397,21 +397,15 @@ describe("the Boss (terminal scene life T5, S5)", () => {
 	const boss = (spot: { cx: number; fy: number }) => {
 		const { cx, fy } = spot;
 		return [
-			/* Black hoodie, hood up: the hood's top and sides, the coat under the chin, the B's stem and its counter. */
-			{ at: [cx, fy - 28], want: P("hair"), what: "hood top" },
-			{ at: [cx - 5, fy - 22], want: P("hair"), what: "hood side (no face there)" },
-			{ at: [cx - 5, fy - 10], want: P("hair"), what: "black hoodie on the chest" },
-			{ at: [cx - 1, fy - 14], want: P("hair"), what: "the B's counter" },
-			/* Fuchsia B on the chest: stem, and the right bump. */
-			{ at: [cx - 2, fy - 15], want: P("fuchsia"), what: "the B's stem" },
-			{ at: [cx + 1, fy - 14], want: P("fuchsia"), what: "the B's right bump" },
-			/* White shorts above the knee, bare legs below, white sneakers. */
-			{ at: [cx - 3, fy - 6], want: P("text"), what: "white shorts" },
-			{ at: [cx + 2, fy - 5], want: P("text"), what: "white shorts, right leg" },
-			{ at: [cx - 3, fy - 3], want: P("sand"), what: "bare leg" },
-			{ at: [cx + 2, fy - 4], want: P("sand"), what: "bare leg, right" },
-			{ at: [cx - 4, fy - 1], want: P("text"), what: "white sneaker" },
-			{ at: [cx + 2, fy - 1], want: P("text"), what: "white sneaker, right" },
+			/* Black suit (L15): short dark hair over a bare face, black jacket, white shirt with a fuchsia tie, black trousers and shoes. */
+			{ at: [cx, fy - 26], want: P("hair"), what: "hair" },
+			{ at: [cx - 1, fy - 21], want: P("sand"), what: "face (no hood)" },
+			{ at: [cx - 5, fy - 10], want: P("hair"), what: "black jacket" },
+			{ at: [cx - 2, fy - 15], want: P("text"), what: "white shirt" },
+			{ at: [cx, fy - 14], want: P("fuchsia"), what: "fuchsia tie" },
+			{ at: [cx - 3, fy - 5], want: P("hair"), what: "black trousers" },
+			{ at: [cx + 2, fy - 4], want: P("hair"), what: "black trousers, right leg" },
+			{ at: [cx - 4, fy - 1], want: P("bg"), what: "black shoe" },
 			/* Keyboard in the right hand: a light bar with key dots, the hand under its left end. */
 			{ at: [cx + 8, fy - 12], want: P("text"), what: "keyboard light bar" },
 			{ at: [cx + 7, fy - 11], want: P("muted"), what: "keyboard key dot" },

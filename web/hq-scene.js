@@ -94,14 +94,11 @@ const ORCH_BACK = { coat: K.pink, pants: K.deep, shoes: INK, hair: K.hair, extra
 	O(cx - 4, fy - 37, 8, 9, K.hair); O(cx - 7, fy - 29, 14, 2, K.hair); R(cx - 4, fy - 31, 8, 2, K.gold);
 	R(cx - 11, fy - 13, 1, 13, INK); R(cx - 12, fy - 14, 3, 2, K.gold);
 } };
-/* The Boss (S5): the user. Black hoodie with the hood up, a fuchsia B on the chest, white shorts above the knee, bare legs,
-   white sneakers, and a computer keyboard in the right hand. The legs are overpainted after person() draws the full-length pants. */
-const BOSS_B = ['XXX.', 'X..X', 'XXX.', 'X..X', 'XXX.'];
-const BOSS = { coat: K.hair, pants: K.text, shoes: K.text, hair: K.hair, extra(cx, fy) {
-	R(cx - 6, fy - 29, 12, 3, K.hair); R(cx - 6, fy - 26, 2, 8, K.hair); R(cx + 4, fy - 26, 2, 8, K.hair);
-	BOSS_B.forEach((row, j) => [...row].forEach((c, i) => { if (c === 'X') R(cx - 2 + i, fy - 15 + j, 1, 1, K.fuchsia); }));
-	R(cx - 4, fy - 6, 3, 2, K.text); R(cx + 1, fy - 6, 3, 2, K.text);
-	R(cx - 4, fy - 4, 3, 2, SKIN); R(cx + 1, fy - 4, 3, 2, SKIN);
+/* The Boss (S5, L15): the user. A black suit with a white shirt and a fuchsia tie, black shoes, and a computer keyboard in
+   the right hand. */
+const BOSS = { coat: K.hair, pants: K.hair, shoes: INK, hair: K.hair, extra(cx, fy) {
+	R(cx - 2, fy - 17, 4, 6, K.text); R(cx - 3, fy - 17, 1, 5, shade(K.hair)); R(cx + 2, fy - 17, 1, 5, shade(K.hair));
+	R(cx - 1, fy - 17, 2, 2, K.fdeep); R(cx - 1, fy - 15, 2, 5, K.fuchsia);
 	R(cx + 4, fy - 11, 2, 3, SKIN);
 	R(cx + 6, fy - 12, 12, 4, K.text);
 	for (let i = 0; i < 5; i++) R(cx + 7 + i * 2, fy - 11, 1, 1, K.muted);
